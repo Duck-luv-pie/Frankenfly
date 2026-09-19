@@ -23,6 +23,7 @@
   .panel h2 span { float:right; text-transform:none; letter-spacing:0; font-weight:400; }
   .stage { position:relative; width:100%; aspect-ratio:4/3; background:#05070b; border-radius:8px; overflow:hidden; }
   .stage img, .stage canvas { position:absolute; inset:0; width:100%; height:100%; }
+  #arena3d canvas { position:absolute; inset:0; }
   .stage img { object-fit:fill; }
   .wide { grid-column: span 2; }
   @media (max-width: 720px) { .wide { grid-column: span 1; } }
@@ -74,8 +75,8 @@
 
   <div class="panel">
     <h2>The fly <span id="fly-note">acting out the descending neurons</span></h2>
-    <div class="stage"><canvas id="arena"></canvas></div>
-    <small class="hint">Tracks objects with DNa01/02, jumps on Giant Fiber, walks backward on MDN, freezes on DNp09, grooms on DNg11/12, raises wings on threat, sings on pC1.</small>
+    <div class="stage" id="arena3d"></div>
+    <small class="hint">Fly / Body Lab rig, 36 joints. Walks toward objects on DNa01/02, jumps and flies on the Giant Fiber, walks backward on MDN, freezes on DNp09, grooms on DNg11/12, wing-threat on DNp02/04/11 + pC1d/e, sings with one wing on pC1a-c. Drag to orbit, scroll to zoom.</small>
   </div>
 
   <div class="panel">
@@ -109,8 +110,9 @@
   </div>
 </div>
 
-<script>
-'use strict';
+<script type="importmap">{"imports":{"three":"/vendor/three.module.js","three/addons/":"/vendor/addons/"}}</script>
+<script type="module">
+import { createFlyStage } from './fly3d.js';
 const $ = id => document.getElementById(id);
 const STATE_COLORS = { idle:'#2a3350', sleep:'#2b2a5e', track:'#1f5fa8', escape:'#c0392b', freeze:'#6c3fb5', backward:'#d97a1a', threat:'#a8123a', groom:'#1f8a5a', land:'#158a8a', social:'#c23a8a' };
 
@@ -278,88 +280,15 @@ function drawSpark() {
   c.stroke(); c.fillStyle = '#8a93a8'; c.font = '10px sans-serif'; c.fillText('spikes/s, last 2 min · peak ' + Math.round(mx).toLocaleString(), 4, 10);
 }
 
-// ---------------------------------------------------------------- the animated fly
-const fly = {
-  x: 0.5, y: 0.6, heading: -Math.PI/2, speed: 0, legPhase: 0, t: 0, state: 'idle', objX: 0, objSeen: 0, lateral: 0,
-  jump: 0, jumpDir: 0, wingL: 0, wingR: 0, scale: 1, groomT: 0, wander: 0, songSide: 1, songT: 0,
-  onPacket(p) {
-    this.state = p.state; this.lateral = (p.lateral && p.lateral.track) || 0;
-    const s = p.sees; this.objSeen = s ? s.obj[2] : 0; this.objX = s ? s.obj[0] : 0;
-    if (p.state === 'escape' && this.jump <= 0 && this.prevState !== 'escape') { this.jump = 0.45; this.jumpDir = this.heading + Math.PI + (this.objX || 0) * 0.8; }
-    this.prevState = p.state;
-  },
-  step(dt) {
-    this.t += dt;
-    const st = this.state;
-    let target = this.heading, turn = 0, speed = 0;
-    if (st === 'track' || st === 'social') { turn = (this.objSeen ? this.objX : this.lateral) * 2.2; speed = st === 'track' ? 0.16 : 0.06; }
-    else if (st === 'backward') { speed = -0.10; turn = 0.4 * Math.sin(this.t * 3); }
-    else if (st === 'idle') { this.wander += (Math.random() - 0.5) * dt * 3; this.wander *= 0.98; turn = this.wander; speed = 0.035 + 0.02 * Math.sin(this.t * 0.7); }
-    else if (st === 'land') { speed = 0.02; }
-    // keep the fly in the arena by steering toward the middle near the edges
-    const dxm = 0.5 - this.x, dym = 0.55 - this.y, edge = Math.max(Math.abs(dxm) - 0.32, Math.abs(dym) - 0.3, 0);
-    if (edge > 0 && speed !== 0) { const want = Math.atan2(dym, dxm) - (speed < 0 ? Math.PI : 0); let d = want - this.heading; d = Math.atan2(Math.sin(d), Math.cos(d)); turn += d * 4 * edge * 10; }
-    this.heading += turn * dt;
-    if (this.jump > 0) { this.jump -= dt; const k = Math.sin(Math.PI * Math.max(0, this.jump) / 0.45); this.scale = 1 + 0.9 * k; this.x += Math.cos(this.jumpDir) * 0.5 * dt; this.y += Math.sin(this.jumpDir) * 0.5 * dt; this.wingL = this.wingR = 1.2 * k + 0.2; }
-    else { this.scale += (1 - this.scale) * 0.2; this.x += Math.cos(this.heading) * speed * dt; this.y += Math.sin(this.heading) * speed * dt; }
-    this.x = Math.min(0.94, Math.max(0.06, this.x)); this.y = Math.min(0.92, Math.max(0.1, this.y));
-    this.legPhase += (Math.abs(speed) > 0.01 ? speed * 60 : 0) * dt;
-    // wings
-    let wl = 0.12, wr = 0.12;
-    if (st === 'threat') { wl = wr = 0.8 + 0.1 * Math.sin(this.t * 20); }
-    else if (st === 'social') { this.songT += dt; if (this.songT > 2.5) { this.songT = 0; this.songSide = -this.songSide; } const ext = 1.3 + 0.08 * Math.sin(this.t * 40); if (this.songSide > 0) wl = ext; else wr = ext; }
-    else if (st === 'land') { wl = wr = 0.5; }
-    else if (st === 'escape' && this.jump <= 0) { wl = wr = 0.5; }
-    if (this.jump <= 0) { this.wingL += (wl - this.wingL) * 0.25; this.wingR += (wr - this.wingR) * 0.25; }
-    this.groomT = st === 'groom' ? this.groomT + dt : 0;
-  },
-  draw(cv) {
-    const w = cv.width = cv.clientWidth, h = cv.height = cv.clientHeight, c = cv.getContext('2d');
-    c.fillStyle = '#0d1018'; c.fillRect(0, 0, w, h);
-    c.strokeStyle = '#1f2740'; c.lineWidth = 1; for (let i = 1; i < 6; i++) { c.beginPath(); c.moveTo(w * i / 6, 0); c.lineTo(w * i / 6, h); c.stroke(); c.beginPath(); c.moveTo(0, h * i / 6); c.lineTo(w, h * i / 6); c.stroke(); }
-    c.fillStyle = '#8a93a8'; c.font = '11px sans-serif'; c.fillText('camera ▲', w / 2 - 26, 14);
-    if (this.objSeen > 0) { c.fillStyle = '#4fd1ff88'; c.beginPath(); c.arc(w / 2 + this.objX * w * 0.4, 26, 6 + 6 * this.objSeen, 0, Math.PI * 2); c.fill(); }
-    const S = Math.min(w, h) * 0.14 * this.scale;
-    c.save(); c.translate(this.x * w, this.y * h); c.rotate(this.heading + Math.PI / 2); c.scale(S / 40, S / 40);
-    if (this.jump > 0) { c.fillStyle = '#00000055'; c.beginPath(); c.ellipse(6, 10, 22, 30, 0, 0, Math.PI * 2); c.fill(); }
-    const st = this.state, still = (st === 'freeze' || st === 'sleep');
-    // legs: three per side, tripod gait
-    c.strokeStyle = '#c8a86b'; c.lineWidth = 2.2; c.lineCap = 'round';
-    for (let side = -1; side <= 1; side += 2) for (let i = 0; i < 3; i++) {
-      const phase = this.legPhase + ((i + (side > 0 ? 1 : 0)) % 2) * Math.PI;
-      let swing = still ? 0 : Math.sin(phase) * 0.35;
-      const baseY = -8 + i * 9, ang = side * (0.9 + i * 0.35) + swing * side;
-      let kx = side * 16 * Math.cos(ang - side * 0.4) , ky = baseY + 16 * Math.sin(ang - side * 0.4) * (i === 0 ? -1 : i === 1 ? 0.2 : 1);
-      let fx = kx + side * 14 * Math.cos(ang + side * 0.3), fy = ky + 14 * Math.sin(ang + side * 0.3) * (i === 0 ? -1 : i === 1 ? 0.2 : 1);
-      if (i === 0 && st === 'groom') { const g = Math.sin(this.groomT * 14) * 6; kx = side * 8; ky = -20 + g; fx = side * 2; fy = -30 + g * 0.5; }
-      if (st === 'sleep') { fy += 4; }
-      c.beginPath(); c.moveTo(side * 6, baseY); c.lineTo(kx, ky); c.lineTo(fx, fy); c.stroke();
-    }
-    // wings
-    const wing = (dir, a) => { c.save(); c.translate(dir * 3, -6); c.rotate(dir * a + dir * 0.05); c.fillStyle = 'rgba(200,220,255,0.35)'; c.strokeStyle = 'rgba(200,220,255,0.6)'; c.lineWidth = 0.8; c.beginPath(); c.ellipse(0, 20, 7, 22, 0, 0, Math.PI * 2); c.fill(); c.stroke(); c.restore(); };
-    if (this.wingL > 0.6 || this.wingR > 0.6) { wing(-1, this.wingL); wing(1, this.wingR); }
-    // body
-    c.fillStyle = '#3b2a1a'; c.beginPath(); c.ellipse(0, 12, 9, 16, 0, 0, Math.PI * 2); c.fill();
-    c.strokeStyle = '#1a110a'; c.lineWidth = 1.5; for (let i = 0; i < 4; i++) { c.beginPath(); c.moveTo(-8 + i, 6 + i * 5); c.lineTo(8 - i, 6 + i * 5); c.stroke(); }
-    c.fillStyle = '#6b4a2b'; c.beginPath(); c.ellipse(0, -4, 8, 10, 0, 0, Math.PI * 2); c.fill();
-    if (this.wingL <= 0.6 && this.wingR <= 0.6) { wing(-1, this.wingL); wing(1, this.wingR); }
-    c.fillStyle = '#7a5433'; c.beginPath(); c.arc(0, -17, 6.5, 0, Math.PI * 2); c.fill();
-    c.fillStyle = st === 'sleep' ? '#7a2b2b' : '#e04040'; c.beginPath(); c.arc(-4.5, -18, 3.2, 0, Math.PI * 2); c.fill(); c.beginPath(); c.arc(4.5, -18, 3.2, 0, Math.PI * 2); c.fill();
-    c.strokeStyle = '#c8a86b'; c.lineWidth = 1.2; const droop = st === 'sleep' ? 4 : 0;
-    c.beginPath(); c.moveTo(-2, -22); c.lineTo(-6, -28 + droop); c.stroke(); c.beginPath(); c.moveTo(2, -22); c.lineTo(6, -28 + droop); c.stroke();
-    c.restore();
-    if (st === 'sleep') { c.fillStyle = '#8a93a8'; c.font = '16px sans-serif'; c.fillText('z z z', this.x * w + 20, this.y * h - 30 - 6 * Math.sin(this.t * 2)); }
-    if (st === 'social') { c.fillStyle = '#c23a8a'; c.font = '12px sans-serif'; c.fillText('♪ pulse song', this.x * w + 22, this.y * h - 24); }
-    if (st === 'freeze') { c.fillStyle = '#6c3fb5'; c.font = '12px sans-serif'; c.fillText('freeze', this.x * w + 22, this.y * h - 24); }
-  }
-};
+// ---------------------------------------------------------------- the 3D fly
+const fly = createFlyStage($('arena3d'));
 
 // ---------------------------------------------------------------- main loop
 let lastFrame = performance.now();
 function loop(now) {
   const dt = Math.min(0.05, (now - lastFrame) / 1000); lastFrame = now;
   layoutBrain(); fadeBrain();
-  fly.step(dt); fly.draw($('arena'));
+  fly.step(dt);
   drawOverlay();
   if (last) {
     eyeAnim.blink = Math.max(0, eyeAnim.blink - dt * 4);

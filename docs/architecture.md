@@ -83,8 +83,12 @@ simulated neuron), `/frame.jpg` (latest camera preview) and `/events`, a server-
 stream at the body rate carrying the body packet plus behavior scores, modulators, sensory
 features, readout rates, the indices of neurons that spiked since the last event, and the cell
 types with the most spikes in the last 100 ms. The page is plain HTML/canvas with no
-dependencies; the brain map draws each spike as a flash at the neuron's real anatomical
-position (frontal view).
+dependencies except Three.js (vendored); the brain map draws each spike as a flash at the neuron's real
+anatomical position (frontal view). The fly panel (`ui/fly3d.js`) drives the Fly / Body Lab
+procedural rig (`ui/fly.js`, 36 joint axes: legs, wings, halteres, head, abdomen, antennae,
+proboscis) from the behavior state: tripod-gait walking toward objects, a jump and wingbeats on
+escape, backward walking, wing-threat display, one-wing courtship song, grooming, landing and a
+lowered sleep posture, on a table with the webcam modelled in front of the fly.
 
 ## Adding arms later
 

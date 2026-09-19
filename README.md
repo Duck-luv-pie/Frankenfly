@@ -24,6 +24,7 @@ ESP32-CAM ──MJPEG /stream (WiFi)──▶ Mac brain ──UDP JSON 20 Hz─�
 | `docs/` | [architecture](docs/architecture.md), [neuron map](docs/neuron-map.md), [wiring](docs/wiring.md) |
 | `hardware/` | [bill of materials](hardware/bom.md) |
 | `tools/` | `make_sounds.py` synthesizes the fly sounds for the SD card |
+| `brain/companion_brain/ui/` | live dashboard; `fly.js` is the Fly / Body Lab procedural *Drosophila* rig (36 joints), `vendor/` holds Three.js r180 (MIT) |
 | `assets/sounds/` | SD card layout for the DFPlayer |
 
 ## Quick start

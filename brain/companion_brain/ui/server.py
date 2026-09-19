@@ -12,7 +12,9 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-HTML = Path(__file__).with_name("index.html")
+UI_DIR = Path(__file__).parent
+HTML = UI_DIR / "index.html"
+STATIC_TYPES = {".js": "text/javascript", ".css": "text/css", ".glb": "model/gltf-binary", ".json": "application/json"}
 
 
 class Dashboard:
@@ -45,7 +47,15 @@ class Dashboard:
                 elif self.path == "/events":
                     self._events()
                 else:
+                    self._static()
+
+            def _static(self):
+                rel = self.path.split("?")[0].lstrip("/")
+                target = (UI_DIR / rel).resolve()
+                if UI_DIR.resolve() not in target.parents or not target.is_file() or target.suffix not in STATIC_TYPES:
                     self._send(404, "text/plain", b"not found")
+                    return
+                self._send(200, STATIC_TYPES[target.suffix], target.read_bytes())
 
             def _send(self, code, ctype, body, cache=True):
                 self.send_response(code)
