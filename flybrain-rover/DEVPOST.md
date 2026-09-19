@@ -17,6 +17,10 @@ Untrained, the brain turns toward a person in 75 to 78% of arena episodes from w
 - LC4 + LPLC2 out (looming detectors): escape response vanishes (giant-fiber under looming: 106.9 to 0.0 Hz) while steering stays at 75%.
 - One DNa02 out: hard rightward bias.
 
+Two of those controls run live on the robot, on a keypress, which is the part we would ask a judge to watch. Press one key and every one of the 2,334,959 synapses keeps its sign, its strength and its neuron's exact number of inputs and outputs, but its target is randomized. The eye carries on firing at 70 Hz and the steering neurons go from 158 Hz to zero: the information was in the map, not the parts. Press another key and the tracking population is deleted a quarter at a time; the steering drive falls 158, 137, 83, 40, 0 Hz while the turn command holds until three quarters are gone, then collapses. Restoring gives back 158.4 Hz and a full turn, exactly.
+
+This is also our answer to the obvious question, why not just train a neural net. A net does this too, and a three-line hand-coded controller does it better. But a net with random weights does nothing at all, and you cannot lesion a named cell type out of one and predict the result. We predicted that removing the left steering neuron would bias the turn right, and it did. A net cannot be wrong that way, so it cannot be right that way either.
+
 Learning, where we do it, uses the fly's own mechanism: reward and punishment land on its dopamine neurons (PAM reward, PPL1 punishment), gating plasticity at existing synapses under Dale's law, hard bounds, and homeostatic scaling toward 150 Hz. We never train a new network; only existing synapses change strength.
 
 ## How we built it
@@ -51,17 +55,21 @@ A path existing anatomically doesn't mean it carries drive: 739 of 795 neurons o
 
 Reward-gated plasticity is only as good as the reward signal behind it: an unbalanced dopamine channel saturates a circuit instead of tuning it, and the two look similar in a five-minute demo if you're not watching firing rates.
 
+Pruning a spiking circuit does not speed it up the way you expect. We cut the runtime brain to the neurons that matter (sensory populations, every descending neuron, and the bridge between them): 4,104 neurons and 408,114 synapses, 27% and 17% of the original, with behaviour intact (77% turn-toward against 75%, 100% advance). It runs 1.4x faster, not 4x, because an event-driven engine never touches a silent neuron in the first place. Cost is spikes times out-degree, not neuron count.
+
 connectome-pilot's own numbers show a 3-line hand-coded controller can beat this same connectome at a similar task, and we're not claiming otherwise. The point was always that real behavior falls out of real wiring, with nothing programmed in the middle.
 
 ## What's next
 
 Today's runs (brain.npz, `tfA_both_dnall` on the Mac plus the box queue at 512 envs) hold DNa02 near its 150 Hz target instead of saturating, contact 0.97 to 0.99 (STATUS.md, 2026-09-18 morning session). On the fixed evaluation set (stage A, 128 envs, 20 s, seed 1000) the locked demo brain, checkpoint gen 20 of that box run, reaches the person in 3.23 s versus 4.25 s untrained and holds front contact for 82% of the episode versus 76%, at the same 0.977 contact rate, with DNa02 at 156 Hz (STATUS.md, M6). Learning bought speed and persistence, not the behaviour itself, and we say that.
 
+We also measured whether the brain could live on the robot instead of a laptop: 0.50 ms per millisecond of brain time at batch one on an M2 Pro CPU, which puts a Raspberry Pi 5 at roughly 30 to 50 ms per camera frame. The brain fits on a Pi in plain Python, no C rewrite. The detector is what does not: 83 ms on this laptop's CPU means 150 to 250 ms on a Pi without an accelerator.
+
 After that: get the chain onto the actual RoboMaster hardware (everything above is dry-run or arena-simulated), confirm `chassis.drive_speed`'s turn sign, and measure the real camera's field of view instead of assuming spec. If there's time before Saturday's 2:00 PM sponsor-track lock, wire the exploratory search state into the live demo instead of starting with a person already in view.
 
 ## Built with
 
-Python, PyTorch (event-driven sparse LIF engine), neuPrint (Janelia), Ultralytics YOLO11n, DJI RoboMaster SDK, Three.js (viz), Vast.ai A100 (training), OpenCV.
+Python, PyTorch (event-driven sparse LIF engine), neuPrint (Janelia), Ultralytics YOLO11n, OpenCV, DJI RoboMaster SDK and an S-Bus link through an ESP32, Three.js (live viewer over websockets), Matplotlib, Vast.ai A100 (training only; the control loop never leaves the laptop).
 
 ## Credits
 
