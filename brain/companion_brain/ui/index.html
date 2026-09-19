@@ -92,16 +92,8 @@
   </div>
 
   <div class="panel">
-    <h2>Robot eyes <span>what the GC9A01 displays show</span></h2>
-    <div class="eyes"><canvas id="eyeL" width="240" height="240"></canvas><canvas id="eyeR" width="240" height="240"></canvas></div>
-    <div class="gauge">valence <div class="track bipolar"><i id="g-val" style="left:50%"></i></div></div>
-    <div class="gauge">arousal <div class="track"><i id="g-ar" style="left:0"></i></div></div>
-    <div class="gauge">sound <b id="g-snd" style="color:var(--text)">–</b></div>
-  </div>
-
-  <div class="panel wide">
     <h2>Brain <span id="atlas-status">loading the MaleCNS neuron atlas…</span></h2>
-    <div class="stage" style="aspect-ratio:2/1"><div id="atlas" style="position:absolute;inset:0"></div><div id="atlas-pick"></div></div>
+    <div class="stage"><div id="atlas" style="position:absolute;inset:0"></div><div id="atlas-pick"></div></div>
     <div class="legend" style="align-items:center">
       <span><i style="background:#56b7dc"></i>optic</span><span><i style="background:#77d4b4"></i>central brain</span><span><i style="background:#dda469"></i>ventral nerve cord</span><span><i style="background:#b69bea"></i>ascending / descending</span>
       <span style="margin-left:auto"><button class="mini" data-view="front">front</button><button class="mini" data-view="side">side</button><button class="mini" data-view="top">top</button></span>
@@ -136,7 +128,6 @@ const STATE_COLORS = { idle:'#2a3350', sleep:'#2b2a5e', track:'#1f5fa8', escape:
 
 // ---------------------------------------------------------------- state from the brain
 let circuit = null, last = null, lastAt = 0, sparkBuf = [], spikeAcc = 0, spikeAccAt = performance.now();
-let eyeAnim = { blink:0 };
 
 function connect() {
   const es = new EventSource('/events');
@@ -165,10 +156,6 @@ function onPacket(p) {
   $('cam-note').textContent = p.vision === 'retina' ? 'what the fly sees → optic lobe' : 'webcam fallback (open this page to give the fly its own eyes)';
   if (p.world && p.world.odor) { const w = p.world; $('senses').textContent = `Smell L/R ${w.odor[0].toFixed(2)}/${w.odor[1].toFixed(2)} · sugar ${w.sugar.toFixed(2)} · dust ${w.dust.toFixed(2)} · humid ${w.moist.toFixed(2)} · satiety ${w.satiety.toFixed(2)}`; }
   renderTypes(p.top_types);
-  $('g-val').style.left = (50 + 50 * p.valence) + '%';
-  $('g-ar').style.left = (100 * p.arousal) + '%';
-  $('g-snd').textContent = p.sound.track ? ('track ' + p.sound.track) : '–';
-  if (p.blink) eyeAnim.blink = 1;
   flashSpikes(p.spikes);
   fly.onPacket(p);
 }
@@ -194,22 +181,6 @@ function drawOverlay() {
     if (f.loom_fast > 0.05) { c.strokeStyle = '#ff4d4d'; c.lineWidth = 3 * f.loom_fast + 1; c.strokeRect(side === 'L' ? 2 : w/2 + 2, 2, w/2 - 4, h - 4); }
   });
   c.fillStyle = '#ffffff99'; c.fillRect(w - 12, h - 8 - 60 * s.motion, 6, 60 * s.motion);
-}
-
-// ---------------------------------------------------------------- robot eyes
-function drawEye(cv, e, blink) {
-  const c = cv.getContext('2d'), S = cv.width, cx = S/2, cy = S/2, R = S/2 - 2;
-  c.clearRect(0, 0, S, S);
-  c.fillStyle = '#fff'; c.beginPath(); c.arc(cx, cy, R, 0, Math.PI*2); c.fill();
-  const irisR = R * 0.55, maxOff = R - irisR - 4, ix = cx + e.px * maxOff, iy = cy + e.py * maxOff;
-  const pupR = irisR * (0.25 + 0.65 * e.pr);
-  c.fillStyle = `rgb(${e.tint[0]},${e.tint[1]},${e.tint[2]})`; c.beginPath(); c.arc(ix, iy, irisR, 0, Math.PI*2); c.fill();
-  c.fillStyle = '#000'; c.beginPath(); c.arc(ix, iy, pupR, 0, Math.PI*2); c.fill();
-  c.fillStyle = '#fff'; c.beginPath(); c.arc(ix - irisR/3, iy - irisR/3, irisR/6, 0, Math.PI*2); c.fill();
-  const ut = e.ut * (1 - blink), lt = e.lt * (1 - blink);
-  c.save(); c.beginPath(); c.arc(cx, cy, R + 1, 0, Math.PI*2); c.clip();
-  c.fillStyle = '#1a1c22'; c.fillRect(0, 0, S, cy - R * ut); c.fillRect(0, cy + R * lt, S, S);
-  c.restore();
 }
 
 // ---------------------------------------------------------------- brain: the MaleCNS atlas lit by our spikes
@@ -306,9 +277,6 @@ function loop(now) {
   fly.step(dt);
   drawOverlay();
   if (last) {
-    eyeAnim.blink = Math.max(0, eyeAnim.blink - dt * 4);
-    const b = eyeAnim.blink > 0.5 ? (1 - eyeAnim.blink) * 2 : eyeAnim.blink * 2;
-    drawEye($('eyeL'), last.eyes.l, b); drawEye($('eyeR'), last.eyes.r, b);
     if (now - lastAt > 3000) { $('state').textContent = 'no signal'; $('state').style.background = '#444'; }
   }
   requestAnimationFrame(loop);
