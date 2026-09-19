@@ -18,21 +18,40 @@ A real fruit fly's brain wiring, running live, in a robot, turning toward and re
 5. Rehearse once with `--dry-run` added to the demo.py line (wheels don't move, everything else runs). Then run it live and walk in from 2 m: the robot should turn to face you and roll forward until it touches your shoe.
 6. Person starts IN VIEW (1 to 3 m, inside the ±49° camera cone). Search from out of view exists (`--explore`) but the demo starts with the person visible, by decision.
 
-Hotkeys (in the window, or type the digit and Enter in terminal 2): **1** baseline, **2** lesion LC10a, **3** restore LC10a, **4** lobotomize, **5** restore learning, **r/p** reward/punish, **space** E-stop, **q** quit.
+Hotkeys (in the window, or type the digit and Enter in terminal 2): **1** baseline, **2** lesion LC10a, **3** restore, **4** lobotomize, **5** restore learning, **6** wiring shuffle on/off, **7** remove another quarter of LC10a, **r/p** reward/punish, **space** E-stop, **q** quit.
 
 ## The two-minute script
+Lead with the controls, not the chase. The chase is only the readout that makes a lesion visible, and nobody has to be chased for the point to land.
+
 | time | presenter says | key | audience sees |
 |---|---|---|---|
-| 0:00 | "This is the wiring of a real fruit fly's brain, 15,000 neurons and 2.3 million synapses from the connectome published this month, running live as spiking neurons. The camera is its eye, the descending neurons are its legs. Nobody programmed the behaviour." | 1 | Robot idle, brain quiet on the wall. |
-| 0:20 | "Step toward it." (a judge walks in from 2 m) | | Retina columns light up where the judge is, LC10a flares on that side, DNa02 fires, the robot turns to face them and rolls forward until it touches. |
-| 0:45 | "Those are the same neurons a male fly uses to track a mate. Left eye drives left steering neuron, right drives right; the wiring is doing the geometry." | | Wall shows DNa02 L/R bars see-saw as the judge moves sideways. |
-| 1:00 | "Now I remove the tracking neurons, LC10a, both sides. Same brain, minus 275 cells." | 2 | Robot stops turning toward the judge; the wall shows LC10a and DNa02 flat. "In the simulator that takes tracking from 78% to 0%. A wiring shuffle with the same neurons also gives 0%." |
-| 1:20 | "Put them back." | 3 | Tracking returns within a second. |
-| 1:30 | "This brain also learned. Rewards were delivered by stimulating its own dopamine neurons, which changed existing synapses only. Wipe the learning, the raw connectome stays." | 4 | Robot still tracks (the wiring alone does that), but slower to close; the wall's DN bars drop. |
-| 1:45 | "And restore it." | 5 | Learned synapses back, bit-identical. |
-| 1:55 | "It's a fly. It wants to touch you. That's all it knows." | space | Stop. Offer the foam swatter. |
+| 0:00 | "This is the wiring of a real fruit fly's brain. 15,000 neurons, 2.3 million synapses, from the connectome published this month, running live as spiking neurons. The camera is its eye, the descending neurons are its legs. Nobody trained it to do anything." | 1 | Robot idle, brain quiet on the wall. |
+| 0:15 | "Walk toward it." (a judge steps in from 2 m) | | Retina columns light on their side, LC10a flares, DNa02 fires, the robot turns and closes until it touches. |
+| 0:35 | "Those are LC10a, the same neurons a male fly uses to track a mate. Left eye drives the left steering neuron. And this is before any learning: untrained, straight out of the microscope, it reaches you 97 times out of 100." | | DNa02 L/R bars see-saw as they move sideways. |
+| 0:55 | "Here is the control. I keep every neuron, every synapse, every connection strength, and every neuron's exact number of inputs and outputs. I randomize only which cell connects to which." | 6 | The robot goes still. |
+| 1:10 | "The eye is still working. LC10a is firing at 70 Hz, same as a second ago. But nothing arrives at the steering neurons: 158 hertz to zero. Same parts, same wiring diagram statistics, different map." | | LC10a lit, DNa02 flat. |
+| 1:20 | "Put the real wiring back." | 6 | Tracking returns immediately. |
+| 1:30 | "And it fails the way a population of neurons should, not like a switch." (press 7 four times, a beat between each) | 7 | DNa02 158 to 137 to 83 to 40 to 0 Hz; it keeps turning until three quarters are gone, then goes blind. |
+| 1:45 | "All 275 cells back." | 3 | Identical behaviour returns, bit for bit. |
+| 1:55 | "It is a fly. It wants to find you. Nobody programmed that." | space | Stop. |
 
-Honesty lines to keep, if asked: the forward speed is read from the population of descending neurons (a read-out choice; the eye does not reach the two forward neurons alone); the untrained wiring already reaches the person 97% of the time in simulation, learning adds speed and consistency; search from out of view uses an internal exploratory state that is not sensory; we do not claim the fly understands anything.
+Optional beats if a judge asks: **4** wipes the learning back to the raw connectome and **5** restores it; `--explore` makes it search when nobody is in view; a foam swatter is available and entirely unnecessary.
+
+What to say if asked "why not just train a neural net": a net with random weights does nothing, and a trained one cannot be lesioned into a named cell type and predicted. Ours can. We predicted that removing one DNa02 would bias the turn to the other side before we ran it, and it did.
+
+Honest lines to keep: the forward read-out (population descending activity) and the search state are our engineering, and we say so. The steering, which is the claim, is untouched wiring.
+
+### The numbers behind those beats
+`checkpoints/demo_brain.pt`, a person box at the left or right of a 320x240 frame, 45 frames at 30 Hz, CPU event engine:
+
+| condition | turn | forward | DNa02 L / R (Hz) | LC10a L / R (Hz) |
+|---|---|---|---|---|
+| real connectome, person left | -1.00 | +0.81 | **158.4** / 0.0 | 66.6 / 0.0 |
+| real connectome, person right | +1.00 | +1.00 | 0.0 / **251.5** | 0.0 / 64.7 |
+| shuffled wiring, person left | 0.00 | +0.05 | **0.0** / 0.0 | **69.9** / 0.0 |
+| shuffled wiring, person right | 0.00 | +0.20 | 0.0 / **0.0** | 0.0 / **69.5** |
+
+Graded LC10a lesion (real wiring, person left): 0% removed 158.4 Hz and turn -1.00; 25% 137.5 and -1.00; 50% 83.4 and -1.00; 75% 40.3 and -0.81; 100% 0.0 and 0.00. Restoring returns exactly 158.4 and -1.00. The turn command saturates while the drive degrades, which is the point: the population is redundant, so half of it still steers.
 
 ## Fallbacks
 - **Robot misbehaves or Wi-Fi drops**: press space (E-stop). Switch to `--dry-run` and narrate against the wall viz; the brain, retina and hotkeys all still run on the webcam (`--source 0 --show`).
@@ -75,3 +94,11 @@ Dry run without the robot: `.venv/bin/python scripts/demo.py --checkpoint checkp
 .venv/bin/python scripts/viz_adapter.py --ui ../hunting-fly/brain/companion_brain/ui --live ws://localhost:8765 --port 8601
 ```
 Open http://localhost:8601. Our 15,000 neurons appear on his brain map at their real soma positions (neuPrint), spikes light up per tick, the DNa02/DNa01/DN_all bars, the 24 retina cells, heat and drive are ours. `fly.js` and the .glb models come from his `ui/` directory (`replay/assets/` holds the human and RoboMaster models until his push includes them; a stand-in fly.js is served if his is missing).
+
+## Second way to drive the S1: S-Bus (Ducks's path, no SDK, no gimbal needed)
+Ducks drives the S1 through its **S-Bus receiver pins** (under the rear cover, see his `docs/wiring.md`): laptop USB → spare ESP32 flashed with his `firmware/sbus-bridge` (inverter) → S1 S-Bus Signal + GND. Nothing comes back, so the eye is the laptop webcam (or his ESP32-CAM stream URL). Our bridge can use his driver directly:
+```
+.venv/bin/python scripts/demo.py --checkpoint checkpoints/demo_brain.pt --s1-sbus /dev/tty.usbserial-XXXX --local-eye --source 0 --dry-run   # check signs
+.venv/bin/python scripts/demo.py --checkpoint checkpoints/demo_brain.pt --s1-sbus /dev/tty.usbserial-XXXX --local-eye --source 0 --v-max 0.5 --w-max 90
+```
+`--sign-yaw -1` if it turns the wrong way. His measured S1 constants (slow preset): 0.85 m/s and 90°/s at full stick; our forward/turn map onto those. Needs `pyserial` (installed) and his `companion_brain` package on disk (auto-found in `../hunting-fly-s1/brain`, `../hunting-fly/brain` or `--companion-dir`). Tested against a fake serial port: 70 Hz frames, failsafe centres the sticks 0.5 s after the last packet.

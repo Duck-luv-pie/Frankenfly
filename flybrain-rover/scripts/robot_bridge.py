@@ -47,7 +47,8 @@ from brain.senses import Senses  # noqa: E402
 # ---------------------------------------------------------------- brain
 class Brain:
     def __init__(self, checkpoint=None, gain=0.05, device=None, engine="auto", k_t=0.02, k_f=0.3,
-                 amps=None, substeps=20, forward_source="dn_all", retinotopy="rank", explore=False):
+                 amps=None, substeps=20, forward_source="dn_all", retinotopy="rank", explore=False,
+                 shuffle=False):
         self.device = pick_device(device)
         d, N, groups = load_brain()
         self.lif = LIF(torch.as_tensor(d["W_indices"]), torch.as_tensor(d["W_values"]), N, 1,
@@ -74,10 +75,41 @@ class Brain:
         # exploratory state, internal drive, not sensory (brain/explore.py); dt = wall-clock frame interval
         self.explorer = Exploratory(self.groups, N, 1, device=self.device, dt=1 / 30) if explore else None
         self.substeps = substeps
+        # the control that answers "is it the wiring, or just the neurons?": same cells, same in- and
+        # out-degrees, same signed weights, randomized targets. Built eagerly so the demo never stalls.
+        self.lif_real, self.lif_shuffled, self.shuffled = self.lif, None, False
+        if shuffle:
+            self.build_shuffled()
         self.lobotomy = False
         self.pending_reward = 0.0
         self.last_t = None
         self.viz, self.last_r, self.last_heat, self.last_exploring = None, None, None, False
+
+    @torch.no_grad()
+    def build_shuffled(self, seed=0):
+        """Permute the post (target) column of every synapse. Each neuron keeps its exact in-degree and
+        out-degree and every synapse keeps its sign and weight; only who-connects-to-whom is destroyed."""
+        if self.lif_shuffled is not None:
+            return self.lif_shuffled
+        real = self.lif_real
+        post, pre = real.post_idx.cpu(), real.pre_idx.cpu()
+        perm = torch.randperm(post.numel(), generator=torch.Generator().manual_seed(seed))
+        t0 = time.time()
+        self.lif_shuffled = LIF(torch.stack([post[perm], pre]), real.w.detach().cpu(), real.N, 1,
+                                device=self.device, engine=real.engine, g=real.g)
+        print(f"shuffled-wiring control built in {time.time() - t0:.1f} s ({real.nnz:,} synapses rewired)", flush=True)
+        return self.lif_shuffled
+
+    @torch.no_grad()
+    def use_shuffled(self, on):
+        """Swap the brain the robot is driven by. Neuron identity is unchanged, so groups, senses and
+        motor read-outs stay valid; only the connectivity differs."""
+        if on and self.lif_shuffled is None:
+            self.build_shuffled()
+        self.shuffled = bool(on) and self.lif_shuffled is not None
+        self.lif = self.lif_shuffled if self.shuffled else self.lif_real
+        self.lif.reset()
+        return self.shuffled
 
     @torch.no_grad()
     def step(self, boxes_px, heat_LR, now):
@@ -144,6 +176,70 @@ class FakeBox:
         cx = self.W * (0.15 + 0.7 * (0.5 - 0.5 * np.cos(2 * np.pi * ph)))
         w = 40
         return [(cx - w / 2, 20.0, cx + w / 2, float(self.H))]
+
+
+def companion_path(explicit=None):
+    """Locate Ducks's `companion_brain` package (hunting-fly) so we can reuse his S1 and camera drivers."""
+    here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    for c in ([explicit] if explicit else []) + [os.path.join(here, "..", "hunting-fly-s1", "brain"),
+                                                 os.path.join(here, "..", "hunting-fly", "brain"),
+                                                 os.path.join(here, "..", "brain")]:
+        if c and os.path.isfile(os.path.join(c, "companion_brain", "body", "s1.py")):
+            c = os.path.abspath(c)
+            if c not in sys.path:
+                sys.path.insert(0, c)
+            return c
+    return None
+
+
+class StreamEye:
+    """A network camera (ESP32-CAM MJPEG, phone IP-camera app, RTSP) as the fly's eye.
+
+    Uses Ducks's `companion_brain.senses.camera.CameraStream` when his repo is on disk: it resolves
+    mDNS names that OpenCV cannot, keeps the capture buffer at one frame, reads in a background thread
+    that holds only the newest frame (so the brain never falls behind the camera), and reconnects after
+    a stall. Falls back to a plain OpenCV capture when his package is missing. read() returns a 320x240
+    BGR frame, or None when nothing new has arrived yet."""
+
+    def __init__(self, url, companion_dir=None):
+        import cv2
+        self.url, self.cv2, self.src = url, cv2, None
+        if companion_path(companion_dir):
+            try:
+                from companion_brain.senses.camera import CameraStream
+                self.src = CameraStream(url)
+                print(f"eye: {url} via Ducks's CameraStream (mDNS, newest-frame thread, auto-reconnect)", flush=True)
+            except Exception as e:  # noqa: BLE001
+                print(f"his CameraStream unavailable ({type(e).__name__}); plain OpenCV capture", flush=True)
+        if self.src is None:
+            self.cap = cv2.VideoCapture(url)
+            if not self.cap.isOpened():
+                raise SystemExit(f"cannot open stream {url!r}  (open it in a browser first to check)")
+            self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+            print(f"eye: {url} (OpenCV capture)", flush=True)
+
+    def read(self):
+        if self.src is not None:
+            self.src.read()                      # his read() downsamples for his optic lobe ...
+            return self.src.preview              # ... and keeps the 320x240 BGR frame here, which is our retina's input
+        ok, frame = self.cap.read()
+        return frame if ok else None
+
+    def close(self):
+        if self.src is not None:
+            self.src.close()
+        elif getattr(self, "cap", None) is not None:
+            self.cap.release()
+
+
+def source_kind(src):
+    """How to treat --source: a digit is a local webcam, anything with :// is a network stream
+    (ESP32-CAM, phone IP-camera app, RTSP), otherwise a video file that ends."""
+    if str(src).isdigit():
+        return "webcam"
+    if "://" in str(src):
+        return "stream"
+    return "file"
 
 
 def scale_boxes(boxes, W, H, cam):
@@ -248,6 +344,39 @@ class VizFeed:
         asyncio.run(main())
 
 
+class SbusRover:
+    """The S1 driven through its S-Bus receiver pins with Ducks's driver (hunting-fly, brain/companion_brain/body/s1.py):
+    Mac USB -> ESP32 'sbus-bridge' (inverter) -> S1 motion controller. No SDK, no gimbal, nothing comes back.
+    forward/turn in [-1, 1] map to his stick gains; his defaults were measured on this S1 (slow preset: 0.85 m/s,
+    90 deg/s at full stick). We override rotation_only=False so the rover advances."""
+    def __init__(self, port, companion_dir=None, v_max=0.7, w_max_deg=90.0, stick_forward=None, sign_yaw=1, sign_forward=1):
+        import importlib
+        if not companion_path(companion_dir):
+            raise SystemExit("cannot find Ducks's companion_brain package; pass --companion-dir <hunting-fly>/brain")
+        s1 = importlib.import_module("companion_brain.body.s1")
+        cfg = dict(rotation_only=False, speed="slow", free_mode=True, timeout_s=0.5,
+                   stick_forward=(stick_forward if stick_forward is not None else min(1.0, v_max / s1.DEFAULTS["speed_mps_full"])),
+                   stick_yaw=min(1.0, w_max_deg / s1.DEFAULTS["yaw_dps_full"]), sign_yaw=sign_yaw, sign_forward=sign_forward)
+        self.body = s1.S1Body(cfg, port=port)
+        self.v_max, self.w_max = v_max, w_max_deg
+        print(f"S-Bus rover on {port}: full forward stick {cfg['stick_forward']:.2f}, full yaw stick {cfg['stick_yaw']:.2f} (turn>0 = right)", flush=True)
+
+    def frame(self):
+        return None                                       # no camera on this path: use --local-eye --source ...
+
+    def drive(self, forward, turn):
+        self.body.send({"motor": {"forward": float(forward), "turn": float(turn)}})
+
+    def stop(self):
+        self.body.send({"motor": {"forward": 0.0, "turn": 0.0}})
+
+    def close(self):
+        try:
+            self.stop(); time.sleep(0.05); self.body.close()
+        except Exception:  # noqa: BLE001
+            pass
+
+
 class RemoteRover:
     """Client for scripts/robot_daemon.py (the SDK lives in a Python 3.8 x86_64 process). Frames arrive as
     JPEG over localhost TCP; commands go back as 'V x y z' lines. Same interface as Rover."""
@@ -320,6 +449,10 @@ def main(argv=None, hotkeys=None):
     ap.add_argument("--source", default="0", help="webcam index, video path, or 'robot'")
     ap.add_argument("--robot", action="store_true", help="drive the RoboMaster via the SDK in THIS process (needs Python 3.8)")
     ap.add_argument("--local-eye", action="store_true", help="with --robot-daemon: use --source (laptop webcam) as the eye, robot for wheels only")
+    ap.add_argument("--s1-sbus", default=None, metavar="PORT",
+                    help="drive the S1 over S-Bus via the ESP32 bridge on this serial port (Ducks's driver); use with --local-eye --source 0")
+    ap.add_argument("--companion-dir", default=None, help="hunting-fly brain/ dir holding companion_brain (auto-detected)")
+    ap.add_argument("--sign-yaw", type=int, default=1, choices=[1, -1], help="flip if the S1 turns the wrong way over S-Bus")
     ap.add_argument("--robot-daemon", default=None, metavar="HOST:PORT",
                     help="drive the RoboMaster through scripts/robot_daemon.py (recommended: SDK in its own py3.8 process)")
     ap.add_argument("--conn", default="ap", choices=["ap", "sta", "rndis"])
@@ -335,6 +468,8 @@ def main(argv=None, hotkeys=None):
     ap.add_argument("--watchdog-ms", type=float, default=300.0)
     ap.add_argument("--latency-log", default="logs/bridge_latency.csv")
     ap.add_argument("--explore", action="store_true", help="search when nobody is in view (exploratory internal state)")
+    ap.add_argument("--shuffle", action="store_true",
+                    help="also build the degree-preserving wiring-shuffle control, toggled live with key 6")
     ap.add_argument("--viz-jsonl", default=None, help="append one JSON frame per camera frame (replay/FORMAT.md fields)")
     ap.add_argument("--viz-ws", type=int, default=None, help="websocket port broadcasting the same frames (ws://localhost:PORT)")
     ap.add_argument("--yolo", default="yolo11n.pt")
@@ -347,7 +482,8 @@ def main(argv=None, hotkeys=None):
     ap.add_argument("--max-frames", type=int, default=0)
     a = ap.parse_args(argv)
 
-    brain = Brain(a.checkpoint, gain=a.gain, device=a.device, engine=a.engine, substeps=a.substeps, explore=a.explore)
+    brain = Brain(a.checkpoint, gain=a.gain, device=a.device, engine=a.engine, substeps=a.substeps, explore=a.explore,
+                  shuffle=a.shuffle)
     if a.viz_jsonl or a.viz_ws:
         brain.viz = VizFeed(brain, jsonl=a.viz_jsonl, ws_port=a.viz_ws)
     print(f"brain on {brain.device} ({brain.lif.engine}), {a.substeps} x 1 ms per frame")
@@ -371,16 +507,25 @@ def main(argv=None, hotkeys=None):
         except ImportError as e:
             sys.exit(str(e))
     heat = HeatSerial(a.heat_serial) if a.heat_serial else None
-    rover = Rover(a.conn, a.v_max, a.w_max) if a.robot else (RemoteRover(a.robot_daemon, a.v_max, a.w_max) if a.robot_daemon else None)
+    if a.s1_sbus:
+        rover = SbusRover(a.s1_sbus, a.companion_dir, a.v_max, a.w_max, sign_yaw=a.sign_yaw)
+    else:
+        rover = Rover(a.conn, a.v_max, a.w_max) if a.robot else (RemoteRover(a.robot_daemon, a.v_max, a.w_max) if a.robot_daemon else None)
 
-    cap = None
-    local_eye = (rover is None) or (a.robot_daemon is not None and a.local_eye)
+    cap = eye = None
+    local_eye = (rover is None) or (a.robot_daemon is not None and a.local_eye) or (a.s1_sbus is not None)
+    kind = source_kind(a.source)
     if local_eye and not a.no_camera:
         import cv2
-        src = int(a.source) if a.source.isdigit() else a.source
-        cap = cv2.VideoCapture(src)
-        if not cap.isOpened():
-            sys.exit(f"cannot open source {a.source}")
+        if kind == "stream":
+            eye = StreamEye(a.source, a.companion_dir)
+        else:
+            src = int(a.source) if kind == "webcam" else a.source
+            cap = cv2.VideoCapture(src)
+            if not cap.isOpened():
+                sys.exit(f"cannot open {kind} source {a.source!r}"
+                         + ("  (webcam: try --source 1; macOS asks for camera permission on first use)" if kind == "webcam" else ""))
+            print(f"eye: {kind} {a.source!r}", flush=True)
         if rover is not None:
             print(f"eye = local camera {a.source}; wheels = robot daemon", flush=True)
     if a.show:
@@ -433,14 +578,16 @@ def main(argv=None, hotkeys=None):
             if a.no_camera:
                 t_cam = time.time(); frame = None; W, H = 320, 240
             else:
-                frame = cap.read()[1] if cap is not None else rover.frame()
+                frame = eye.read() if eye is not None else (cap.read()[1] if cap is not None else rover.frame())
                 t_cam = time.time()
                 if frame is None:
+                    if eye is not None:
+                        time.sleep(0.002)          # the threaded reader has nothing new yet; do not spin a core
                     if (time.time() - last_frame_t) * 1000 > a.watchdog_ms:
                         send(0.0, 0.0, "WATCHDOG: no frame"); print("WATCHDOG: no frame, wheels zeroed", flush=True)
                         last_frame_t = time.time()
-                    if cap is not None and not rover and not a.source.isdigit():
-                        break                      # end of video file
+                    if cap is not None and kind == "file":
+                        break                      # end of the video file; a webcam or stream just hiccuped
                     continue
                 H, W = frame.shape[:2]
             wd = (t_cam - last_frame_t) * 1000 > a.watchdog_ms and n > 0
@@ -499,7 +646,11 @@ def main(argv=None, hotkeys=None):
             rover.close()
         if cap is not None:
             cap.release()
+        if eye is not None:
+            eye.close()
         lat_f.close()
+        if len(lats) > 12:
+            lats = lats[5:]                    # drop startup frames (opening a stream can take seconds)
         if lats:
             lats.sort()
             print(f"latency camera->command over {len(lats)} frames: median {lats[len(lats) // 2]:.1f} ms, "
