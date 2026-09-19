@@ -113,13 +113,13 @@
   <h1>FlyBrain Demo Runbook</h1>
   <p class="thesis">A real fruit fly's brain wiring, running live, driving a robot toward the person in front of it.
   <strong>Nothing in between is programmed.</strong> This page is what to say, what to press, and what the judge
-  sees, for each track we are entering. The badge below is live: it runs the actual connectome in your browser.</p>
+  sees, for each track we are entering. Final submissions close <strong>8:00 AM Sunday</strong>. The badge below is live: it runs the actual connectome in your browser.</p>
   <div class="strip">
     <div class="cell"><div class="t">Finalist</div><div class="s ready">READY</div></div>
     <div class="cell"><div class="t">ElevenLabs</div><div class="s done">DONE</div></div>
     <div class="cell"><div class="t">Tiger Data</div><div class="s done">DONE</div></div>
     <div class="cell"><div class="t">GoDaddy domain</div><div class="s todo">5 MIN</div></div>
-    <div class="cell"><div class="t">Solana badge hack</div><div class="s ask">ENTER</div></div>
+    <div class="cell"><div class="t">Best Badge Hack · $2,500</div><div class="s ready">READY</div></div>
   </div>
 </header>
 
@@ -185,7 +185,8 @@
       <dd>"Same neurons, same number of connections, same synaptic strengths. I randomize only which cell connects to
       which. The eye is still firing at 70 Hz. Nothing arrives at the steering neurons."</dd>
       <dt>Run it</dt>
-      <dd><pre><span class="c"># terminal 1 - the DJI SDK, Python 3.8 under Rosetta</span>
+      <dd><pre>cd ~/Downloads/filess/flybrain-rover
+<span class="c"># terminal 1 - the DJI SDK, Python 3.8 under Rosetta</span>
 .venv38/bin/python scripts/robot_daemon.py --conn ap
 <span class="c"># wait for "robot connected, gimbal recentred, video on"</span>
 
@@ -214,7 +215,8 @@
       <dd>"A demo table is loud and you are watching the robot, not my screen. So the useful thing for the fly to say
       is what was just done to its brain."</dd>
       <dt>Run it</dt>
-      <dd><pre><span class="c"># already done - all ten are cached in assets/voice/</span>
+      <dd><pre>cd ~/Downloads/filess/flybrain-rover
+<span class="c"># already done - all ten are cached in assets/voice/</span>
 .venv/bin/python scripts/voice.py --list
 .venv/bin/python scripts/voice.py --say lesion_lc10a
 
@@ -246,7 +248,8 @@ select time_bucket('2 seconds', t), grp, avg(hz)
       the tracking neurons: steering flat at zero, and the escape circuit still firing at 84.5 Hz, because they are
       different pathways."</dd>
       <dt>Run it</dt>
-      <dd><pre><span class="c"># the four episodes are already loaded; this prints the table</span>
+      <dd><pre>cd ~/Downloads/filess/flybrain-rover
+<span class="c"># the four episodes are already loaded; this prints the table</span>
 .venv/bin/python scripts/export_timeseries.py --report
 
 <span class="c"># to load more, e.g. straight after a live run</span>
@@ -275,7 +278,7 @@ select time_bucket('2 seconds', t), grp, avg(hz)
   </div>
 
   <div class="track on">
-    <h3>Solana: Best Use of Solana and Badge Hack <span class="chip ask">entering</span></h3>
+    <h3>Best Badge Hack, $2,500 <span class="chip done">ready</span></h3>
     <dl>
       <dt>The move</dt>
       <dd>Hand them the badge. Swat at it. The giant fibre fires, every LED flashes white, the fly jumps.
@@ -287,7 +290,8 @@ select time_bucket('2 seconds', t), grp, avg(hz)
       <dd>"There is no light sensor on this badge, so the swat is the stimulus: the accelerometer sees your hand
       arrive. It is the same convergence that fires when you swat at a real fly and miss."</dd>
       <dt>Run it</dt>
-      <dd><pre><span class="c"># 1. connectome -&gt; Lua, 2. Lua -&gt; the single file the IDE imports</span>
+      <dd><pre>cd ~/Downloads/filess/flybrain-rover
+<span class="c"># 1. connectome -&gt; Lua, 2. Lua -&gt; the single file the IDE imports</span>
 .venv/bin/python badge/export_badge_circuit.py
 .venv/bin/python badge/build_app.py
 
@@ -299,9 +303,9 @@ select time_bucket('2 seconds', t), grp, avg(hz)
       <b>USB JTAG/serial debug unit</b>, <b>Push</b>. Full API notes in
       <code>badge/SDK_NOTES.md</code>.</dd>
       <dt>Caveat</dt>
-      <dd class="caveat">The badge is Solana's own sponsorship, so a badge app sits inside this track. Worth one
-      question at the booth: does the badge-hack half need a Solana component, or is a pure badge app judged on its
-      own? If it needs Solana, drop it. Nothing else depends on the answer.</dd>
+      <dd class="caveat">Confirmed on the Devpost prize page: Best Badge Hack is its own $2,500 prize, separate from
+      Best Use of Solana, and "does not need to relate to your main project". No Solana component needed. It is
+      the largest cash prize we qualify for, so it gets the most polish.</dd>
     </dl>
   </div>
 </section>
