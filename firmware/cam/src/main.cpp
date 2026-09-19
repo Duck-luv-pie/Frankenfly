@@ -5,7 +5,6 @@
 
 #include <Arduino.h>
 #include <WiFi.h>
-#include <WiFiMulti.h>
 #include <ESPmDNS.h>
 #include <esp_camera.h>
 #include <esp_http_server.h>
@@ -17,7 +16,41 @@
 #endif
 
 static const char *HOSTNAME = "companion-cam";
-static WiFiMulti wifiMulti;
+
+// Every network the camera may meet (secrets.ini: WIFI_SSID / WIFI_PASS, then WIFI_SSID2 / 3 for a phone
+// hotspot or the Pi's own hotspot). Scan, print what is in range, join the strongest known one.
+struct KnownNet { const char *ssid; const char *pass; };
+static const KnownNet KNOWN[] = {
+  {WIFI_SSID, WIFI_PASS},
+#ifdef WIFI_SSID2
+  {WIFI_SSID2, WIFI_PASS2},
+#endif
+#ifdef WIFI_SSID3
+  {WIFI_SSID3, WIFI_PASS3},
+#endif
+};
+
+static bool join_known(uint32_t wait_ms) {
+  WiFi.disconnect(true, false);
+  delay(100);
+  int n = WiFi.scanNetworks(false, false, false, 300);
+  Serial.printf("scan: %d networks\n", n);
+  const KnownNet *chosen = nullptr;
+  int best = -1000;
+  for (int i = 0; i < n; i++) {
+    Serial.printf("  %-32s ch%-2d %4d dBm\n", WiFi.SSID(i).c_str(), WiFi.channel(i), WiFi.RSSI(i));
+    for (const KnownNet &k : KNOWN)
+      if (WiFi.SSID(i) == k.ssid && WiFi.RSSI(i) > best) { best = WiFi.RSSI(i); chosen = &k; }
+  }
+  WiFi.scanDelete();
+  if (!chosen) { Serial.println("none of the known networks in range"); return false; }
+  Serial.printf("joining %s (%d dBm)", chosen->ssid, best);
+  WiFi.begin(chosen->ssid, chosen->pass);
+  uint32_t t0 = millis();
+  while (WiFi.status() != WL_CONNECTED && millis() - t0 < wait_ms) { esp_task_wdt_reset(); delay(250); Serial.print('.'); }
+  Serial.println();
+  return WiFi.status() == WL_CONNECTED;
+}
 
 // AI-Thinker ESP32-CAM pin map
 #define PWDN_GPIO_NUM 32
@@ -152,21 +185,11 @@ void setup() {
   WiFi.mode(WIFI_STA);
   WiFi.setSleep(false);
   WiFi.setHostname(HOSTNAME);
-  // Every network the camera may meet (secrets.ini: WIFI_SSID / WIFI_PASS, then WIFI_SSID2 / 3 for a phone
-  // hotspot or the Pi's own hotspot); WiFiMulti joins whichever is in range, strongest first.
-  wifiMulti.addAP(WIFI_SSID, WIFI_PASS);
-#ifdef WIFI_SSID2
-  wifiMulti.addAP(WIFI_SSID2, WIFI_PASS2);
-#endif
-#ifdef WIFI_SSID3
-  wifiMulti.addAP(WIFI_SSID3, WIFI_PASS3);
-#endif
-  Serial.print("connecting to a known WiFi");
   uint32_t t0 = millis();
-  while (wifiMulti.run(8000) != WL_CONNECTED) {
-    esp_task_wdt_reset();                 // joining can take a while; don't let the watchdog reboot us mid-connect
-    Serial.print('.');
-    if (millis() - t0 > 90000) { Serial.println("\nno WiFi after 90 s, rebooting"); ESP.restart(); }
+  while (!join_known(12000)) {
+    esp_task_wdt_reset();
+    delay(1000);
+    if (millis() - t0 > 180000) { Serial.println("no known WiFi after 3 min, rebooting"); ESP.restart(); }
   }
   WiFi.setSleep(false);
   Serial.printf("\njoined %s, IP %s\n", WiFi.SSID().c_str(), WiFi.localIP().toString().c_str());
@@ -190,7 +213,7 @@ void loop() {
     last = millis();
     Serial.printf("up %lus frames %lu heap %u rssi %d\n", (unsigned long)(last / 1000),
                   (unsigned long)frames_served, ESP.getFreeHeap(), WiFi.RSSI());
-    if (WiFi.status() != WL_CONNECTED) wifiMulti.run(8000);
+    if (WiFi.status() != WL_CONNECTED) join_known(12000);
   }
   delay(100);
 }

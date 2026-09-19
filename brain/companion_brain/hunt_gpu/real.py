@@ -48,11 +48,35 @@ class RealHunt:
         self.last: dict = {}
         self.frame_jpg = b""
         self.heat_on = True
+        # the person detector runs on its own thread at the camera's pace; the brain loop takes the latest columns
+        self.latest = (np.zeros((self.arena.spec.bins, 2), dtype=np.float32), [], False)
+        self._stop = threading.Event()
+        self._sense_thread = threading.Thread(target=self._sense_loop, daemon=True, name="people-sense")
+        self._sense_thread.start()
+
+    def _sense_loop(self) -> None:
+        while not self._stop.is_set():
+            gray = self.cam.read()
+            if gray is None:
+                time.sleep(0.005)
+                if self.sense.age > self.sense.hold_ticks:
+                    with self.lock:
+                        self.latest = (self.latest[0] * 0.0, [], self.latest[2])
+                continue
+            vis, boxes = self.sense.observe(gray, abs(self.speed) > 0.05, color=self.cam.preview)
+            img = self.cam.preview.copy() if self.cam.preview is not None else None
+            if img is not None:
+                for (x, y, w, h) in boxes:
+                    cv2.rectangle(img, (x, y), (x + w, y + h), (80, 220, 120), 2)
+                ok, buf = cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, 70])
+                if ok:
+                    self.frame_jpg = buf.tobytes()
+            with self.lock:
+                self.latest = (vis, boxes, True)
 
     def tick(self) -> dict:
-        gray = self.cam.read()
-        fly_moving = abs(self.speed) > 0.05
-        vis, boxes = self.sense.observe(gray, fly_moving, color=self.cam.preview if gray is not None else None)
+        with self.lock:
+            vis, boxes, camera_ok = self.latest
         heat = np.zeros(2, dtype=np.float32)
         if self.heat_on and self.pir is not None:
             self.pir.poll()
@@ -60,12 +84,12 @@ class RealHunt:
                 heat[:] = min(1.0, float(self.arena.heat_gain))             # the HC-SR501: one bit into both hot cells (as in the arena's pir model)
         body = np.array([self.speed / self.vmax, self.prev_drive[0], self.prev_drive[1], (self.t % self.episode_s) / self.episode_s], dtype=np.float32)
         obs = torch.from_numpy(np.concatenate([heat, vis.reshape(-1), body]))[None]
-        drive = self.spiking(obs)
+        drive, _decoded = self.spiking(obs)                      # the spiking hunter returns (drive, decoded motor channels)
         f, tu = float(drive[0, 0]), float(drive[0, 1])
         # the fly's would-be motion, as the arena would integrate it (the S1 driver turns these into sticks)
         target = self.vmax * max(0.0, f)
         self.speed += (target - self.speed) * min(1.0, self.arena.dt / 0.3)
-        yaw_dps = -self.wmax_dps * float(self.arena.turn_sign) * tu * -1.0   # arena: turn +ve = right; yaw_dps +ve = clockwise
+        yaw_dps = -self.wmax_dps * float(self.arena.turn_sign) * tu          # arena heading rate = turn_sign*wmax*tu (+ve left); yaw_dps +ve = clockwise
         self.prev_drive[:] = (f, tu)
         self.t += self.arena.dt
         if self.body is not None and self.rover_on:
@@ -82,21 +106,15 @@ class RealHunt:
               "boxes": [[int(v) for v in b] for b in boxes], "drive": [round(f, 3), round(tu, 3)],
               "speed_mps": round(self.speed, 2), "yaw_dps": round(yaw_dps, 1), "fov_deg": self.sense.cam_fov,
               "rover": (self.body.status() if self.body is not None and hasattr(self.body, "status") else None), "rover_on": self.rover_on,
-              "paused": self.paused, "heat_on": self.heat_on, "camera_ok": gray is not None,
+              "paused": self.paused, "heat_on": self.heat_on, "camera_ok": camera_ok,
               "brain": {"n_spikes": int(spk.sum()), "top": sorted(types.items(), key=lambda kv: -kv[1])[:8],
                         "rates": {g: [round(rates[g]["left"], 1), round(rates[g]["right"], 1)] for g in ("DNa02", "DNa01", "DN_all", "MDN", "DNp09")}}}
-        if self.cam.preview is not None:
-            img = self.cam.preview.copy()
-            for (x, y, w, h) in boxes:
-                cv2.rectangle(img, (x, y), (x + w, y + h), (80, 220, 120), 2)
-            ok, buf = cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, 70])
-            if ok:
-                self.frame_jpg = buf.tobytes()
         with self.lock:
             self.last = st
         return st
 
     def close(self) -> None:
+        self._stop.set()
         self.cam.close()
         if self.body is not None:
             self.body.close()

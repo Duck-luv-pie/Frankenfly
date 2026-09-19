@@ -6,4 +6,6 @@ cd "$HOME/companion/brain" || exit 1
 BRIDGE=$(ls /dev/serial/by-id/*CP210* 2>/dev/null | head -1)         # the S-Bus bridge ESP32 (CP2102), whatever ttyUSB number it got
 CAM="${CAM_URL:-http://companion-cam.local:81/stream}"
 echo "[companion-hunt] camera $CAM, bridge ${BRIDGE:-none}"
-exec uv run companion hunt-brain --real --camera "$CAM" --load data/cache/hunter_brain.npz --rover-off ${BRIDGE:+--s1 "$BRIDGE"}
+ROVER_FLAG="--rover-off"; [ "${ROVER:-off}" = "on" ] && ROVER_FLAG=""      # ROVER=on in companion-hunt.env: drive from the start
+echo "[companion-hunt] rover ${ROVER:-off} at start"
+exec uv run companion hunt-brain --real --camera "$CAM" --load data/cache/hunter_brain.npz $ROVER_FLAG ${BRIDGE:+--s1 "$BRIDGE"}
