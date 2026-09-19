@@ -6,6 +6,7 @@ make_figures.py -- the three figures for the Devpost gallery and the poster, fro
 1. control.png   the wiring-shuffle control: the eye is untouched, the steering neurons go silent.
 2. graded.png    deleting LC10a a quarter at a time: a population degrades, it does not switch off.
 3. lesions.png   every lesion against the intact circuit, as turn-toward fraction.
+4. pathway.png   the relays that carry LC10a to DNa02, and what pruning does to them.
 Every panel carries its own protocol line, so a figure cannot be quoted without its provenance.
 """
 from __future__ import annotations
@@ -145,7 +146,72 @@ def fig_dropout(out):
     fig.savefig(f"{out}/dropout.png", dpi=200, facecolor=BG); plt.close(fig)
 
 
+
+def pathway_shares(brain):
+    """AOTU / LAL / everything else, as a share of the LC10a -> DNa02 bottleneck weight. Computed live
+    from the connectome so the figure cannot drift away from what scripts/trace_pathway.py reports."""
+    import os
+    import sys
+    import torch
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from brain.lif import load_brain
+    from trace_pathway import relays
+    d, N, g = load_brain(brain)
+    types = [str(t) for t in d["types"]]
+    post, pre = torch.as_tensor(d["W_indices"])
+    w = torch.as_tensor(d["W_values"])
+    idx, bottleneck, _, _ = relays(g["LC10a_L"], g["DNa02_L"], pre, post, w, N)
+    share = {"AOTU": 0.0, "LAL": 0.0, "other": 0.0}
+    kinds = set()
+    for k in range(idx.numel()):
+        t = types[int(idx[k])]
+        kinds.add(t)
+        key = "AOTU" if t.startswith("AOTU") else ("LAL" if t.startswith("LAL") else "other")
+        share[key] += float(bottleneck[k])
+    tot = sum(share.values())
+    return {k: 100 * v / tot for k, v in share.items()}, len(kinds), int(w.numel())
+
+
+def fig_pathway(out, brains=("data/brain.npz", "data/brain_tiny.npz")):
+    import os
+    rows = []
+    for b in brains:
+        if not os.path.exists(b):
+            print(f"  skipping pathway figure: {b} missing")
+            return
+        sh, n_types, n_syn = pathway_shares(b)
+        rows.append((sh, n_types, n_syn))
+    (s0, t0, y0), (s1, t1, y1) = rows
+
+    fig, ax = frame("Prune 99.6% of the synapses. The pathway concentrates.",
+                    "Every neuron on a path from LC10a to DNa02, scored by the bottleneck weight min(|in|, |out|) it can "
+                    "actually pass. LC10a has no direct synapse onto DNa02 at all: every signal goes through a relay. "
+                    "LC10a to AOTU (anterior optic tubercle) to LAL (lateral accessory lobe) to DNa02 is the steering "
+                    "pathway the courtship literature describes. We did not put it there. This is anatomy, not "
+                    "causation: lesioning AOTU leaves tracking at 61% against 71% for a size-matched random lesion, "
+                    "so it is where the weight sits, not a bottleneck the behaviour needs (RESULTS.md 4b).",
+                    figsize=(9.0, 5.0), left=0.30)
+    labels = [f"full connectome\n{y0 / 1e6:.2f}M synapses, {t0} types\nAOTU + LAL  {s0['AOTU'] + s0['LAL']:.0f}%",
+              f"strongest only\n{y1:,} synapses, {t1} types\nAOTU + LAL  {s1['AOTU'] + s1['LAL']:.0f}%"]
+    for i, sh in enumerate((s0, s1)):
+        left = 0.0
+        for key, color in (("AOTU", CORAL), ("LAL", BLUE), ("other", GREY)):
+            v = sh[key]
+            ax.barh(i, v, 0.42, left=left, color=color, label=key if i == 0 else None)
+            if v > 7:
+                ax.text(left + v / 2, i, f"{key}\n{v:.0f}%", ha="center", va="center",
+                        color=BG if key != "other" else FG, fontsize=11, fontweight="bold", linespacing=1.4)
+            left += v
+    ax.set_yticks([0, 1]); ax.set_yticklabels(labels, color=FG, fontsize=10, linespacing=1.6)
+    ax.set_xlabel("share of the LC10a to DNa02 pathway (%)")
+    ax.set_xlim(0, 100); ax.set_ylim(-0.55, 1.55)
+    ax.invert_yaxis()
+    fig.savefig(f"{out}/pathway.png", dpi=200, facecolor=BG); plt.close(fig)
+
+
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(); ap.add_argument("--out", default="devpost"); a = ap.parse_args()
     fig_control(a.out); fig_graded(a.out); fig_lesions(a.out); fig_silence(a.out); fig_dropout(a.out)
-    print(f"wrote control, graded, lesions, silence and dropout figures to {a.out}/")
+    fig_pathway(a.out)
+    print(f"wrote control, graded, lesions, silence, dropout and pathway figures to {a.out}/")

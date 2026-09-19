@@ -85,6 +85,79 @@ The same circuit in **pure numpy**, no PyTorch at all (`edge/flybrain_mini.py`, 
 
 So the brain needs neither a GPU nor a deep-learning framework, and a Raspberry Pi would run even the full circuit in roughly 10 ms per frame. At 0.15 ms per millisecond of brain time, the PyTorch version runs at 335 Hz on one laptop core, which puts it comfortably in real time on a Raspberry Pi and makes the detector, not the brain, the only obstacle to putting the whole loop on the robot. The mushroom body does not survive this cut (Kenyon cells and MBONs are silent in this task and drop out), so the tiny circuit is a runtime artifact, not something to train on.
 
+## 4b. Where the weight sits, and what the behaviour actually needs
+
+Section 4 showed the behaviour survives deleting the weakest 95% of synapses. That is a claim about
+redundancy, not about anatomy: a circuit could be robust and still be riding an accident of thresholding.
+`scripts/trace_pathway.py` asks the sharper question. For every neuron X on a path from an eye population
+to a descending neuron, it scores the bottleneck weight min(|in|, |out|), because a relay only passes what
+its weaker half allows, then rolls the scores up by anatomical family.
+
+    python scripts/trace_pathway.py --from LC10a_L --to DNa02_L
+    python scripts/trace_pathway.py --from LC10a_L --to DNa02_L --brain data/brain_tiny.npz
+
+LC10a and DNa02, the tracking pathway, have **no direct synapses at all**. Every signal goes through a
+relay, and the relays are not arbitrary:
+
+| Brain file | neurons | synapses | relay types | AOTU share | LAL share | AOTU + LAL |
+|---|---|---|---|---|---|---|
+| `data/brain.npz` | 15,000 | 2,334,959 | 40 | 51.1% | 29.5% | **80.6%** |
+| `data/brain_tiny.npz` | 2,211 | 10,387 | 13 | 70.7% | 27.4% | **98.1%** |
+
+Deleting 99.6% of the synapses does not dilute the pathway, it concentrates it: the same named cells stay
+on top (AOTU012, AOTU015, AOTU025), 40 relay types collapse to 13, and the anterior optic tubercle plus
+the lateral accessory lobe go from carrying four fifths of the route to carrying essentially all of it.
+LC10a to AOTU to LAL to DNa02 is the steering pathway the courtship-pursuit literature describes. We did
+not put it there and we did not select for it; it is what is left when you keep the strongest synapses.
+
+The escape pathway is wired the opposite way, and the contrast is the point:
+
+| Pathway | Direct synapses | Architecture |
+|---|---|---|
+| LC4 to the giant fibre | 71, net weight +3,782 | monosynaptic, plus feedforward **inhibition** (PVLP010, -414) |
+| LC10a to DNa02 | 0 | obligate two-stage relay, AOTU then LAL |
+
+Escape is built for speed: every LC4 cell synapses straight onto the giant fibre, with inhibitory relays
+setting the threshold so the fly does not jump at everything. Steering is built for computation, with no
+shortcut available. That is why `badge/` can run a credible escape reflex in 150 neurons on a microcontroller
+while the rover needs the full 15,000 to turn toward a person.
+
+### The prediction that failed
+
+Everything above is anatomy: weights on a graph, no simulation. It makes an obvious prediction. If AOTU
+really carries the route, deleting it should abolish tracking while the eye stays intact. It does not.
+
+    python scripts/lesion_relay.py --envs 128 --device mps --engine dense
+
+| condition | turn-toward | advance | DNa02 L/R (Hz) |
+|---|---|---|---|
+| intact | 73% | 99% | 15 / 14 |
+| LC10a (the eye) lesioned, 275 cells | **0%** | 98% | 0 / 0 |
+| AOTU lesioned, 169 cells | 61% | 99% | 10 / 10 |
+| LAL lesioned, 350 cells | 71% | 99% | 11 / 10 |
+| random 169 cells | 71% | 99% | 15 / 14 |
+| random 350 cells | 80% | 99% | 24 / 23 |
+
+128 arenas, one seed, stage A, humans frozen, untrained. Removing neurons always costs something, so the
+row that matters is the size-matched random lesion, not the intact row.
+
+Deleting the eye abolishes tracking completely. Deleting the tubercle that carries half the anatomical
+route leaves it at 61% against 71% for the same number of random cells, a gap of roughly 1.7 standard
+errors at this sample size. That is suggestive at best, and nowhere near the collapse the anatomy
+predicted. LAL is indistinguishable from its control.
+
+So the figure shows **where the synaptic weight is concentrated, not a bottleneck the behaviour depends
+on**, and it should be described that way. The honest reading is the one section 4 already pointed at:
+this circuit is redundant, and it routes around its own strongest path. A connectome tells you where the
+wiring went; only a lesion tells you what the wiring is for, and the two answers are different here.
+
+The one place they agree is the eye. LC10a is a genuine bottleneck, 0% with no parallel route, which is
+why the demo lesions the eye and not the relay.
+
+(Worth noting for anyone repeating this: deleting 350 random cells *raised* turn-toward to 80% and nearly
+doubled DNa02 rates, which is what you would expect if random deletion removes net inhibition. Do not
+read that as an improvement; read it as a warning that lesion size alone changes the excitation balance.)
+
 ## 5. Learning, using the fly's own dopamine neurons
 
 Reward and punishment are delivered as current onto PAM and PPL1; plasticity is confined to existing synapses under Dale's law with bounds of 3× the original magnitude, plus homeostatic scaling toward 150 Hz. No new network is trained at any point.
