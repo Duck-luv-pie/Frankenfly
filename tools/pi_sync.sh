@@ -6,7 +6,7 @@ set -e
 PI="${1:-companion@companion-pi.local}"
 HERE="$(cd "$(dirname "$0")/.." && pwd)"
 echo "syncing $HERE -> $PI:companion/"
-rsync -az --info=progress2 --delete \
+rsync -az --delete \
   --exclude '.git' --exclude '.venv' --exclude '__pycache__' --exclude '.pio' --exclude '.pytest_cache' \
   --exclude 'brain/data/raw' --exclude 'brain/data/atlas' --exclude 'node_modules' \
   "$HERE/" "$PI:companion/"

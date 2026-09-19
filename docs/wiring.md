@@ -167,6 +167,20 @@ is mirrored, flip `sign_forward` / `sign_strafe` / `sign_yaw` under `body.s1` in
 slowly per stick: `--pulse yaw:1:2` at full stick, count the degrees turned, and set `stick_yaw` /
 `stick_forward` so the robot's turn-to-speed ratio matches the fly's (hunt.turn_max / hunt.speed_max).
 
+## Raspberry Pi 5 (the brain on the robot)
+
+Image the card with `tools/pi_image.md`'s recipe (Raspberry Pi OS Lite 64-bit + cloud-init `user-data` /
+`network-config` on the boot partition: hostname `companion-pi`, user `companion`, SSH on, the Wi-Fi
+networks), then from the Mac `tools/pi_sync.sh companion@<pi>` and on the Pi `bash companion/tools/pi_setup.sh`
+(uv, numba, pyserial, CPU PyTorch; a benchmark at the end). iPhone hotspots do not pass `.local` names:
+find the Pi with a ping sweep of the hotspot's /28 and use its address.
+
+Measured 2026-09-19 on a Pi 5 (4 GB): the full pruned circuit (48,670 neurons) runs at **0.35x** real
+time; the hunt subcircuit (8,503 spiking neurons, `hunt-brain --spiking`) at **1.18x** (45 s of brain in
+38 s), behaving as on the Mac (first touch 11.7 s). So the robot runs the hunt brain, not the whole brain.
+The ESP32 S-Bus bridge is `/dev/ttyUSB0` on the Pi; `hunt-brain --watch --s1 /dev/ttyUSB0` there drives
+the S1 with the dashboard at `http://<pi>:8601` from any machine on the same network.
+
 ## Bring-up order
 
 1. **Cam first, nothing wired.** Flash, open `http://companion-cam.local:81/stream` in a

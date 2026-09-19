@@ -14,7 +14,7 @@ if ! command -v uv >/dev/null 2>&1; then
   grep -q '.local/bin' "$HOME/.bashrc" || echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$HOME/.bashrc"
 fi
 sudo usermod -aG dialout "$USER" || true           # serial ports (/dev/ttyUSB0) without sudo; takes effect at next login
-uv sync --extra fast --extra s1
+uv sync --extra fast --extra s1 --extra gpu
 echo
 echo "--- brain benchmark (the pruned circuit; 1.0x or more = real time) ---"
 uv run companion bench

@@ -35,3 +35,12 @@ packages = ["companion_brain"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+# Linux Arm (the Raspberry Pi): PyPI's torch wheel is the CUDA build with gigabytes of NVIDIA packages; use the CPU build
+torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux' and platform_machine == 'aarch64'" }]
