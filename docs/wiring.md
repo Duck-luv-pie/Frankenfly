@@ -144,7 +144,25 @@ Enable the UART with `dtparam=uart0=on` in `/boot/firmware/config.txt`; the port
 -> Signal, GND -> GND, port `/dev/ttyUSB0`.
 
 Bench test before the brain: `python3 tools/s1_sbus.py --port <PORT> --neutral` (does the chassis
-stiffen with the app disconnected?), then without `--neutral` for w/s/a/d/q/e driving. If an axis
+stiffen with the app disconnected?), then without `--neutral` for w/s/a/d/q/e driving, or hands-off
+`--pulse forward:0.4:1` (3 s centred, then the axis for that long, then centred).
+
+**The fly driving the S1** (verified 2026-09-19, Mac -> ESP32 bridge -> S1, robot on the floor):
+
+```sh
+cd brain
+uv run --with pyserial companion hunt-brain --watch --load data/cache/hunter_brain.npz --s1 /dev/cu.usbserial-210 --open
+```
+
+The spiking connectome hunter runs in its arena at http://localhost:8601 and the rover mirrors the fly's
+real speed and heading rate each tick (`body.s1.speed_mps_full` / `yaw_dps_full` convert them to sticks;
+the fly's 1.6 m/s saturates the rover's 0.85, so the rover follows the same path more slowly). The page
+shows the fly's heading and yaw rate and what the rover is being told; the camera button cycles to a
+locked bird's-eye view for comparing turns. `--set body.s1.rotation_only=true` (a global option: it goes
+*before* the subcommand) makes the rover pivot only. Lessons: a dead S1 battery looks exactly like a
+broken link (the motion controller ignores S-Bus, the ESP32 still reports frames flowing) - check it
+first; the hunter wags its heading several times a second, which the rover cannot follow tick by tick,
+so on turns it shivers until the fly commits (heading tracking, not yet built, is the fix). If an axis
 is mirrored, flip `sign_forward` / `sign_strafe` / `sign_yaw` under `body.s1` in the config. The S1 yaws
 slowly per stick: `--pulse yaw:1:2` at full stick, count the degrees turned, and set `stick_yaw` /
 `stick_forward` so the robot's turn-to-speed ratio matches the fly's (hunt.turn_max / hunt.speed_max).

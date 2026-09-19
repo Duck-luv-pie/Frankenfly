@@ -29,7 +29,7 @@ DEFAULTS = {
     "sign_forward": 1, "sign_strafe": 1, "sign_yaw": 1,   # flip after the bench test if an axis is mirrored
     "yaw_dps_full": 90.0,    # measured: degrees per second at full yaw stick (slow preset, 2026-09-19)
     "speed_mps_full": 0.85,  # measured: metres per second at full forward stick (slow preset)
-    "rotation_only": True,   # copy the fly's rotation only; forward and strafe stay centred (the first matching test)
+    "rotation_only": False,  # True: copy the fly's rotation only; forward and strafe stay centred (the first matching test)
     "heading_gain": 3.0,     # heading tracking: yaw rate = gain x heading error (deg/s per deg), capped at yaw_dps_full
     "heading_deadband_deg": 2.0,
     "gimbal_pitch": 0.0,     # -1..1 held on channel 3
@@ -170,7 +170,7 @@ class S1Body:
             st = dict(self.sticks)
         full = float(self.cfg.get("yaw_dps_full", DEFAULTS["yaw_dps_full"]))
         out = {"sticks": {k: round(v, 3) for k, v in st.items()}, "yaw_dps": round(st["yaw"] * full, 1),
-               "saturated": abs(st["yaw"]) >= 0.999, "rotation_only": bool(self.cfg.get("rotation_only", True)), "frames": self.frames}
+               "saturated": abs(st["yaw"]) >= 0.999, "rotation_only": bool(self.cfg.get("rotation_only", False)), "frames": self.frames}
         if self.est_heading is not None and self.target_heading is not None:
             out["heading_deg"] = round(self.est_heading, 1)
             out["error_deg"] = round(wrap_deg(self.target_heading - self.est_heading), 1)
