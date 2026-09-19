@@ -535,7 +535,16 @@ def main(argv=None, hotkeys=None):
             sys.exit(str(e))
     heat = HeatSerial(a.heat_serial) if a.heat_serial else None
     if a.s1_sbus:
-        rover = SbusRover(a.s1_sbus, a.companion_dir, a.v_max, a.w_max, sign_yaw=a.sign_yaw)
+        try:
+            rover = SbusRover(a.s1_sbus, a.companion_dir, a.v_max, a.w_max, sign_yaw=a.sign_yaw)
+        except Exception as e:  # noqa: BLE001
+            # rehearsing before the ESP32 arrives is the normal case, so a dry run carries on without it
+            if not a.dry_run:
+                raise SystemExit(f"cannot open the S-Bus bridge on {a.s1_sbus}: {str(e).splitlines()[0][:100]}\n"
+                                 f"  is the ESP32 plugged in?  ls /dev/cu.usb*   (or rehearse with --dry-run)")
+            print(f"no S-Bus bridge on {a.s1_sbus} ({type(e).__name__}); dry run continues, wheel commands print only",
+                  flush=True)
+            rover = None
     else:
         rover = Rover(a.conn, a.v_max, a.w_max) if a.robot else (RemoteRover(a.robot_daemon, a.v_max, a.w_max) if a.robot_daemon else None)
 
