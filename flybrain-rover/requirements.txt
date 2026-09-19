@@ -1,0 +1,9 @@
+torch
+numpy
+pandas
+tqdm
+neuprint-python
+python-dotenv
+# Friday, optional:
+# ultralytics
+# robomaster

@@ -1,0 +1,17 @@
+.venv
+.venv38
+.venv38b
+__pycache__/
+*.pyc
+checkpoints/*
+!checkpoints/demo_brain.pt
+checkpoints_box/
+logs/
+logs_box/
+data/raw/
+data/*.npz
+*.pt
+!checkpoints/demo_brain.pt
+.env
+yolo11n.pt
+_archive/
