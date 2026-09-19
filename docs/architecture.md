@@ -82,7 +82,26 @@ config `learning`, toggle from the dashboard, `--no-learn`, or `learning.enabled
 - **Behavior.** The learned MBON valence steers the fly: approach turns toward the stronger-
   smelling antenna and speeds up, avoidance turns away (`learning.valence_steering`).
 
-**The two-odor experiment.** The world has two smells: the grape (odor A, glomeruli DM1/DM4/
+**The two-odor arena (second world).** The world panel switches between the *table* and a
+*two-odor arena*: a plain 24 × 9 mm chamber with the grape's scent from one end and the lemon's
+from the other, scent plumes drawn on the floor, nothing else to see. "Run assay" runs the classic
+choice test on the live brain: a 60 s naive test counting time spent on each half, then training
+with a sugar drop at the grape end until the fly has fed for 12 s (or 90 s), then a 60 s test.
+The preference index PI = (t_A − t_B)/(t_A + t_B) is shown before and after; switching plasticity
+off first gives the control. Learned MBON valence reaches behavior through the valence-steering
+coupling, so the trained fly turns toward and speeds up in the grape's plume.
+
+**Training many flies at once.** `companion batch --runs N --control --save` runs the same arena
+assay headless (`sim/arena.py` is a port of the world's kinematics) with one brain per worker
+process: N flies with learning on and N with it off, on as many cores as you have. Each assay is
+about 3 minutes of brain time; a 14-core Mac runs 12 of them in about 4.5 minutes of wall time,
+so a day of fly-time takes an hour. It prints every fly's naive → trained preference index and
+the group means, and `--save` stores the best fly's learned KC→MBON synapses so the live fly can
+start already trained: `companion run --load-weights data/cache/learned_weights.npz`. Steering
+in both worlds is klinotaxis on the learned value: the fly turns when its mushroom-body valence is
+falling and runs when it is rising, plus a small left/right antenna comparison.
+
+**The two-odor experiment (headless, neural readout).** The world has two smells: the grape (odor A, glomeruli DM1/DM4/
 VA2/DM2) with sugar, and a lemon (odor B, glomeruli VA6/DL1/VM4/DM3/DL4) that is never rewarded.
 `companion experiment` runs it headless: probe both odors, train (A + sugar, then B alone), probe
 again. Result: odor A's drive onto avoidance-MBONs is abolished (≈ 8.6 → 0.1 Hz) while its drive

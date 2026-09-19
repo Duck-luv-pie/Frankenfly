@@ -78,7 +78,8 @@ class Decoder:
         if group not in rates:
             return 0.0
         b = self.baseline.get(w, {}).get(group, {}).get(side, {"mean": 0.0, "std": 0.0})
-        return (rates[group][side] - b["mean"]) / max(b["std"], self.min_std)
+        floor = float(spec.get("min_std_hz", self.min_std)) if spec else self.min_std   # big populations may use a lower floor
+        return (rates[group][side] - b["mean"]) / max(b["std"], floor)
 
     def zgroup(self, rbw: dict, groups: list[str], side: str = "all", spec: dict | None = None) -> float:
         vals = [self.z(rbw, g, side, spec) for g in groups]

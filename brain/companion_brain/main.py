@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import time
 
@@ -178,6 +179,14 @@ def cmd_experiment(args, cfg):
     return ok
 
 
+def cmd_batch(args, cfg):
+    """Many headless arena assays in parallel: train and test the fly quickly, with controls."""
+    from .batch import run_batch
+    from .config import BRAIN_DIR
+    save = (BRAIN_DIR / "data" / "cache" / "learned_weights.npz") if args.save else None
+    run_batch(args.config, _parse_overrides(args.set), runs=args.runs, workers=args.workers, control=args.control, save=save)
+
+
 def cmd_run(args, cfg):
     from .data.prune import load_or_build
     from .sim.runner import BrainRunner
@@ -196,6 +205,13 @@ def cmd_run(args, cfg):
         print(f"[learning] mushroom body: {pl.n_kc} Kenyon cells, {pl.n_mbon} MBON compartments, {pl.n_syn:,} plastic synapses; "
               f"{'ON' if pl.enabled else 'OFF'} (toggle from the dashboard)", flush=True)
     baseline = load_or_calibrate(brain, cfg, circuit_key(cfg, args.full), rebuild=args.recalibrate)
+    if args.load_weights and brain.plasticity is not None:
+        z = np.load(args.load_weights)
+        if len(z["weights"]) == brain.plasticity.n_syn:
+            brain.plasticity.net.data[brain.plasticity.syn] = z["weights"].astype(np.float32)
+            print(f"[learning] loaded learned synapses from {args.load_weights} (seed {int(z['seed'])}, PI {float(z['naive_pi']):+.2f} -> {float(z['trained_pi']):+.2f})", flush=True)
+        else:
+            print(f"[learning] {args.load_weights} does not match this circuit; ignored", flush=True)
     cam_cfg = cfg.senses.camera
     probe_result = {}
     odor_probes = {"A": {"ORN_fruit": 120.0}, "B": {"ORN_lemon": 120.0}}
@@ -407,6 +423,10 @@ def main(argv=None):
     p.add_argument("--blocks", type=int, default=3); p.add_argument("--train-s", type=float, default=15.0)
     p.add_argument("--odor-hz", type=float, default=80.0); p.add_argument("--seed", type=int, default=0)
     p.add_argument("--no-learn", action="store_true", help="control run with plasticity switched off"); p.set_defaults(fn=cmd_experiment)
+    p = sub.add_parser("batch", help="many headless two-odor arena assays in parallel")
+    p.add_argument("--runs", type=int, default=4, help="flies with learning on"); p.add_argument("--workers", type=int, default=os.cpu_count() or 4)
+    p.add_argument("--control", action="store_true", help="also run the same number with learning off")
+    p.add_argument("--save", action="store_true", help="save the best fly's learned synapses for `run --load-weights`"); p.set_defaults(fn=cmd_batch)
     p = sub.add_parser("run"); p.add_argument("--full", action="store_true")
     p.add_argument("--sim-camera", default=None, metavar="SRC", help="'synthetic' or a video file / URL instead of the ESP32-CAM")
     p.add_argument("--dry-body", action="store_true", help="print body packets instead of sending UDP")
@@ -414,6 +434,7 @@ def main(argv=None):
     p.add_argument("--recalibrate", action="store_true", help="re-measure the resting baseline")
     p.add_argument("--no-learn", action="store_true", help="start with mushroom-body plasticity switched off")
     p.add_argument("--no-webcam", action="store_true", help="start with the webcam closed (toggle from the dashboard)")
+    p.add_argument("--load-weights", default=None, metavar="NPZ", help="start with learned KC->MBON synapses saved by `batch --save`")
     p.add_argument("--no-ui", action="store_true", help="do not start the live dashboard")
     p.add_argument("--ui-port", type=int, default=8600)
     p.add_argument("--open", action="store_true", help="open the dashboard in the default browser")

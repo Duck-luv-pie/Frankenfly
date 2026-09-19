@@ -158,7 +158,7 @@ decode:
   motor:                         # continuous channels 0..1 (turn: -1..1), what actually moves the fly
     smoothing_ms: 400
     channels:
-      forward:  {groups: [DN_all], window_ms: 300, z_ref: 1.2, z0: 0.0}   # descending population = walking drive
+      forward:  {groups: [DN_all], window_ms: 300, z_ref: 1.2, z0: 0.0, min_std_hz: 0.1}   # descending population (674 cells) = walking drive; its own std is ~0.07 Hz
       backward: {groups: [MDN],                    z_ref: 5}
       turn:     {groups: [DNa01, DNa02], window_ms: 300, z_ref: 4, lateral: true}   # right minus left
       groom:    {groups: [DNg11, DNg12, DN_groom], z_ref: 4}

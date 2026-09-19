@@ -38,7 +38,8 @@ uv run companion download                 # ~135 MB of connectome + annotations
 uv run companion prune                    # builds the real-time circuit (cached)
 uv run companion bench                    # checks the circuit runs faster than real time
 uv run companion test-gf                  # looming neurons → Giant Fiber escape sanity test
-uv run companion experiment                              # two-odor conditioning, headless (--no-learn = control)
+uv run companion experiment                              # two-odor conditioning, headless neural readout (--no-learn = control)
+uv run companion batch --runs 6 --control --save         # 6 flies + 6 controls through the arena assay in parallel; saves the best synapses
 uv run companion run --sim-camera 0 --dry-body --open   # no robot yet: Mac webcam + live dashboard
 uv run companion run                                      # ESP32-CAM + real robot (dashboard too)
 ```
@@ -57,9 +58,10 @@ bodies from the Fly / Neural Atlas) lit by the simulated spikes, motor channels,
 the cell types firing right now. The atlas data lives in `brain/data/atlas/male-cns` (git-ignored;
 copy it from the Fly / Neural Atlas project's `public/data/male-cns`).
 
-The fly also learns: its mushroom body runs dopamine-gated plasticity (toggle on the dashboard),
-and the world holds a two-odor experiment: the grape (rewarded with sugar) and a lemon (never
-rewarded). See `docs/architecture.md`, "Learning".
+The fly also learns: its mushroom body runs dopamine-gated plasticity (toggle on the dashboard).
+The table holds a grape (rewarded with sugar) and a lemon (never rewarded), and a second world,
+the two-odor arena, runs the classic choice assay with a before/after preference index. See
+`docs/architecture.md`, "Learning".
 
 Firmware (needs [PlatformIO](https://platformio.org/) CLI, `uv tool install platformio`):
 

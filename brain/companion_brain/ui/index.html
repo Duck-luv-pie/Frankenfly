@@ -87,8 +87,9 @@
   </div>
 
   <div class="panel">
-    <h2>The fly's world <span id="fly-note">moved by descending neurons · grape, flower, water, a neighbour, and you in the window</span></h2>
+    <h2>The fly's world <span id="fly-note"><button class="mini" data-world="table">table</button><button class="mini" data-world="arena">two-odor arena</button><button class="mini" id="assay-run">▶ run assay</button></span></h2>
     <div class="stage" id="arena3d"></div>
+    <div id="assay-out" style="font-size:12px;color:var(--muted);margin-top:6px;display:none"></div>
     <div class="bars motor" id="motor"></div>
     <small class="hint">Fly / Body Lab rig, 36 joints, moved only by the motor channels above (z-scores of descending-neuron rates against the brain's own resting activity): forward = whole descending population, turn = DNa01/02 right minus left, backward = MDN, groom = DNg11/12, threat = DNp02/04/11 + pC1d/e, song = pC1a-c, land = DNp07/10, freeze = DNp09, jump = Giant Fiber. Drag to orbit.</small>
   </div>
@@ -313,6 +314,16 @@ function drawSpark() {
 // ---------------------------------------------------------------- the 3D fly
 const fly = createFlyStage($('arena3d'), $('retina'));
 window.flyStage = fly;
+document.querySelectorAll('[data-world]').forEach(b => b.onclick = () => { fly.setWorld(b.dataset.world); document.querySelectorAll('[data-world]').forEach(x => x.style.color = x === b ? 'var(--text)' : ''); });
+$('assay-run').onclick = () => { fly.startAssay(); document.querySelectorAll('[data-world]').forEach(x => x.style.color = x.dataset.world === 'arena' ? 'var(--text)' : ''); };
+function renderAssay() {
+  const a = fly.assay, out = $('assay-out');
+  if (fly.world.name !== 'arena') { out.style.display = 'none'; return; }
+  out.style.display = 'block';
+  const pi = v => v == null ? '–' : (v >= 0 ? '+' : '') + v.toFixed(2);
+  const phase = { idle: 'arena · press ▶ run assay: 60 s naive test → training confined with grape scent + sugar → 60 s test', 'naive test': `naive test ${a.t.toFixed(0)}/60 s · grape side ${a.sideA.toFixed(0)} s, lemon side ${a.sideB.toFixed(0)} s`, training: `training ${a.t.toFixed(0)} s · confined with grape scent + sugar · fed ${a.fed.toFixed(1)} s`, test: `test ${a.t.toFixed(0)}/60 s · grape side ${a.sideA.toFixed(0)} s, lemon side ${a.sideB.toFixed(0)} s`, done: 'assay done' }[a.phase];
+  out.innerHTML = `<b style="color:var(--text)">${phase}</b> · preference for grape scent: naive <b style="color:var(--text)">${pi(a.naive)}</b> → trained <b style="color:var(--text)">${pi(a.trained)}</b> <span>(PI = (t<sub>A</sub> − t<sub>B</sub>) / (t<sub>A</sub> + t<sub>B</sub>); +1 = always on the grape side)</span>`;
+}
 
 // ---------------------------------------------------------------- main loop
 let lastFrame = performance.now();
@@ -320,6 +331,7 @@ function loop(now) {
   const dt = Math.min(0.05, (now - lastFrame) / 1000); lastFrame = now;
   atlas.step();
   fly.step(dt);
+  if ((now | 0) % 4 === 0) renderAssay();
   drawOverlay();
   if (last) {
     if (now - lastAt > 3000) { $('state').textContent = 'no signal'; $('state').style.background = '#444'; }
