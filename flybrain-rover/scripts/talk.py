@@ -262,7 +262,8 @@ def converse(key, agent_id, port):
     for name in ("what_do_you_see", "neural_state", "recent_events", "lesion", "restore",
                  "shuffle_wiring", "baseline", "dopamine"):
         fn = getattr(brain, name)
-        tools.register(name, (lambda p, fn=fn: fn(p)))
+        # the orchestrator validates the result as a string; a dict is a 1008 policy violation
+        tools.register(name, (lambda p, fn=fn: json.dumps(fn(p))))
 
     client = ElevenLabs(api_key=key)
     conv = Conversation(
