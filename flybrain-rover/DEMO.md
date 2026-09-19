@@ -97,6 +97,20 @@ Dry run without the robot: `.venv/bin/python scripts/demo.py --checkpoint checkp
 ```
 Open http://localhost:8601. Our 15,000 neurons appear on his brain map at their real soma positions (neuPrint), spikes light up per tick, the DNa02/DNa01/DN_all bars, the 24 retina cells, heat and drive are ours. `fly.js` and the .glb models come from his `ui/` directory (`replay/assets/` holds the human and RoboMaster models until his push includes them; a stand-in fly.js is served if his is missing).
 
+## Third way, the one Ducks is building: the Pi rides the robot
+The brain stays on the laptop (15,000 neurons plus the detector do not fit on a Pi). The Pi holds the S-Bus wiring
+and is the access point the ESP32-CAM streams through. `scripts/pi_s1_relay.py` runs on the Pi: UDP motor packets
+in on :4310, his `S1Body` driver out to the S1, sticks centred by his failsafe if packets stop for 0.5 s.
+```
+scp scripts/pi_s1_relay.py companion@companion-pi.local:companion/     # once
+ssh companion@companion-pi.local python3 companion/pi_s1_relay.py       # on the Pi (--port /dev/ttyUSB0 for an adapter)
+.venv/bin/python scripts/demo.py --checkpoint checkpoints/demo_brain.pt \
+  --s1-udp companion-pi.local:4310 --source http://companion-cam.local:81/stream --voice --dry-run
+```
+Verified end to end on one machine with `pi_s1_relay.py --fake`: 94 packets in, sticks followed the brain, 886 S-Bus
+frames out at 70 Hz, failsafe centred them when the packets stopped. The laptop must reach the Pi (its Wi-Fi, or one
+LAN); with the laptop on the Pi's Wi-Fi, use iPhone USB tethering for the voice agent and Tiger.
+
 ## Second way to drive the S1: S-Bus (Ducks's path, no SDK, no gimbal needed)
 Ducks drives the S1 through its **S-Bus receiver pins** (under the rear cover, see his `docs/wiring.md`): laptop USB → spare ESP32 flashed with his `firmware/sbus-bridge` (inverter) → S1 S-Bus Signal + GND. Nothing comes back, so the eye is the laptop webcam (or his ESP32-CAM stream URL). Our bridge can use his driver directly:
 ```

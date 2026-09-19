@@ -345,6 +345,42 @@ class VizFeed:
         asyncio.run(main())
 
 
+class UdpS1Rover:
+    """The S1 driven through the Raspberry Pi that rides it: one JSON packet per frame over UDP to
+    scripts/pi_s1_relay.py, which hands it to Ducks's S-Bus driver on the Pi's UART. Wireless, and his
+    Pi is the body as he designed it. The relay centres the sticks itself if packets stop for 0.5 s, so a
+    dead laptop or a dropped network is a stopped robot, not a runaway."""
+    def __init__(self, target, v_max=0.7, w_max_deg=90.0, sign_yaw=1):
+        import socket
+        host, _, port = target.rpartition(":")
+        self.addr = (host or "127.0.0.1", int(port or 4310))
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.sign_yaw = sign_yaw
+        self.v_max, self.w_max = v_max, w_max_deg
+        self.n = 0
+        print(f"wheels: RoboMaster S1 via the Pi relay at udp://{self.addr[0]}:{self.addr[1]} "
+              f"(forward/turn in [-1,1]; the Pi's driver maps them to sticks)", flush=True)
+
+    def drive(self, forward, turn):
+        msg = json.dumps({"forward": float(max(-1.0, min(1.0, forward))),
+                          "turn": float(max(-1.0, min(1.0, self.sign_yaw * turn)))}, separators=(",", ":"))
+        try:
+            self.sock.sendto(msg.encode(), self.addr)
+            self.n += 1
+        except OSError:
+            pass
+
+    def stop(self):
+        for _ in range(3):
+            try:
+                self.sock.sendto(b'{"stop":true}', self.addr)
+            except OSError:
+                pass
+
+    def close(self):
+        self.stop()
+
+
 class SbusRover:
     """The S1 driven through its S-Bus receiver pins with Ducks's driver (hunting-fly, brain/companion_brain/body/s1.py):
     Mac USB -> ESP32 'sbus-bridge' (inverter) -> S1 motion controller. No SDK, no gimbal, nothing comes back.
@@ -471,6 +507,8 @@ def main(argv=None, hotkeys=None):
     ap.add_argument("--source", default="0", help="webcam index, video path, or 'robot'")
     ap.add_argument("--robot", action="store_true", help="drive the RoboMaster via the SDK in THIS process (needs Python 3.8)")
     ap.add_argument("--local-eye", action="store_true", help="with --robot-daemon: use --source (laptop webcam) as the eye, robot for wheels only")
+    ap.add_argument("--s1-udp", default=None, metavar="HOST:PORT",
+                    help="drive the S1 through the Pi relay (scripts/pi_s1_relay.py), e.g. companion-pi.local:4310")
     ap.add_argument("--s1-sbus", default=None, metavar="PORT",
                     help="drive the S1 over S-Bus via the ESP32 bridge on this serial port (Ducks's driver); use with --local-eye --source 0")
     ap.add_argument("--companion-dir", default=None, help="hunting-fly brain/ dir holding companion_brain (auto-detected)")
@@ -534,7 +572,9 @@ def main(argv=None, hotkeys=None):
         except ImportError as e:
             sys.exit(str(e))
     heat = HeatSerial(a.heat_serial) if a.heat_serial else None
-    if a.s1_sbus:
+    if a.s1_udp:
+        rover = UdpS1Rover(a.s1_udp, a.v_max, a.w_max, sign_yaw=a.sign_yaw)
+    elif a.s1_sbus:
         try:
             rover = SbusRover(a.s1_sbus, a.companion_dir, a.v_max, a.w_max, sign_yaw=a.sign_yaw)
         except Exception as e:  # noqa: BLE001
@@ -549,7 +589,7 @@ def main(argv=None, hotkeys=None):
         rover = Rover(a.conn, a.v_max, a.w_max) if a.robot else (RemoteRover(a.robot_daemon, a.v_max, a.w_max) if a.robot_daemon else None)
 
     cap = eye = None
-    local_eye = (rover is None) or (a.robot_daemon is not None and a.local_eye) or (a.s1_sbus is not None)
+    local_eye = (rover is None) or (a.robot_daemon is not None and a.local_eye) or (a.s1_sbus is not None) or (a.s1_udp is not None)
     kind = source_kind(a.source)
     if local_eye and not a.no_camera:
         import cv2

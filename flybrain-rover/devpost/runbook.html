@@ -125,24 +125,33 @@
 
 <section>
   <h2>Run order, before judges arrive</h2>
-  <p class="lede">Four terminals, in this order, all from the project directory. Ten minutes. There is no Raspberry Pi
-  in the loop: the robot is driven over S-Bus from an ESP32 on the laptop's USB, and the eye is the laptop
-  webcam. Rehearse the whole sequence once with <code>--dry-run</code> so the wheels stay still.</p>
+  <p class="lede">Four terminals, in this order, all from the project directory. Ten minutes. The brain runs on the
+  laptop; the Pi rides the robot and turns the laptop's motor packets into S-Bus, and the ESP32-CAM streams
+  through the Pi's Wi-Fi. Rehearse the whole sequence once with <code>--dry-run</code> so the wheels stay still.</p>
   <div class="steps-run">
     <pre>cd ~/Downloads/filess/flybrain-rover
 
-<span class="c"># 1 + 2, the path that works: Ducks's ESP32 S-Bus bridge on USB. No Wi-Fi, no SDK, no gimbal.</span>
-<span class="c">#   plug the ESP32 into this laptop, find its port, and the eye is the laptop webcam</span>
-ls /dev/cu.usb*
-.venv/bin/python scripts/demo.py --checkpoint checkpoints/demo_brain.pt \
-  --s1-sbus /dev/cu.usbserial-XXXX --local-eye --source 0 --voice --dry-run
-<span class="c">#   dry run first: stand left of the camera, then right; the printed turn must flip sign.</span>
-<span class="c">#   wrong way round -> add --sign-yaw -1. Then drop --dry-run and add --v-max 0.5 --w-max 90</span>
-<span class="c">#   ESP32-CAM instead of the webcam: --source http://companion-cam.local:81/stream</span>
+<span class="c"># 1 + 2, three ways to reach the wheels. Pick one.</span>
 
-<span class="c"># 1 + 2, the other path: the DJI SDK over the robot's own Wi-Fi (join it first; gimbal boards were offline)</span>
-<span class="c">#   .venv38/bin/python scripts/robot_daemon.py --conn ap</span>
-<span class="c">#   .venv/bin/python scripts/demo.py --checkpoint checkpoints/demo_brain.pt --robot-daemon 127.0.0.1:9500 --voice</span>
+<span class="c"># A. the Pi rides the robot (Ducks's design). ON THE PI, once:</span>
+<span class="c">#    scp scripts/pi_s1_relay.py companion@companion-pi.local:companion/</span>
+<span class="c">#    ssh companion@companion-pi.local  python3 companion/pi_s1_relay.py          # or --port /dev/ttyUSB0</span>
+<span class="c">#    ON THE LAPTOP, joined to the Pi's Wi-Fi (internet via iPhone USB tethering for voice + Tiger):</span>
+.venv/bin/python scripts/demo.py --checkpoint checkpoints/demo_brain.pt \
+  --s1-udp companion-pi.local:4310 --source http://companion-cam.local:81/stream --voice --dry-run
+<span class="c">#    no CAM yet? --local-eye --source 0 uses the laptop webcam for the rehearsal</span>
+
+<span class="c"># B. tether: the S-Bus adapter plugged into THIS laptop, webcam on the same cable bundle</span>
+<span class="c">#    ls /dev/cu.usb*</span>
+<span class="c">#    .venv/bin/python scripts/demo.py --checkpoint checkpoints/demo_brain.pt --s1-sbus /dev/cu.usbserial-XXXX --local-eye --source 1 --voice --dry-run</span>
+
+<span class="c"># C. the DJI SDK over the robot's own Wi-Fi (join it first; its gimbal boards were offline)</span>
+<span class="c">#    .venv38/bin/python scripts/robot_daemon.py --conn ap</span>
+<span class="c">#    .venv/bin/python scripts/demo.py --checkpoint checkpoints/demo_brain.pt --robot-daemon 127.0.0.1:9500 --voice</span>
+
+<span class="c"># whichever way: dry run first, stand left then right, the printed turn must flip sign (else --sign-yaw -1);</span>
+<span class="c"># then drop --dry-run and add --v-max 0.5 --w-max 90. Space is E-stop. The Pi relay and the S-Bus driver</span>
+<span class="c"># both centre the sticks by themselves if packets stop for half a second.</span>
 
 <span class="c"># 3. talk to the fly (needs a mic near the speaker, and venue Wi-Fi)</span>
 .venv/bin/python scripts/talk.py
@@ -157,7 +166,8 @@ ls /dev/cu.usb*
   <table>
     <thead><tr><th>Check before judges</th><th>What you should see</th><th>If not</th></tr></thead>
     <tbody>
-      <tr><td>ESP32 plugged in, <code>ls /dev/cu.usb*</code> shows a port</td><td>One usbserial device</td><td>Different cable (data, not charge-only); it is Ducks's board</td></tr>
+      <tr><td>Relay running on the Pi, laptop on the Pi's Wi-Fi</td><td>Relay prints "motor packets arriving from &lt;laptop ip&gt;"</td><td><code>ping companion-pi.local</code>; same network?</td></tr>
+      <tr><td>Camera stream</td><td><code>http://companion-cam.local:81/stream</code> opens in a browser</td><td>CAM joined the Pi's Wi-Fi? Fall back to the laptop webcam</td></tr>
       <tr><td>Dry run, stand left then right</td><td>Printed turn flips sign</td><td><code>--sign-yaw -1</code></td></tr>
       <tr><td>The brain terminal prints latency every 30 frames</td><td>30 to 60 ms camera to wheels</td><td><code>--yolo-device mps</code>, close browser tabs</td></tr>
       <tr><td>Walk in from 2 m</td><td>Robot turns to face you, rolls to your shoe</td><td>Stand at 1.5 m; <code>--show</code> to see boxes</td></tr>
