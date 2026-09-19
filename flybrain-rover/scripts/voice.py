@@ -38,12 +38,47 @@ LINES = {
     "contact":     "Found you.",
 }
 
-# ElevenLabs "Rachel"; any voice id works, and the id is not a secret
-DEFAULT_VOICE = "21m00Tcm4TlvDq8ikWAM"
+# ElevenLabs "River", relaxed and informative, which suits a fly reporting what was just done to it.
+# It must be a *premade* voice: free accounts are refused library voices over the API with HTTP 402.
+# `python scripts/voice.py --voices` lists what this account can actually use. The id is not a secret.
+DEFAULT_VOICE = "SAz9YHcvj6GT2YYXdXww"
+
+
+
+def load_dotenv():
+    """Read the project's .env into os.environ without overwriting anything already set.
+
+    The working directory is not a reliable place to look: a shell that wandered into a sibling repo
+    silently wrote a live database password into the wrong file once, so this resolves .env relative to
+    this source file instead."""
+    path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
+    if not os.path.exists(path):
+        return
+    with open(path) as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            k, v = line.split("=", 1)
+            os.environ.setdefault(k.strip(), v.strip().strip('"').strip("'"))
+
+
+FALLBACK = {}
 
 
 def path_for(key):
     return os.path.join(VOICE_DIR, f"{key}.mp3")
+
+
+def list_voices():
+    """What this account may use. Free plans see the premade voices only."""
+    import requests
+    key = os.environ.get("ELEVENLABS_API_KEY")
+    if not key:
+        sys.exit("set ELEVENLABS_API_KEY first")
+    r = requests.get("https://api.elevenlabs.io/v1/voices", headers={"xi-api-key": key}, timeout=20)
+    r.raise_for_status()
+    return [v for v in r.json().get("voices", []) if v.get("category") == "premade"]
 
 
 def generate(keys=None, voice_id=DEFAULT_VOICE, model="eleven_turbo_v2_5"):
@@ -60,6 +95,13 @@ def generate(keys=None, voice_id=DEFAULT_VOICE, model="eleven_turbo_v2_5"):
                           json={"text": text, "model_id": model,
                                 "voice_settings": {"stability": 0.4, "similarity_boost": 0.8}},
                           timeout=30)
+        if r.status_code == 402 and voice_id != FALLBACK.get("id"):
+            # a library voice on a free plan; drop to the first premade voice this account has
+            prem = list_voices()
+            if prem:
+                FALLBACK["id"] = voice_id = prem[0]["voice_id"]
+                print(f"  (voice refused on this plan, switching to {prem[0]['name']})")
+                continue
         if r.status_code != 200:
             print(f"  {name}: HTTP {r.status_code} {r.text[:120]}")
             continue
@@ -111,13 +153,20 @@ class Voice:
 
 
 if __name__ == "__main__":
+    load_dotenv()
     ap = argparse.ArgumentParser()
     ap.add_argument("--generate", action="store_true")
+    ap.add_argument("--voices", action="store_true", help="list the voices this account can use")
     ap.add_argument("--list", action="store_true")
     ap.add_argument("--say", default=None, choices=sorted(LINES))
     ap.add_argument("--voice-id", default=DEFAULT_VOICE)
     a = ap.parse_args()
-    if a.generate:
+    if a.voices:
+        for v in list_voices():
+            lab = (v.get("labels") or {})
+            print(f"  {v['voice_id']:24s} {v.get('name','')[:40]:42s} "
+                  f"{lab.get('gender','')}/{lab.get('accent','')}")
+    elif a.generate:
         generate(voice_id=a.voice_id)
     elif a.say:
         v = Voice()

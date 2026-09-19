@@ -28,6 +28,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+from datetime import datetime, timezone
 import sqlite3
 import sys
 import time
@@ -35,12 +36,12 @@ import time
 DDL = [
     """CREATE TABLE IF NOT EXISTS episodes (run_id TEXT PRIMARY KEY, started_at DOUBLE PRECISION,
         brain TEXT, checkpoint TEXT, stage TEXT, seed INTEGER, n_frames INTEGER, note TEXT)""",
-    """CREATE TABLE IF NOT EXISTS motor (run_id TEXT, t DOUBLE PRECISION, forward REAL, turn REAL,
+    """CREATE TABLE IF NOT EXISTS motor (run_id TEXT, t {T}, forward REAL, turn REAL,
         reward REAL, exploring INTEGER, lobotomy INTEGER)""",
-    """CREATE TABLE IF NOT EXISTS neuron_rates (run_id TEXT, t DOUBLE PRECISION, grp TEXT, hz REAL)""",
-    """CREATE TABLE IF NOT EXISTS retina (run_id TEXT, t DOUBLE PRECISION, col INTEGER,
+    """CREATE TABLE IF NOT EXISTS neuron_rates (run_id TEXT, t {T}, grp TEXT, hz REAL)""",
+    """CREATE TABLE IF NOT EXISTS retina (run_id TEXT, t {T}, col INTEGER,
         pres REAL, size REAL, mot REAL)""",
-    """CREATE TABLE IF NOT EXISTS spikes (run_id TEXT, t DOUBLE PRECISION, neuron INTEGER)""",
+    """CREATE TABLE IF NOT EXISTS spikes (run_id TEXT, t {T}, neuron INTEGER)""",
 ]
 INDEXES = [
     "CREATE INDEX IF NOT EXISTS neuron_rates_grp_t ON neuron_rates (grp, t)",
@@ -53,7 +54,7 @@ class Store:
     """One interface over Postgres/TimescaleDB/TigerData and SQLite, so nothing here needs an account."""
 
     def __init__(self, dsn=None, path="logs/timeseries.db"):
-        self.dsn, self.kind = dsn, "sqlite"
+        self.dsn, self.kind, self.hypertables = dsn, "sqlite", []
         if dsn:
             try:
                 import psycopg
@@ -77,15 +78,22 @@ class Store:
 
     def _setup(self):
         cur = self.conn.cursor()
+        ts = "TIMESTAMPTZ" if self.kind == "postgres" else "REAL"
         for stmt in DDL:
+            stmt = stmt.format(T=ts)
             cur.execute(stmt if self.kind == "postgres" else stmt.replace("DOUBLE PRECISION", "REAL"))
+        self.conn.commit()          # the tables are safe before anything that might roll back
         if self.kind == "postgres":
             for tbl in ("neuron_rates", "spikes"):                 # the two that actually get large
                 try:
                     cur.execute(f"SELECT create_hypertable('{tbl}', 't', if_not_exists => TRUE, "
-                                f"chunk_time_interval => 60)")
-                except Exception:                                   # plain Postgres has no Timescale
+                                f"chunk_time_interval => INTERVAL '1 minute')")
+                    self.conn.commit()
+                    self.hypertables.append(tbl)
+                except Exception as e:                              # plain Postgres has no Timescale
                     self.conn.rollback()
+                    print(f"  no hypertable on {tbl}: {type(e).__name__}: {str(e).splitlines()[0][:90]}",
+                          flush=True)
         for stmt in INDEXES:
             try:
                 cur.execute(stmt)
@@ -111,6 +119,25 @@ class Store:
         return f"{self.kind} ({self.dsn.split('@')[-1] if self.dsn else self.path})"
 
 
+
+def load_dotenv():
+    """Read the project's .env into os.environ without overwriting anything already set.
+
+    The working directory is not a reliable place to look: a shell that wandered into a sibling repo
+    silently wrote a live database password into the wrong file once, so this resolves .env relative to
+    this source file instead."""
+    path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
+    if not os.path.exists(path):
+        return
+    with open(path) as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            k, v = line.split("=", 1)
+            os.environ.setdefault(k.strip(), v.strip().strip('"').strip("'"))
+
+
 def frame_rows(run_id, f):
     """One replay/FORMAT.md frame -> rows for each table."""
     t = float(f.get("t", 0.0))
@@ -133,6 +160,11 @@ def write_frames(store, run_id, frames, meta, note=""):
     for f in frames:
         m, r, t, s = frame_rows(run_id, f)
         M += m; R += r; T += t; S += s
+    if store.kind == "postgres":
+        base = t0
+        def at(rows):
+            return [(r[0], datetime.fromtimestamp(base + r[1], timezone.utc)) + tuple(r[2:]) for r in rows]
+        M, R, T, S = at(M), at(R), at(T), at(S)
     n = (store.insert("motor", ["run_id", "t", "forward", "turn", "reward", "exploring", "lobotomy"], M)
          + store.insert("neuron_rates", ["run_id", "t", "grp", "hz"], R)
          + store.insert("retina", ["run_id", "t", "col", "pres", "size", "mot"], T)
@@ -170,6 +202,7 @@ def report(store):
 
 
 def main() -> None:
+    load_dotenv()
     ap = argparse.ArgumentParser()
     ap.add_argument("--replay", default=None, help="a replay JSON from scripts/dump_replay.py")
     ap.add_argument("--live", default=None, metavar="WS", help="stream from the demo feed, e.g. ws://localhost:8765")
