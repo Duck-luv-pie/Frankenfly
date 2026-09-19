@@ -117,11 +117,50 @@
   <div class="strip">
     <div class="cell"><div class="t">Finalist</div><div class="s ready">READY</div></div>
     <div class="cell"><div class="t">ElevenLabs</div><div class="s done">TALK TO THE FLY</div></div>
-    <div class="cell"><div class="t">Tiger Data</div><div class="s done">DONE</div></div>
+    <div class="cell"><div class="t">Tiger Data</div><div class="s done">LIVE</div></div>
     <div class="cell"><div class="t">GoDaddy domain</div><div class="s todo">5 MIN</div></div>
     <div class="cell"><div class="t">Best Badge Hack · $2,500</div><div class="s ready">READY</div></div>
   </div>
 </header>
+
+<section>
+  <h2>Run order, before judges arrive</h2>
+  <p class="lede">Five terminals, in this order, all from the project directory. Ten minutes. Rehearse the whole
+  sequence once with <code>--dry-run</code> on terminal 2 so the wheels stay still.</p>
+  <div class="steps-run">
+    <pre>cd ~/Downloads/filess/flybrain-rover
+
+<span class="c"># 0. join the RoboMaster's own Wi-Fi first (the daemon talks to 192.168.2.1); without it terminal 1 fails</span>
+
+<span class="c"># 1. the DJI SDK, Python 3.8 under Rosetta. Wait for "robot connected, gimbal recentred, video on"</span>
+.venv38/bin/python scripts/robot_daemon.py --conn ap
+
+<span class="c"># 2. the brain. Add --dry-run for the rehearsal. Hotkeys 1-7, space = E-stop</span>
+.venv/bin/python scripts/demo.py --checkpoint checkpoints/demo_brain.pt --robot-daemon 127.0.0.1:9500 --voice
+
+<span class="c"># 3. talk to the fly (needs a mic near the speaker, and venue Wi-Fi)</span>
+.venv/bin/python scripts/talk.py
+
+<span class="c"># 4. stream the frames into Tiger Data, until Ctrl-C</span>
+.venv/bin/python scripts/export_timeseries.py --live ws://localhost:8765 --run-id demo_$(date +%H%M)
+
+<span class="c"># 5. the wall chart -> http://localhost:8790 on the big screen, next to Ducks's 3-D viewer on ws://localhost:8765</span>
+.venv/bin/python scripts/live_chart.py</pre>
+  </div>
+  <div class="scroll">
+  <table>
+    <thead><tr><th>Check before judges</th><th>What you should see</th><th>If not</th></tr></thead>
+    <tbody>
+      <tr><td>Terminal 2 prints latency every 30 frames</td><td>30 to 60 ms camera to wheels</td><td><code>--yolo-device mps</code>, close browser tabs</td></tr>
+      <tr><td>Walk in from 2 m</td><td>Robot turns to face you, rolls to your shoe</td><td>Stand at 1.5 m; <code>--show</code> to see boxes</td></tr>
+      <tr><td>Press <b>6</b></td><td>Robot goes still, LC10a still lit on the wall</td><td>That is the control; if it keeps tracking, the shuffle did not apply</td></tr>
+      <tr><td>Say "what do you see" to terminal 3</td><td>Bearing and distance in the fly's voice</td><td>Check the mic input device; <code>talk.py --check</code> prints the tool answers</td></tr>
+      <tr><td>Open localhost:8790</td><td>Three traces moving, "newest bucket" under 3 s</td><td>Terminal 4 running? Wi-Fi? <code>--report</code> shows the aggregate</td></tr>
+      <tr><td>Badge in your pocket, charged</td><td>Swat, six white LEDs</td><td>Press DOWN if it flinches at rest</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
 
 <section>
   <h2>The fly's escape circuit, running here</h2>
@@ -234,35 +273,39 @@
   </div>
 
   <div class="track on">
-    <h3>MLH: Best Use of Tiger Data <span class="chip done">done</span></h3>
+    <h3>MLH: Best Use of Tiger Data <span class="chip done">live</span></h3>
     <dl>
       <dt>The move</dt>
-      <dd>Run the query live. Four episodes, 211,430 rows, two hypertables on 1-minute chunks.</dd>
+      <dd>The wall chart. Every frame the brain produces streams into TimescaleDB hypertables as it happens, a
+      continuous aggregate rolls it up per second, and the chart on the wall polls that aggregate once a second.
+      Lesion the fly and the judge watches the steering trace fall to zero in the database, not just on the robot.</dd>
       <dt>Judge sees</dt>
-      <dd>
+      <dd>Three live traces (eye, steering, escape) with "newest bucket 1.6 s ago" and a row counter climbing.
+      Then, in Tiger's own SQL editor:
         <pre><span class="c">-- the steering asymmetry, straight out of the database</span>
 select time_bucket('2 seconds', t), grp, avg(hz)
   from neuron_rates
  where grp in ('DNa02_L','DNa02_R')
  group by 1,2;</pre>
       </dd>
-      <dt>The line</dt>
-      <dd>"The lesion is visible in the time series, not just in the robot. This episode is the one where we removed
-      the tracking neurons: steering flat at zero, and the escape circuit still firing at 84.5 Hz, because they are
-      different pathways."</dd>
       <dt>Run it</dt>
       <dd><pre>cd ~/Downloads/filess/flybrain-rover
-<span class="c"># the four episodes are already loaded; this prints the table</span>
-.venv/bin/python scripts/export_timeseries.py --report
+<span class="c"># terminal 4: stream the demo's frames into Tiger, one batch a second, until Ctrl-C</span>
+.venv/bin/python scripts/export_timeseries.py --live ws://localhost:8765 --run-id demo_$(date +%H%M)
 
-<span class="c"># to load more, e.g. straight after a live run</span>
-.venv/bin/python scripts/export_timeseries.py \
-  --replay replay/episode_7_trained.json</pre>
-      For the judge, paste the query above into Tiger Cloud's own SQL editor so they watch it run on their
-      console, not ours.</dd>
+<span class="c"># terminal 5: the wall chart, reads the continuous aggregate; open http://localhost:8790</span>
+.venv/bin/python scripts/live_chart.py
+
+<span class="c"># the four recorded episodes are already loaded; this prints the table plus aggregate and compression stats</span>
+.venv/bin/python scripts/export_timeseries.py --report</pre></dd>
+      <dt>The line</dt>
+      <dd>"Fifty hertz of neural data, 60,000 rows an episode, a quarter million rows loaded. It goes in by COPY a
+      second at a time, a continuous aggregate keeps per-second rates fresh with the newest second computed on
+      read, and compression kicks in after two minutes so a free instance holds a day of the robot. The lesion we
+      just did is already in the time series."</dd>
       <dt>Caveat</dt>
-      <dd class="caveat">A 15-second episode is ~60,000 rows at 50 Hz. It is a time series because the robot produces
-      one continuously, not because we wanted a database.</dd>
+      <dd class="caveat">Cloud is downstream of the loop, never in it: the brain does not know the database exists.
+      If the venue Wi-Fi drops, the demo runs on; only the chart stops updating.</dd>
     </dl>
   </div>
 
@@ -309,6 +352,50 @@ select time_bucket('2 seconds', t), grp, avg(hz)
       <dd class="caveat">Confirmed on the Devpost prize page: Best Badge Hack is its own $2,500 prize, separate from
       Best Use of Solana, and "does not need to relate to your main project". No Solana component needed. It is
       the largest cash prize we qualify for, so it gets the most polish.</dd>
+    </dl>
+  </div>
+</section>
+
+<section>
+  <h2>Three audiences, three pitches</h2>
+  <p class="lede">Finalist judges get the two-minute script below. MLH sends one judge for all of its prizes, so
+  those get one ninety-second conversation. Every other sponsor judges its own prize separately.</p>
+
+  <div class="track on">
+    <h3>MLH judge, ninety seconds, all MLH prizes at once</h3>
+    <dl>
+      <dt>0:00</dt>
+      <dd>"Real fruit fly connectome driving this robot; nothing in the middle is programmed. Three of your sponsors
+      are in the loop around it, each doing the job it is built for."</dd>
+      <dt>0:10 ElevenLabs</dt>
+      <dd>Hand them the mic. "Ask it what it sees." It answers from its retina columns. "Tell it to remove its eye."
+      It lesions the brain and reports its own steering neurons going from 251 hertz to zero.
+      <i>"A conversational agent whose only knowledge is eight tools reading a live brain. Not narration."</i></dd>
+      <dt>0:40 Tiger Data</dt>
+      <dd>Point at the wall chart. "Every frame goes into TimescaleDB hypertables as it happens, a continuous
+      aggregate rolls it up per second, this chart polls the aggregate. Fifty hertz of neural data, four episodes,
+      a quarter million rows, and the lesion we just did is already visible in the time series."</dd>
+      <dt>1:05 GoDaddy</dt>
+      <dd>"The domain installs the fly's escape circuit on any attendee's badge: one paste, no account. That is
+      what the site is for."</dd>
+      <dt>1:20</dt>
+      <dd>"Everything is in the repo with a reproduce script. Eight headline claims re-run in twelve seconds."</dd>
+      <dt>Do not</dt>
+      <dd class="caveat">Do not pitch MongoDB unless it exists by then. A bolted-on second database in front of the
+      person judging Tiger Data costs more than it earns.</dd>
+    </dl>
+  </div>
+
+  <div class="track on">
+    <h3>Solana, Best Badge Hack, sixty seconds at their booth</h3>
+    <dl>
+      <dt>The move</dt>
+      <dd>Hand them the badge. "Swat at it." Six LEDs flash white, the fly jumps. "That was the giant fibre: the one
+      neuron that launches a real fly's escape, wired here exactly as it is in the animal. Press B." Swat again,
+      nothing. "You just removed the eye's synapses. Press A." It works again.</dd>
+      <dt>The line</dt>
+      <dd>"150 real neurons, 900 measured synapses, integer arithmetic at 100 hertz on the ESP32-C3, stored as byte
+      strings because the badge compiles its source in RAM. And anyone here can install it from the site."</dd>
     </dl>
   </div>
 </section>

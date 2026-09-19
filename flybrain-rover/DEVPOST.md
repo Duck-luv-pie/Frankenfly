@@ -94,3 +94,26 @@ Python, PyTorch (event-driven sparse LIF engine), neuPrint (Janelia), Ultralytic
 - neuprint-python (Janelia), Ultralytics, DJI RoboMaster SDK.
 
 Team: Ducks (hardware, RoboMaster S1, the Three.js arena and visualization), Max, Senthil, and Taka (this repo: brain, senses, motor mapping, arena, training, robot bridge).
+
+## Sponsor prize paragraphs (paste one under each prize on Devpost)
+
+**MLH: Best Use of ElevenLabs.** You can talk to the fly. An ElevenLabs conversational agent whose only
+knowledge of the world is eight client tools that read the live brain and press the demo's own controls: ask
+what it sees and it answers from its retina columns with a bearing and distance; tell it to remove its eye and
+it lesions LC10a, reads its own steering neurons, and reports the rates going from 251 Hz to zero while the eye
+still fires. The language model is an interpreter with a microphone, not part of the control loop; the brain runs
+identically with it closed. Ten narration lines generated with eleven_v3 and cached are the no-network fallback.
+`scripts/talk.py`, `scripts/voice.py`.
+
+**MLH: Best Use of Tiger Data.** The robot's brain is a 50 Hz time series: 25 population firing rates, 24 retina
+columns, the motor command and every spike in a 512-cell sample, about 60,000 rows per 15-second episode. Frames
+stream from the demo into TimescaleDB hypertables as they happen (COPY, one batch per second), a continuous
+aggregate `rates_1s` rolls them up per second with the newest second computed on read, compression policies keep
+a free-tier instance sufficient, and a wall chart polls the aggregate once a second. Four recorded episodes are
+loaded; the lesioned one shows DNa02 flat at zero while the giant fibre still fires at 84.5 Hz, which is the
+whole argument, queryable. `scripts/export_timeseries.py`, `scripts/live_chart.py`.
+
+**MLH: Best Domain Name from GoDaddy Registry.** The domain does a job: it installs the fly's escape circuit on
+any Hack the North badge. One page with the circuit running live in the browser, a Copy-the-app button carrying
+the whole 16 KB single-file app, and the four badge-IDE steps. Every attendee has the same badge, so the domain
+is the distribution point for putting a fly brain on a thousand of them. `site/index.html`.
