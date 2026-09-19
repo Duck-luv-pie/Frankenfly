@@ -155,6 +155,11 @@ webcam plays. So you are in the fly's world too, seen through the window.
 | Humidity | 1/(1+(d/2.5 mm)²) from the water drop | `HRN_moist` = HRN_VP4 | logged; no behavior mapped yet |
 | Wind / presence | PIR on the robot body | `JO_wind` | startle, grooming |
 
+The webcam is a toggle ("webcam on" in the Fly's eyes panel, `--no-webcam` to start closed).
+Closing it releases the camera device, the window in the fly's world shows drawn curtains, and
+the brain gets no webcam frames; the fly's own retina keeps working as long as the page is
+visible (a hidden tab stops rendering, and then the fly is blind until it is shown again).
+
 Body state that lives in the world, not the brain: satiety (rises while feeding, decays over
 ~4 min and scales smell and taste), dust (pollen on the body), flight (a Giant Fiber takeoff
 starts a flight that lasts until the landing neurons DNp07/DNp10 fire or ~9 s pass; the retina

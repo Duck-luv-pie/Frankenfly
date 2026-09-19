@@ -81,7 +81,8 @@
 <div class="grid">
   <div class="panel">
     <h2>Fly's eyes <span id="cam-note">what the fly sees → optic lobe</span></h2>
-    <div class="stage"><canvas id="retina" width="80" height="60"></canvas><canvas id="overlay"></canvas><div class="inset"><img id="cam" alt=""><span>you, through the window</span></div></div>
+    <div class="stage"><canvas id="retina" width="80" height="60"></canvas><canvas id="overlay"></canvas><div class="inset"><img id="cam" alt=""><span id="cam-label">you, through the window</span></div></div>
+    <div class="gauge"><label style="display:flex;align-items:center;gap:6px;color:var(--text)"><input type="checkbox" id="cam-toggle" checked> webcam on (you are in the fly's world)</label></div>
     <small class="hint">Rendered from the fly's own head in its world at 80×60, the same pixels the brain gets. Your webcam plays on a window in that world. Red = looming (LC4/LPLC2), cyan = small object (LC11/LC10a), bar height = drive. <span id="senses"></span></small>
   </div>
 
@@ -164,7 +165,9 @@ function onPacket(p) {
   renderScores(p.scores, p.state);
   renderMotor(p.motor);
   renderLearning(p.learning);
-  $('cam-note').textContent = p.vision === 'retina' ? 'what the fly sees → optic lobe' : 'webcam fallback (open this page to give the fly its own eyes)';
+  $('cam-note').textContent = p.vision === 'retina' ? 'what the fly sees → optic lobe' : (p.vision === 'none' ? 'no vision right now (webcam closed; keep this page visible for the fly\'s own eyes)' : 'webcam fallback (keep this page visible to give the fly its own eyes)');
+  // keep the checkbox in sync with the brain (e.g. --no-webcam), but not in the seconds right after a user toggle
+  if (performance.now() - lastCamToggle > 3000 && typeof p.webcam === 'boolean' && p.webcam !== camOn) setCam(p.webcam, false);
   if (p.world && p.world.odor) { const w = p.world; $('senses').textContent = `Smell L/R ${w.odor[0].toFixed(2)}/${w.odor[1].toFixed(2)} · sugar ${w.sugar.toFixed(2)} · dust ${w.dust.toFixed(2)} · humid ${w.moist.toFixed(2)} · satiety ${w.satiety.toFixed(2)}`; }
   renderTypes(p.top_types);
   flashSpikes(p.spikes);
@@ -173,8 +176,17 @@ function onPacket(p) {
 
 // ---------------------------------------------------------------- camera + overlay
 const cam = $('cam'), ov = $('overlay');
-setInterval(() => { cam.src = '/frame.jpg?' + Date.now(); }, 100);
-cam.addEventListener('load', () => { if (window.flyStage) window.flyStage.setWebcam(cam); });
+let camOn = true;
+setInterval(() => { if (camOn) cam.src = '/frame.jpg?' + Date.now(); }, 100);
+cam.addEventListener('load', () => { if (camOn && window.flyStage) window.flyStage.setWebcam(cam); });
+let lastCamToggle = -1e9;
+function setCam(on, tellBrain) {
+  camOn = on; $('cam-toggle').checked = on;
+  if (tellBrain) { lastCamToggle = performance.now(); fetch('/control', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ webcam: on }) }).catch(() => {}); }
+  if (!on) { cam.removeAttribute('src'); cam.style.visibility = 'hidden'; $('cam-label').textContent = 'webcam closed'; if (window.flyStage) window.flyStage.closeWindow(); }
+  else { cam.style.visibility = ''; $('cam-label').textContent = 'you, through the window'; }
+}
+$('cam-toggle').onchange = e => setCam(e.target.checked, true);
 function drawOverlay() {
   const w = ov.width = ov.clientWidth, h = ov.height = ov.clientHeight, c = ov.getContext('2d');
   c.clearRect(0, 0, w, h);

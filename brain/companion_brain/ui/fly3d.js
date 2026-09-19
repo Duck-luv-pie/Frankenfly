@@ -94,6 +94,12 @@ export function createFlyStage(host, retinaCanvas, opts = {}) {
   const frame = new THREE.Mesh(new THREE.BoxGeometry(winW + 1, winH + 1, .4), mat('#2b3247', .7)); frame.position.set(0, winH / 2 + .6, ARENA + 3.7); scene.add(frame);
   const sill = new THREE.Mesh(new THREE.BoxGeometry(winW + 1.6, .5, 1.2), mat('#3a4360', .7)); sill.position.set(0, .25, ARENA + 3.3); scene.add(sill);
   function setWebcam(img) { if (!img.complete || !img.naturalWidth) return; camCtx.drawImage(img, 0, 0, 320, 240); camTex.needsUpdate = true; }
+  function closeWindow() {   // the human world is gone: draw drawn curtains on the window
+    camCtx.fillStyle = '#3a3f55'; camCtx.fillRect(0, 0, 320, 240);
+    for (let x = 0; x < 320; x += 20) { camCtx.fillStyle = (x / 20) % 2 ? '#454b66' : '#32374b'; camCtx.fillRect(x, 0, 20, 240); }
+    camCtx.fillStyle = '#8a93a8'; camCtx.font = '14px sans-serif'; camCtx.fillText('webcam closed', 112, 124);
+    camTex.needsUpdate = true;
+  }
 
   // the other fly: part of the world, so it follows a simple script (wander, stop, groom)
   const other = createFly(); other.root.scale.setScalar(.92); scene.add(other.root);
@@ -281,5 +287,5 @@ export function createFlyStage(host, retinaCanvas, opts = {}) {
     renderer.render(scene, camera);
   }
 
-  return { onPacket, step, fly, scene, motor: M, state: S, setWebcam };
+  return { onPacket, step, fly, scene, motor: M, state: S, setWebcam, closeWindow };
 }

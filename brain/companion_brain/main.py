@@ -218,10 +218,14 @@ def cmd_run(args, cfg):
     if not args.no_ui:
         from .ui.server import Dashboard
         dash = Dashboard(c, cfg, port=args.ui_port, open_browser=args.open)
-    if args.sim_camera == "synthetic":
-        source = SyntheticLooming(cam_cfg.width, cam_cfg.height, cam_cfg.fps, loop=dash is not None)
-    else:
-        source = CameraStream(args.sim_camera or cam_cfg.url, cam_cfg.width, cam_cfg.height)
+    def open_source():
+        if args.sim_camera == "synthetic":
+            return SyntheticLooming(cam_cfg.width, cam_cfg.height, cam_cfg.fps, loop=dash is not None)
+        return CameraStream(args.sim_camera or cam_cfg.url, cam_cfg.width, cam_cfg.height)
+    webcam_on = not args.no_webcam
+    source = open_source() if webcam_on else None
+    if dash is not None:
+        dash.webcam_on = webcam_on
     cam_lobe = OpticLobe(cam_cfg.width, cam_cfg.height, cam_cfg.fps)      # the webcam, as fallback vision
     lobe = OpticLobe(cam_cfg.width, cam_cfg.height, 10.0)                  # the fly's own eyes (retina from its world)
     decoder = Decoder(cfg, baseline)
@@ -241,14 +245,26 @@ def cmd_run(args, cfg):
     try:
         while True:
             tick = time.time()
+            # --- controls: webcam on/off (closing releases the camera; the window in the world goes dark)
+            if dash is not None:
+                for ctl in [c_ for c_ in dash.controls if "webcam" in c_]:
+                    want = bool(ctl["webcam"])
+                    if want and source is None:
+                        source = open_source(); cam_lobe.reset(); webcam_on = True
+                        print("[run] webcam opened", flush=True)
+                    elif not want and source is not None:
+                        source.close(); source = None; webcam_on = False; dash.jpeg = None
+                        print("[run] webcam closed", flush=True)
+                    dash.webcam_on = webcam_on
+                dash.controls[:] = [c_ for c_ in dash.controls if "webcam" not in c_]
             # --- senses: the webcam (the human world) ...
-            frame = source.read()
+            frame = source.read() if source is not None else None
             cam_feats = None
             if frame is not None:
                 cam_feats = cam_lobe.process(frame)
                 if cam_feats.motion_energy > float(cfg.senses.wake_motion):
                     last_motion = tick
-            elif args.sim_camera and (isinstance(source, SyntheticLooming) or source.is_file):
+            elif source is not None and args.sim_camera and (isinstance(source, SyntheticLooming) or source.is_file):
                 print("[run] video finished"); break
             # ... and the fly's own eyes in its world, whenever the dashboard is rendering them
             use_retina = want_retina and dash.retina is not None and (tick - dash.retina_at) < 1.0
@@ -261,9 +277,8 @@ def cmd_run(args, cfg):
                     feats = lobe.process(rf)
                 vision = "retina"
             else:
-                if cam_feats is not None:
-                    feats = cam_feats
-                vision = "camera"
+                feats = cam_feats            # None when the webcam is closed: the fly is blind, not stuck on its last view
+                vision = "camera" if cam_feats is not None else "none"
             world = dash.world if (dash is not None and tick - dash.world_at < 1.0) else {}
             if any(_world_value(world.get(k)) > 0.3 for k in cfg.senses.world):
                 last_motion = tick
@@ -342,7 +357,7 @@ def cmd_run(args, cfg):
                     "valence": round(d.valence, 3), "arousal": round(d.arousal, 3), "reward": round(d.reward, 3),
                     "asleep": asleep, "pir": int(body.pir),
                     "sees": feats.as_dict() if feats else None,
-                    "vision": vision, "world": world,
+                    "vision": vision, "world": world, "webcam": webcam_on,
                     "learning": ({**brain.plasticity.summary(), "probe": probe_result} if brain.plasticity is not None else None),
                     "rates": {g: {s: round(v, 1) for s, v in r.items()} for g, r in brain.rates().items()},
                     "spikes": spiking.tolist(),
@@ -350,7 +365,7 @@ def cmd_run(args, cfg):
                     "top_types": dash.top_types(brain.window_counts()),
                     "brain": {"behind_ms": round(brain.behind_ms), "chunk_ms": round(brain.last_chunk_wall_ms, 1),
                               "brain_s": round(brain.brain_ms / 1000, 1), "n": c.n},
-                }, frame=source.preview)
+                }, frame=source.preview if source is not None else None)
             if args.verbose:
                 act = " ".join(f"{k}={v:.2f}" for k, v in d.motor.items() if abs(v) > 0.05)
                 fl, fr = (feats.left, feats.right) if feats else (None, None)
@@ -364,7 +379,8 @@ def cmd_run(args, cfg):
     except KeyboardInterrupt:
         print("\n[run] stopped")
     finally:
-        source.close()
+        if source is not None:
+            source.close()
         body.close()
 
 
@@ -397,6 +413,7 @@ def main(argv=None):
     p.add_argument("-v", "--verbose", action="store_true")
     p.add_argument("--recalibrate", action="store_true", help="re-measure the resting baseline")
     p.add_argument("--no-learn", action="store_true", help="start with mushroom-body plasticity switched off")
+    p.add_argument("--no-webcam", action="store_true", help="start with the webcam closed (toggle from the dashboard)")
     p.add_argument("--no-ui", action="store_true", help="do not start the live dashboard")
     p.add_argument("--ui-port", type=int, default=8600)
     p.add_argument("--open", action="store_true", help="open the dashboard in the default browser")
