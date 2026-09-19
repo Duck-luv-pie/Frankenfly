@@ -122,7 +122,30 @@ def fig_silence(out):
     fig.savefig(f"{out}/silence.png", dpi=200, facecolor=BG); plt.close(fig)
 
 
+def fig_dropout(out):
+    fig, ax = frame("Delete 95% of the synapses, if you delete the right ones.",
+                    "Synapses deleted and the turn-toward test re-run, 32 arenas, 2 s, people frozen. Neurons are never "
+                    "removed here, only connections. Repeat runs of the same condition vary by about 5 points.")
+    pct = [0, 25, 50, 75, 90, 95, 99]
+    rand = [81, 78, 66, 0, 0, 0, 0]
+    weak = [75, 78, 78, 72, 72, 72, 47]
+    ax.plot(pct, weak, "-o", color=CORAL, lw=2.5, ms=8, label="weakest synapses deleted first")
+    ax.plot(pct, rand, "--s", color=BLUE, lw=2.5, ms=8, label="deleted at random")
+    ax.axhline(50, color=GREY, lw=1, ls=":")
+    ax.text(1, 52, "chance", color=DIM, fontsize=9)
+    ax.annotate("the behaviour is carried by\na small minority of strong connections", xy=(95, 72), xytext=(36, 88),
+                color=DIM, fontsize=10, linespacing=1.6, arrowprops=dict(arrowstyle="->", color=DIM, lw=1.2))
+    ax.annotate("same number of synapses,\nchosen at random: gone", xy=(75, 0), xytext=(52, 22),
+                color=DIM, fontsize=10, linespacing=1.6, arrowprops=dict(arrowstyle="->", color=DIM, lw=1.2))
+    ax.set_xlabel("synapses deleted (%)"); ax.set_ylabel("arenas that turned toward the person (%)")
+    ax.set_xticks(pct); ax.set_ylim(-4, 104); ax.set_xlim(-3, 103)
+    leg = ax.legend(frameon=False, fontsize=10.5, loc="lower left", bbox_to_anchor=(0.01, 0.02))
+    for t in leg.get_texts():
+        t.set_color(FG)
+    fig.savefig(f"{out}/dropout.png", dpi=200, facecolor=BG); plt.close(fig)
+
+
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(); ap.add_argument("--out", default="devpost"); a = ap.parse_args()
-    fig_control(a.out); fig_graded(a.out); fig_lesions(a.out); fig_silence(a.out)
-    print(f"wrote {a.out}/control.png, {a.out}/graded.png, {a.out}/lesions.png, {a.out}/silence.png")
+    fig_control(a.out); fig_graded(a.out); fig_lesions(a.out); fig_silence(a.out); fig_dropout(a.out)
+    print(f"wrote control, graded, lesions, silence and dropout figures to {a.out}/")

@@ -48,7 +48,23 @@ The eye is untouched by the shuffle and nothing arrives at the steering neurons:
 
 Deleting LC10a a quarter at a time, same protocol: DNa02 **158.4, 137.5, 83.4, 40.3, 0.0 Hz** at 0, 25, 50, 75, 100% removed, with the turn command holding at full until three quarters are gone. Restoring returns 158.4 Hz and −1.00 exactly.
 
-## 4. Learning, using the fly's own dopamine neurons
+## 4. How much of the wiring is load-bearing
+
+Synapses deleted, neurons left intact, then the turn-toward test re-run (32 arenas, 2 s, people frozen). Two deletion orders, the same counts.
+
+| deleted | at random | weakest synapses first |
+|---|---|---|
+| 0% | 81% | 75% |
+| 25% | 78% | 78% |
+| 50% | 66% | 78% |
+| 75% | **0%** | 72% |
+| 90% | 0% | 72% |
+| 95% | 0% | **72%** |
+| 99% | 0% | 47% |
+
+**Throw away the weakest 95% of the connections, 2.2 million of them, and the behaviour is intact. Throw away the same number at random and it is gone by 75%.** The steering rides on roughly a hundred thousand strong synapses, and the rest of the graph is, for this task, ballast. Repeat runs of an identical condition differ by about 5 points (the retina noise is redrawn), which is far below the effect.
+
+## 5. Learning, using the fly's own dopamine neurons
 
 Reward and punishment are delivered as current onto PAM and PPL1; plasticity is confined to existing synapses under Dale's law with bounds of 3× the original magnitude, plus homeostatic scaling toward 150 Hz. No new network is trained at any point.
 
@@ -63,7 +79,7 @@ Learning bought speed and persistence, not the behaviour. Lobotomizing the demo 
 
 Negative results we are not hiding: four overnight biological training runs were flat, because a rover that cannot advance never earns reward, and because the Kenyon cells, the fly's actual learning site, are silent in this task, so mushroom-body plasticity had nothing to act on. An earlier run with a non-biological tonic "walking" current did raise contact but saturated DNa02 at 300 Hz; we do not call that learning.
 
-## 5. Two ways for a descending neuron to be silent
+## 6. Two ways for a descending neuron to be silent
 
 This began as our biggest problem, that the eye does not drive the forward-walking neurons, and turned into the most interesting thing we found. `scripts/why_silent.py` drives the eye, then strips the inhibitory inputs onto a chosen descending neuron one source at a time, strongest first, and watches what happens.
 
@@ -83,7 +99,7 @@ The connectome is running feedforward inhibition that gates this pathway off whi
 
 Anatomy is not drive, and there are at least two distinguishable ways for that to be true. This is also why we read forward speed from the descending population rather than from DNa01 and DNp09: not a workaround we chose, a fact we measured.
 
-## 6. Speed
+## 7. Speed
 
 | measurement | protocol | result |
 |---|---|---|
@@ -93,7 +109,7 @@ Anatomy is not drive, and there are at least two distinguishable ways for that t
 | camera to wheel command | dry run, network camera, detector on GPU | **15 ms median**, 24 ms at the 95th percentile. Budget was 100 ms |
 | training | A100, 512 arenas, event engine | 3.4 ms per step, about 1.1 min per 20 s generation |
 
-## 7. Sensors and interfaces
+## 8. Sensors and interfaces
 
 The retina encoder was checked against ground truth on 50 synthetic pinhole-projected frames: boxes from a detector and boxes computed from true positions agree within one of 24 angular columns, and the pixel-to-azimuth round trip is accurate to 0.5 degrees. The simulated heat sensors are lateralized correctly but reach no descending neuron at a stable gain, so they only bias the search direction.
 
