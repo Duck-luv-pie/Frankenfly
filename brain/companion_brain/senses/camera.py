@@ -32,7 +32,21 @@ class CameraStream(FrameSource):
 
     def _open(self) -> None:
         self.last_attempt = time.time()
-        self.cap = cv2.VideoCapture(int(self.url) if self.is_device else self.url)
+        url = self.url
+        if not self.is_device and not self.is_file:
+            # OpenCV's stream reader cannot resolve mDNS names (companion-cam.local): resolve here
+            from urllib.parse import urlsplit, urlunsplit
+            import socket
+            u = urlsplit(url)
+            if u.hostname and u.hostname.endswith(".local"):
+                try:
+                    ip = socket.gethostbyname(u.hostname)
+                    netloc = ip + (f":{u.port}" if u.port else "")
+                    url = urlunsplit((u.scheme, netloc, u.path, u.query, u.fragment))
+                    print(f"[camera] {u.hostname} -> {ip}", flush=True)
+                except OSError:
+                    print(f"[camera] cannot resolve {u.hostname}; is the camera on the network?", flush=True)
+        self.cap = cv2.VideoCapture(int(self.url) if self.is_device else url)
         if not self.cap.isOpened():
             self.cap = None
 
