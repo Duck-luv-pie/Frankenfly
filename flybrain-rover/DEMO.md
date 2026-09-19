@@ -65,3 +65,13 @@ Bridge command (laptop next to the robot; the SDK daemon runs in the Python 3.8 
 ```
 Dry run without the robot: `.venv/bin/python scripts/demo.py --checkpoint checkpoints/demo_brain.pt --source 0 --show --dry-run`.
 
+
+## Wall visual: Ducks's 3-D viewer driven by our brain
+`scripts/viz_adapter.py` serves his `hunt_gpu.html` and feeds it our state (his protocol: `/events` SSE, `/brain.json`, `/who`, `/control`).
+```
+# replay on the wall (works now, loops):
+.venv/bin/python scripts/viz_adapter.py --ui ../hunting-fly/brain/companion_brain/ui --replay replay/episode_7_trained.json --port 8601
+# live from the robot demo (demo.py already streams ws://localhost:8765):
+.venv/bin/python scripts/viz_adapter.py --ui ../hunting-fly/brain/companion_brain/ui --live ws://localhost:8765 --port 8601
+```
+Open http://localhost:8601. Our 15,000 neurons appear on his brain map at their real soma positions (neuPrint), spikes light up per tick, the DNa02/DNa01/DN_all bars, the 24 retina cells, heat and drive are ours. `fly.js` and the .glb models come from his `ui/` directory (`replay/assets/` holds the human and RoboMaster models until his push includes them; a stand-in fly.js is served if his is missing).
