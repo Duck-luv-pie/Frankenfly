@@ -15,3 +15,15 @@ data/*.npz
 .env
 yolo11n.pt
 _archive/
+
+# internal notes stay local, this repo is public
+STATUS.md
+CONTEXT.md
+TODAY.md
+PLAN.md
+PITCH.md
+TRACKS.md
+DEVPOST_FIELDS.md
+CLAUDE.md
+handoff/
+docs/

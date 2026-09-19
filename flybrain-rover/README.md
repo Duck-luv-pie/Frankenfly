@@ -1,60 +1,68 @@
 # FlyBrain Rover
-A real fruit fly connectome (male CNS v1.0, Janelia/Google, Sept 2026) driving a RoboMaster S1 to find and touch humans. Behavior emerges from real neural wiring; learning uses the fly's own dopamine-gated plasticity.
 
-Pipeline: camera -> `brain/retina.py` (24 angular columns) -> `brain/senses.py` (current into LC eye neurons) -> `brain/lif.py` (real wiring, leaky integrate-and-fire) -> `brain/motor.py` (descending neurons -> forward/turn) -> wheels.
+A real fruit fly's wiring diagram, running live as spiking neurons, driving a robot that finds a person in the room. Nothing in between is programmed, and nothing is trained from scratch.
 
-## Run
-```
+We take the male *Drosophila* CNS connectome (Berg et al., *Cell*, September 2026; served on neuPrint as `male-cns:v1.0`), cut out the 15,000-neuron subcircuit that runs from the eye to the descending neurons, and simulate all 2,334,959 signed synapses as leaky integrate-and-fire cells with the constants from Shiu et al. 2024. A camera frame becomes current on the fly's visual projection neurons. The descending neurons, the ones that would drive its legs, are read out as wheel commands.
+
+**Untrained, straight out of the electron microscope, it turns toward a person in 75% of trials and reaches them 97.7% of the time.** Learning, where we use it, is the fly's own: reward and punishment are delivered onto its dopamine neurons, and only existing synapses change strength.
+
+The point of the demo is not that a robot follows you. A three-line controller does that better. The point is that this one can be broken in named, predictable ways:
+
+- Remove LC10a, the 275 cells a male fly uses to track a mate: tracking goes to **0%**.
+- Keep every neuron, every synapse and every neuron's exact number of connections, and randomize only *which cell connects to which*: the eye still fires at 70 Hz, the steering neurons go from **158 Hz to zero**.
+- Remove the looming detectors: the escape reflex vanishes (giant fibre 130 Hz to 0.1 Hz) while steering is untouched.
+- Remove one of the two steering neurons: it biases to the other side, which we predicted before running it.
+
+Every number here, with its protocol, is in **[RESULTS.md](RESULTS.md)**. Check them yourself in under a minute with `python scripts/reproduce.py --quick`.
+
+## Run it
+
+```bash
 python -m venv .venv && .venv/bin/pip install -r requirements.txt
-python data/pull_connectome.py          # neuPrint -> data/brain.npz (works without a token; .env token is optional)
-python -m pytest tests/ -q               # 124 tests: LIF engines, arena, learning rules, lobotomize, retina sim-to-real
-python scripts/milestones.py m1          # groups non-empty, N/nnz in range
-python scripts/milestones.py m2          # batched gain sweep; DNa02 laterality
-python scripts/milestones.py m3          # untrained brain turns toward (M3) and advances on (M3b) a human
-python scripts/milestones.py m2b         # centred human at 2 m: forward-DN rates with vs without a human
-python scripts/milestones.py m2c         # lateral symmetry: human at 0 / -30 / +30 deg -> DNa02 L/R and turn sign
-python scripts/ablations.py              # lesion table (LC10a, DNa02_L, LC4+LPLC2, shuffled)
-python scripts/evaluate.py --brain data/brain.npz --checkpoint checkpoints/X_latest.pt   # fixed evaluation set
-python scripts/probe.py                  # which eye population drives which descending neuron
-python scripts/paths.py                  # who feeds each descending neuron (why a DN is silent)
-python train.py --stage A --envs 64 --learn three_factor --plastic both --minutes 60
-python train.py --stage A --envs 128 --learn es --plastic dn_in --seconds 10 --minutes 60
-python train.py --sweep gain 0.01:0.2:10 --envs 80
-python train.py --record logs/replay.json --envs 4 --seconds 10     # env-0 replay for the Three.js viz
-python scripts/robot_bridge.py --bench   # brain-loop latency on this laptop
-python scripts/robot_bridge.py --source 0 --show --fake-box          # webcam plumbing test, no robot
-python scripts/robot_bridge.py --robot --checkpoint checkpoints/<run>_latest.pt
+python data/pull_connectome.py     # neuPrint -> data/brain.npz, no account or token needed
+python -m pytest tests -q          # 125 tests
+python scripts/reproduce.py --quick
+
+# the demo on a laptop webcam, no robot, wheel commands printed instead of sent
+python scripts/demo.py --checkpoint checkpoints/demo_brain.pt --source 0 --show --dry-run
 ```
-Status, findings and the overnight training log: `STATUS.md`. Plan: `PLAN.md`. Rules: `CLAUDE.md`.
 
-## Read-outs and mappings (2026-09-18)
-- **Forward** = k_f (0.3) × mean firing rate over `DN_ALL`, every descending neuron in the subcircuit (241 neurons, 132 types). Nothing in the eye drives DNa01/DNp09 alone; the population does move (mostly looming-driven DN types as the target grows). `--k_f`, `Motor(forward_source=...)`.
-- **Turn** = k_t (0.02) × (DNa02_R − DNa02_L); turn > 0 = right = clockwise = positive z on the RoboMaster.
-- **Retinotopy**: each LC neuron gets the retina column of its real lobula dendritic footprint (`brain/retinotopy.py`, from neuPrint column ROIs via `scripts/pull_lc_columns.py`). Default `--retinotopy rank`; `index` is the old bodyId-order spread, kept for A/B tests.
-- **Dopamine**: reward → PAM, punishment → PPL1 with a ×5 channel weight (`--pun_gain`); three-factor eta 3e-4 plus homeostatic synaptic scaling toward 150 Hz (`--r_target`, `--eta_h`).
-- `--amp_tonic` (constant walking current into DNa01) is a labelled fallback, off by default, superseded by the DN_ALL read-out.
+In the demo window: **1** baseline, **2** remove the tracking neurons, **3** restore, **4** wipe the learning, **5** restore it, **6** wiring shuffle on and off, **7** delete a quarter of the tracking population, **space** stop.
 
-## What is and is not learned
-No new neural network anywhere. The only parameters that change are the weights of existing connectome
-synapses (fixed sparsity mask, sign fixed by the presynaptic neurotransmitter), via
-`learn/three_factor.py` (eligibility traces gated by the fly's own PAM/PPL1 dopamine neurons) or
-`learn/es.py` (evolution strategies over per-synapse scale factors). Sensory transduction gains
-(`brain/senses.py` amplitudes), the global synaptic gain and the motor read-out gains are swept, not learned.
+Driving a real RoboMaster S1, eyes and wheels chosen independently:
 
-## Replay JSON (for the arena viz)
-`train.py --record out.json` writes `{"meta": {...}, "frames": [...]}`. Each frame: `t`, `rxy`, `ryaw`
-(CCW-positive), `hxy` list, `hr` list, `forward`, `turn` (+ = right), `reward`, `heat` [L, R],
-`rates` (Hz per named group), `spikes` (indices into `meta.viz_neurons`, a fixed random sample of 512
-neurons, spike count summed over the 20 ms env step). `meta.arena_L` is the square arena side in metres.
+```bash
+# wheels over the S1's S-Bus receiver pins through an ESP32, eye from any camera
+python scripts/demo.py --checkpoint checkpoints/demo_brain.pt \
+  --s1-sbus /dev/cu.usbserial-XXXX --local-eye --source 0 --dry-run
+# --source also takes a stream URL (ESP32-CAM, phone IP camera) or a video file
+```
+
+[DEMO.md](DEMO.md) is the runbook: setup, a two-minute script, and what to do when something fails.
+
+## How it fits together
+
+| | |
+|---|---|
+| `data/pull_connectome.py` | neuPrint to `data/brain.npz`: ids, types, signed weights, named neuron groups |
+| `brain/lif.py` | batched spiking simulation, three engines (sparse, dense, event-driven) that agree spike for spike; lesion and restore |
+| `brain/retina.py`, `brain/senses.py` | camera or ground truth to 24 angular columns to current on the eye neurons |
+| `brain/retinotopy.py` | each eye neuron gets the retina column its real lobula dendrites look at |
+| `brain/motor.py` | descending neurons to forward and turn |
+| `brain/explore.py` | search as an internal state, labelled non-sensory, gated off the moment the eye sees anyone |
+| `env/arena.py` | batched 2-D world: people who walk, contact events, reward |
+| `learn/` | three-factor dopamine-gated plasticity and evolution strategies, both under Dale's law and hard bounds |
+| `scripts/` | milestones, evaluation, lesion tables, pruning, benchmarks, replay, the robot bridge and the demo |
+
+## What we engineered, and say so
+
+Forward speed is read from the descending population as a whole, because the eye does not drive the two classic forward-walking neurons in this connectome; the anatomical paths exist but carry no signal ([RESULTS.md](RESULTS.md) section 5). The search behaviour is an internal drive we added, not something we found in the wiring. The steering, which is the claim, is untouched connectome.
 
 ## Credits
-- Berg et al. 2026, "Sexual dimorphism in the complete connectome of the Drosophila male CNS", Cell. Data CC-BY via neuPrint (`male-cns:v1.0`, https://neuprint.janelia.org).
-- Shiu et al. 2024, "A Drosophila computational brain model reveals sensorimotor processing", Nature. LIF constants (tau 20 ms, -52/-45/-52 mV, 2.2 ms refractory, 5 ms synapse, 0.275 mV per synapse) and the NT-to-sign rule.
-- Eon Systems `fly-brain` (GPL-2.0-or-later). LIF engine reference.
-- `ilyaosovskoi/connectome-pilot`. Three-factor plasticity reference.
-- `Imperol3/flybrain`. Looming/escape pipeline reference.
-- Keles and Frye 2017. LC11 small-object tuning (why the 180-turn happens).
-- Rayshubskiy et al. 2020 (bioRxiv). DNa02 drives ipsilateral turning; matches what we measure (LC10a_L -> DNa02_L).
-- Marin et al. 2020, Current Biology. VP2/VP3 thermosensory glomeruli (VP3 = hot), used to pick the THERMO group.
-- Bidaye et al. 2020, Neuron. DNp09 (P9) forward walking.
-- neuprint-python (Janelia), PyTorch, Ultralytics YOLO (person detector on the robot), DJI RoboMaster SDK.
+
+- Berg et al. 2026, "Sexual dimorphism in the complete connectome of the Drosophila male CNS", *Cell*. Data CC-BY via [neuPrint](https://neuprint.janelia.org).
+- Shiu et al. 2024, *Nature*: leaky integrate-and-fire constants and the neurotransmitter-to-sign rule.
+- Nern et al. 2025 and the Reiser lab eyemap documentation: lobula column coordinates for the retinotopy.
+- Keles and Frye 2017 (LC11 small-object tuning), Ribeiro et al. 2018 and Hindmarsh Sten et al. 2021 (LC10a and courtship tracking), Rayshubskiy et al. 2020 (DNa02 steering), Bidaye et al. 2020 (DNp09), Marin et al. 2020 (thermosensory glomeruli).
+- Eon Systems `fly-brain` (GPL-2.0-or-later), `ilyaosovskoi/connectome-pilot`, `Imperol3/flybrain` as references.
+- neuprint-python, PyTorch, Ultralytics YOLO11n, OpenCV, the DJI RoboMaster SDK, Three.js.

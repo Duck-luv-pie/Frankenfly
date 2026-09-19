@@ -1,6 +1,6 @@
 #!/bin/bash
 # One-time (or repeat) copy of this repo to a Vast.ai box. Run this YOURSELF from the repo's parent folder:
-#     bash flybrain-rover/scripts/sync_to_box.sh <port> <host>          e.g. ... 30714 150.136.39.147
+#     bash flybrain-rover/scripts/sync_to_box.sh <port> <host>
 # Excludes secrets (.env), the venv, checkpoints and logs. brain.npz/brain_v2.npz/lc_columns.json ARE copied.
 # To pull results back:  rsync -az -e "ssh -p <port>" root@<host>:~/flybrain-rover/checkpoints/ flybrain-rover/checkpoints_box/
 set -e
