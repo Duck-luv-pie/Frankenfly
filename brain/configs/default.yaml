@@ -6,6 +6,7 @@
 data:
   raw_dir: data/raw
   cache_dir: data/cache
+  atlas_dir: data/atlas/male-cns   # MaleCNS neuron atlas (Fly / Neural Atlas export: manifest.json, catalog.json.gz, skeletons-*.bin.gz)
   files:
     connectivity:
       url: https://raw.githubusercontent.com/philshiu/Drosophila_brain_model/main/Connectivity_783.parquet

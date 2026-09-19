@@ -134,11 +134,29 @@ scripted animal on the table is the neighbour fly, which is scenery.
 `companion_brain/ui/server.py` is a stdlib HTTP server started by `run` (port 8600). It serves
 `ui/index.html`, `/circuit.json` once (normalized FAFB x/y position, role and cell type of every
 simulated neuron), `/frame.jpg` (latest webcam frame, which the world paints on its window),
-`/events`, a server-sent-events stream at the body rate carrying the body packet plus behavior
+`/atlas/*` (the MaleCNS neuron atlas data), `/events`, a server-sent-events stream at the body rate carrying the body packet plus behavior
 scores, motor channels, modulators, sensory features, world senses, readout rates, the indices of
 neurons that spiked since the last event, and the cell types with the most spikes; and it accepts
 `POST /retina` (raw 80×60 gray frame from the fly's eyes) and `POST /world` (odor per antenna,
 sugar, dust, moist, satiety, self-motion). The page is plain HTML/canvas plus vendored Three.js.
+
+## The brain view: MaleCNS atlas lit by FlyWire spikes
+
+The Brain panel renders the Fly / Neural Atlas data (`brain/data/atlas/male-cns`, exported by
+that project's `prepare-neurons.py` from the MaleCNS v1.0 connectome, HHMI Janelia × Google
+Research, CC BY 4.0): 165k catalogued neurons with 140k cell-body positions and 1,508 complete
+skeletons, drawn with the atlas viewer's shader (an activity texture indexed by catalogue slot,
+`ui/atlas.js` adapted from its `neural.js`, `ui/atlas-data.js` copied from `neural-data.js`).
+
+The simulation runs FlyWire (a female brain); the atlas is a male CNS. Neuron ids do not
+correspond, so `ui/atlas_map.py` maps each simulated neuron to a MaleCNS neuron of the same
+**cell type and side** (round-robin, preferring neurons with a bundled skeleton), falling back
+to the same type on any side, then to a subtype-prefix match (pC1a → pC1_*, KCab → KCab-*).
+About 71% of the simulated neurons map; the rest are optic-lobe types the two nomenclatures
+name differently and are simply not lit. Every spike from a mapped neuron is a flash on its
+counterpart's cell body and, when bundled, its whole skeleton. What you see is therefore the
+real anatomy of the fly's nervous system with our simulated activity painted onto it by
+identity, not a rendering of the simulated neurons' own positions.
 
 ## Adding arms later
 

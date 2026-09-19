@@ -9,6 +9,7 @@ __pycache__/
 # Connectome data (download with: python -m companion_brain download)
 brain/data/raw/
 brain/data/cache/
+brain/data/atlas/
 
 # PlatformIO
 firmware/*/.pio/

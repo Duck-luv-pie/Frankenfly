@@ -51,8 +51,10 @@ disables it). The dashboard is the fly's world: a table with a grape (smell, sug
 (pollen → grooming), a water drop (humidity), a neighbour fly, and a window on which your webcam
 plays. The fly sees this world through its own eyes (an 80×60 retina rendered from its head is
 what the brain's optic lobe gets), walks, flies, feeds and grooms on its descending neurons, and
-the page also shows the two robot eyes, a map of all simulated neurons flashing as they spike,
-motor channels, readout rates and the cell types firing right now.
+the page also shows the two robot eyes, the MaleCNS neuron atlas (real neuron skeletons and cell
+bodies from the Fly / Neural Atlas) lit by the simulated spikes, motor channels, readout rates and
+the cell types firing right now. The atlas data lives in `brain/data/atlas/male-cns` (git-ignored;
+copy it from the Fly / Neural Atlas project's `public/data/male-cns`).
 
 Firmware (needs [PlatformIO](https://platformio.org/) CLI, `uv tool install platformio`):
 

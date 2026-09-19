@@ -15,7 +15,7 @@ import numpy as np
 
 UI_DIR = Path(__file__).parent
 HTML = UI_DIR / "index.html"
-STATIC_TYPES = {".js": "text/javascript", ".css": "text/css", ".glb": "model/gltf-binary", ".json": "application/json"}
+STATIC_TYPES = {".js": "text/javascript", ".css": "text/css", ".glb": "model/gltf-binary", ".json": "application/json", ".gz": "application/gzip"}
 
 
 class Dashboard:
@@ -30,7 +30,8 @@ class Dashboard:
         self.retina_at = 0.0
         self.world: dict = {}                       # latest world senses posted by the page
         self.world_at = 0.0
-        self.circuit_json = self._circuit_json(circuit, cfg)
+        self.atlas_dir = cfg.path("data.atlas_dir") if cfg.dotted("data.atlas_dir") else None
+        self.circuit_json = self._circuit_json(circuit, cfg, self.atlas_dir)
         self.type_ids = self.type_names = None
         if circuit.cell_type is not None:
             self.type_names, self.type_ids = np.unique(circuit.cell_type, return_inverse=True)
@@ -52,13 +53,16 @@ class Dashboard:
                         self._send(200, "image/jpeg", dash.jpeg, cache=False)
                 elif self.path == "/events":
                     self._events()
+                elif self.path.startswith("/atlas/") and dash.atlas_dir is not None:
+                    self._static(dash.atlas_dir, self.path[len("/atlas/"):])
                 else:
                     self._static()
 
-            def _static(self):
-                rel = self.path.split("?")[0].lstrip("/")
-                target = (UI_DIR / rel).resolve()
-                if UI_DIR.resolve() not in target.parents or not target.is_file() or target.suffix not in STATIC_TYPES:
+            def _static(self, base=None, rel=None):
+                base = (base or UI_DIR).resolve()
+                rel = (rel if rel is not None else self.path).split("?")[0].lstrip("/")
+                target = (base / rel).resolve()
+                if base not in target.parents or not target.is_file() or target.suffix not in STATIC_TYPES:
                     self._send(404, "text/plain", b"not found")
                     return
                 self._send(200, STATIC_TYPES[target.suffix], target.read_bytes())
@@ -119,8 +123,20 @@ class Dashboard:
 
     # ------------------------------------------------------------------------------------
     @staticmethod
-    def _circuit_json(circuit, cfg) -> bytes:
+    def _circuit_json(circuit, cfg, atlas_dir=None) -> bytes:
         n = circuit.n
+        atlas = None
+        if atlas_dir is not None and (Path(atlas_dir) / "catalog.json.gz").exists():
+            from .atlas_map import build_mapping
+            from ..data.annotations import load_annotations
+            from ..data.download import raw_paths
+            import pandas as pd
+            ann = load_annotations(raw_paths(cfg)["annotations"]).set_index("root_id")
+            sides = ann.reindex(circuit.root_ids)["side"].fillna("").to_numpy()
+            slots, stats = build_mapping(circuit, sides, Path(atlas_dir))
+            atlas = {"slot": slots.tolist(), "stats": stats}
+            print(f"[atlas] {stats['mapped']:,}/{stats['n']:,} simulated neurons mapped onto {stats['dataset']} "
+                  f"({stats['how']}); {stats['skeletons']:,} full skeletons available", flush=True)
         pos = circuit.pos if circuit.pos is not None else np.zeros((n, 3), np.float32)
         # frontal view: x lateral, y dorsal-ventral. Normalize to 0..1 using neurons with a position.
         has = (pos[:, 0] > 0) & (pos[:, 1] > 0)
@@ -147,6 +163,7 @@ class Dashboard:
             "inputs": list(cfg.inputs), "readouts": list(cfg.readouts),
             "behaviors": list(cfg.decode.behaviors.keys()),
             "connections": int(circuit.m),
+            "atlas": atlas,
         }, separators=(",", ":")).encode()
 
     def top_types(self, counts: np.ndarray, k: int = 10) -> list:
