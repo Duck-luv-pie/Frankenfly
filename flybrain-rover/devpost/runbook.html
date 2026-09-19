@@ -164,6 +164,8 @@
 
 <span class="c"># 6. Ducks's 3-D viewer with our brain in it -> http://localhost:8601. His files live on his s1-fly-brain</span>
 <span class="c">#    branch, checked out at ~/Downloads/filess/hunting-fly-s1; the copy on main is only the HTML and renders black.</span>
+<span class="c">#    Live, the fly's position is dead-reckoned from the motor command (the robot reports none); the header says so.</span>
+<span class="c">#    The viewer's lobotomize button presses hotkey 4 in the demo; it wipes learning, and the fly keeps tracking.</span>
 .venv/bin/python scripts/viz_adapter.py --ui ~/Downloads/filess/hunting-fly-s1/brain/companion_brain/ui --live ws://localhost:8765
 open http://localhost:8601</pre>
   </div>
@@ -178,7 +180,7 @@ open http://localhost:8601</pre>
       <tr><td>Walk in from 2 m</td><td>Robot turns to face you, rolls to your shoe</td><td>Stand at 1.5 m; <code>--show</code> to see boxes</td></tr>
       <tr><td>Press <b>6</b></td><td>Robot goes still, LC10a still lit on the wall</td><td>That is the control; if it keeps tracking, the shuffle did not apply</td></tr>
       <tr><td>Say "what do you see" to terminal 3</td><td>Bearing and distance in the fly's voice</td><td>Check the mic input device; <code>talk.py --check</code> prints the tool answers</td></tr>
-      <tr><td>Open localhost:8601</td><td>The fly, the person, the 15,000-neuron map with spikes, DNa02 bars moving</td><td>Black scene = wrong --ui folder; it must be the hunting-fly-s1 one</td></tr>
+      <tr><td>Open localhost:8601</td><td>The fly walks toward the person, the 15,000-neuron map spikes, DNa02 bars move; press 2 in the demo and it stops</td><td>Black scene = wrong --ui folder; it must be the hunting-fly-s1 one</td></tr>
       <tr><td>Open localhost:8790</td><td>Three traces moving, "newest bucket" under 3 s</td><td>Terminal 4 running? Wi-Fi? <code>--report</code> shows the aggregate</td></tr>
       <tr><td>Badge in your pocket, charged</td><td>Swat, six white LEDs</td><td>Press DOWN if it flinches at rest</td></tr>
     </tbody>
