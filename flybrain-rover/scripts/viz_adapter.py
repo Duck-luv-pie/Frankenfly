@@ -9,10 +9,13 @@ tick), /brain.json (neuron map: normalised x,y per neuron, class, type, hunter g
 static files from --ui (and --assets for the .glb models), POST /control (accepted; "lobotomy" is echoed
 into the state so the HUD follows). Two sources:
   --replay  one of our replay JSONs (50 Hz, full rover/human poses) played back in a loop;
-  --live    the demo bridge's websocket feed (no world pose on the robot: the rover sits at the origin,
-            people are placed from the detector boxes by bearing and apparent width).
+  --live    the demo bridge's websocket feed (no world pose on the robot: the pose is dead-reckoned from the
+            motor command, forward * --v-max and turn * --w-max integrated the way env/arena.py steps the rover,
+            starting at the origin facing +y and clamped to the arena walls; people are placed from the detector
+            boxes by bearing and apparent width relative to that estimate; the state says pose_estimated: true).
 Coordinate mapping: his fly = [x, z, heading, speed] with heading 0 = +z and x = sin(heading); ours is
-x right, y up, yaw CCW from +x, so his x = our x, his z = our y, his heading = pi/2 - yaw.
+x right, y up, yaw CCW from +x, so his x = -our x, his z = our y, his heading = yaw - pi/2 (a rotation, not a
+reflection: a right turn is a right turn in both, and a person on the fly's right is drawn on its right).
 Neuron map: data/neuron_positions.json (neuPrint somaLocation of our 15,000 neurons), frontal view
 (x = medial-lateral, y = dorsal-ventral); spikes arrive as indices into the bridge's 512-neuron sample.
 """
@@ -36,6 +39,13 @@ STATIC_TYPES = {".js": "text/javascript", ".mjs": "text/javascript", ".css": "te
 GROUP_OF = {"LC10a": 1, "LC11": 1, "LC12": 1, "LC15": 1, "LC4": 1, "LPLC2": 1, "THERMO": 2, "DNa02": 3, "DNa01": 3, "DNp09": 3, "GF": 3,
             "PAM": 4, "PPL1": 4, "KC": 5, "MBON": 5}
 CLASS_OF = {"visual_projection": 1, "descending_neuron": 2, "cb_intrinsic": 3, "ol_intrinsic": 4, "cb_sensory": 5, "vnc_intrinsic": 6}
+V_MAX, W_MAX_DEG = 0.7, 90.0          # the bridge's defaults: m/s at forward = 1, deg/s at turn = 1 (live dead reckoning)
+LIVE_ARENA_L = 12.0                   # live feed has no meta.arena_L: top of env/arena.py's size range, inside the viewer's rails
+WHO_DEFAULT = "the male-CNS spiking fly (flybrain-rover): 15,000 neurons, live"
+
+
+def _wrap(a: float) -> float:
+    return (a + math.pi) % (2 * math.pi) - math.pi
 
 
 def build_brain_json(brain_npz: str, positions_json: str, viz_neurons: list[int] | None) -> tuple[bytes, dict]:
@@ -102,32 +112,56 @@ class Source:
 
 
 class Adapter:
-    def __init__(self, src: Source, viz_neurons: list[int], fov_deg: float = 98.43):
+    def __init__(self, src: Source, viz_neurons: list[int], fov_deg: float = 98.43, v_max: float = V_MAX, w_max_deg: float = W_MAX_DEG):
         self.src, self.viz, self.fov = src, viz_neurons, fov_deg
         self.lock = threading.Condition(); self.version = 0; self.payload = b"{}"
         self.total = 0.0; self.touches = 0; self.locked = False; self.t_first = None; self.track_steps = 0; self.steps_since_lock = 0
         self.lobotomized = False; self.heat_on = True; self.episode = 0; self.seed = int(src.meta.get("seed", 0)); self.last_t = -1.0
+        self.live = not src.replay                                     # live: no world pose in the frames, dead-reckon one
+        self.v_max, self.w_max = float(v_max), math.radians(w_max_deg)
+        self.arena_half = float(src.meta.get("arena_L", LIVE_ARENA_L)) / 2
+        self.pose = None                                               # [x, y, yaw] in our frame, live mode only
+
+    def dead_reckon(self, t: float, fwd: float, turn: float, restart: bool) -> tuple[list[float], float]:
+        """Integrate the motor command the way env/arena.py steps the rover: yaw -= turn * w_max * dt, then
+        x += v cos(yaw) dt with v = forward * v_max, walls clamp (no wrap). dt = frame clock delta clamped to
+        [0, 0.1] s. Restart (clock went backwards) or first frame: origin, facing +y, no motion this frame."""
+        if restart or self.pose is None:
+            self.pose = [0.0, 0.0, math.pi / 2]; dt = 0.0
+        else:
+            dt = min(max(t - self.last_t, 0.0), 0.1)
+        fwd, turn = max(-1.0, min(1.0, fwd)), max(-1.0, min(1.0, turn))
+        x, y, yaw = self.pose
+        yaw = _wrap(yaw - turn * self.w_max * dt)                      # turn > 0 = clockwise, yaw is CCW-positive
+        v, h = fwd * self.v_max, self.arena_half
+        x = min(max(x + v * math.cos(yaw) * dt, -h), h); y = min(max(y + v * math.sin(yaw) * dt, -h), h)
+        self.pose = [x, y, yaw]
+        return [x, y], yaw
 
     def state(self, f: dict) -> dict:
         t = float(f.get("t", 0.0))
-        if t < self.last_t:                                            # replay looped
+        restarted = t < self.last_t                                    # replay looped / demo restarted
+        if restarted:
             self.episode += 1; self.total = 0.0; self.touches = 0; self.locked = False; self.t_first = None; self.track_steps = 0; self.steps_since_lock = 0
-        self.last_t = t
-        rxy = f.get("rxy", [0.0, 0.0]); yaw = float(f.get("ryaw", 0.0))
         fwd, turn = float(f.get("forward", 0.0)), float(f.get("turn", 0.0))
+        if self.live:                                                  # no world pose on the robot: estimate it
+            rxy, yaw = self.dead_reckon(t, fwd, turn, restarted)
+        else:
+            rxy = f.get("rxy", [0.0, 0.0]); yaw = float(f.get("ryaw", 0.0))
+        self.last_t = t
         speed = abs(fwd) * 1.2
-        fly = [round(rxy[0], 3), round(rxy[1], 3), round(math.pi / 2 - yaw, 4), round(speed, 3)]
+        fly = [round(-rxy[0], 3), round(rxy[1], 3), round(_wrap(yaw - math.pi / 2), 4), round(speed, 3)]
         people = []
         if "hxy" in f:                                                  # replay: true poses
             for (hx, hy) in f["hxy"]:
-                people.append([round(hx, 3), round(hy, 3), 1.0, 0.0, 1.0, 0, 1, 0])
+                people.append([round(-hx, 3), round(hy, 3), 1.0, 0.0, 1.0, 0, 1, 0])
         else:                                                           # live: place people from detector boxes
             for x0, y0, x1, y1 in f.get("boxes", []):
                 az0 = math.atan((x0 - 160) / 138.1); az1 = math.atan((x1 - 160) / 138.1)
                 width = max(az1 - az0, 1e-3); dist = min(6.0, 0.5 / width)      # 0.5 m shoulders
                 bearing = 0.5 * (az0 + az1)                                          # + = right
                 ang = yaw - bearing
-                people.append([round(rxy[0] + dist * math.cos(ang), 3), round(rxy[1] + dist * math.sin(ang), 3), 0.0, 0.0, 1.0, 0, 1, 0])
+                people.append([round(-(rxy[0] + dist * math.cos(ang)), 3), round(rxy[1] + dist * math.sin(ang), 3), 0.0, 0.0, 1.0, 0, 1, 0])
         reward = float(f.get("reward", 0.0)); self.total += reward
         touching = reward >= 0.5
         if touching:
@@ -145,15 +179,18 @@ class Adapter:
                            "DN_all": [round(r("DN_ALL"), 2), round(r("DN_ALL"), 2)], "MDN": [0.0, 0.0], "DNp09": [round(r("DNp09"), 1), round(r("DNp09"), 1)]},
                  "motor": {"forward": round(fwd, 2), "turn": round(turn, 2)}}
         heat = f.get("heat", [0.0, 0.0])
-        return {"t": round(t, 2), "seed": self.seed, "episode": self.episode, "fly": fly, "people": people,
-                "humans": "people walking about (male-CNS spiking fly, flybrain-rover)", "target": 0, "locked": self.locked, "touches": self.touches,
-                "t_first": round(self.t_first, 2) if self.t_first is not None else None,
-                "track": round(self.track_steps / max(1, self.steps_since_lock), 3) if self.locked else None,
-                "heat": [round(float(heat[0]), 3), round(float(heat[1]), 3)] if self.heat_on else [0.0, 0.0],
-                "vis": [round(float(v), 2) for v in f.get("pres", [0.0] * 24)], "motion": [round(abs(float(v)), 2) for v in f.get("mot", [0.0] * 24)],
-                "drive": [round(fwd, 3), round(turn, 3)], "reward": round(reward, 3), "total": round(self.total, 2), "done": False,
-                "lobotomized": bool(f.get("lobotomy", self.lobotomized)), "heat_on": self.heat_on, "see_m": 6.0, "fov_deg": round(self.fov, 1),
-                "brain": brain, "stats": {}, "history": []}
+        st = {"t": round(t, 2), "seed": self.seed, "episode": self.episode, "fly": fly, "people": people,
+              "humans": "people walking about (male-CNS spiking fly, flybrain-rover)", "target": 0, "locked": self.locked, "touches": self.touches,
+              "t_first": round(self.t_first, 2) if self.t_first is not None else None,
+              "track": round(self.track_steps / max(1, self.steps_since_lock), 3) if self.locked else None,
+              "heat": [round(float(heat[0]), 3), round(float(heat[1]), 3)] if self.heat_on else [0.0, 0.0],
+              "vis": [round(float(v), 2) for v in f.get("pres", [0.0] * 24)], "motion": [round(abs(float(v)), 2) for v in f.get("mot", [0.0] * 24)],
+              "drive": [round(fwd, 3), round(turn, 3)], "reward": round(reward, 3), "total": round(self.total, 2), "done": False,
+              "lobotomized": bool(f.get("lobotomy", self.lobotomized)), "heat_on": self.heat_on, "see_m": 6.0, "fov_deg": round(self.fov, 1),
+              "brain": brain, "stats": {}, "history": []}
+        if self.live:
+            st["pose_estimated"] = True                                # dead-reckoned from the motor command, not measured
+        return st
 
     def on_frame(self, f: dict):
         st = self.state(f)
@@ -205,6 +242,12 @@ def serve(ad: Adapter, brain_json: bytes, ui_dir: Path, asset_dirs: list[Path], 
             body = json.loads(self.rfile.read(n).decode() or "{}") if n else {}
             if "lobotomy" in body:
                 ad.lobotomized = bool(body["lobotomy"])
+                if ad.live:                                   # press the demo's own hotkey; replay is a recording
+                    try:
+                        import socket as _s
+                        _s.socket(_s.AF_INET, _s.SOCK_DGRAM).sendto(b"4" if ad.lobotomized else b"5", ("127.0.0.1", 9600))
+                    except OSError:
+                        pass
             if "heat" in body:
                 ad.heat_on = bool(body["heat"])
             self._send(204, "text/plain", b"")
@@ -237,8 +280,10 @@ def main():
     ap.add_argument("--replay", default=None); ap.add_argument("--live", default=None)
     ap.add_argument("--brain", default="data/brain.npz"); ap.add_argument("--positions", default="data/neuron_positions.json")
     ap.add_argument("--port", type=int, default=8601)
-    ap.add_argument("--who", default="the male-CNS spiking fly (flybrain-rover): 15,000 neurons, live")
+    ap.add_argument("--who", default=WHO_DEFAULT)
     ap.add_argument("--no-loop", action="store_true")
+    ap.add_argument("--v-max", type=float, default=V_MAX, help="m/s at forward = 1 (live pose dead reckoning; the bridge's default)")
+    ap.add_argument("--w-max", type=float, default=W_MAX_DEG, help="deg/s at turn = 1 (live pose dead reckoning; the bridge's default)")
     a = ap.parse_args()
     if not (a.replay or a.live):
         sys.exit("give --replay file.json or --live ws://host:port")
@@ -250,8 +295,9 @@ def main():
         N = int(np.load(a.brain, allow_pickle=False)["N"])
         viz = torch.randperm(N, generator=torch.Generator().manual_seed(0))[:512].tolist()
     brain_json, _ = build_brain_json(a.brain, a.positions, viz)
-    ad = Adapter(src, viz)
-    serve(ad, brain_json, Path(a.ui), [Path(a.assets)], a.port, a.who)
+    ad = Adapter(src, viz, v_max=a.v_max, w_max_deg=a.w_max)
+    who = a.who + (" (pose dead-reckoned from the motor command)" if ad.live and a.who == WHO_DEFAULT else "")
+    serve(ad, brain_json, Path(a.ui), [Path(a.assets)], a.port, who)
     src.run(ad.on_frame)
 
 

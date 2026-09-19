@@ -15,7 +15,7 @@ Two things in that chain are ours, not the connectome's, and we label them as su
 ```bash
 python -m venv .venv && .venv/bin/pip install -r requirements.txt
 python data/pull_connectome.py     # neuPrint -> data/brain.npz, no account or token needed
-python -m pytest tests -q          # 168 tests
+python -m pytest tests -q          #  tests
 python scripts/reproduce.py --quick   # 8 headline claims, about 12 s
 ```
 
