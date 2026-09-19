@@ -55,6 +55,8 @@ class BodyLink:
             if self.addr is None or addr[0] != self.addr[0]:
                 self.addr = (addr[0], self.port)  # learn the body's address from its packets
         if last is not None:
+            if not self.last_rx:
+                print(f"[body] hearing from the body at {self.addr[0]} (rssi {last.get('rssi')})", flush=True)
             self.pir = int(last.get("pir", 0))
             self.busy = int(last.get("busy", 0))
             self.last_rx = time.time()
