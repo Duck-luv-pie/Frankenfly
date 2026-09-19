@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import math
+import threading
 import time
 
 import cv2
@@ -19,7 +20,10 @@ class FrameSource:
 
 
 class CameraStream(FrameSource):
-    """Reads the ESP32-CAM MJPEG stream (or any OpenCV-readable URL / file)."""
+    """Reads the ESP32-CAM MJPEG stream (or any OpenCV-readable URL / file / device index).
+
+    Network streams are read in a background thread that always keeps only the newest frame, so
+    the brain loop never waits on the camera and never falls behind it (latency stays at one frame)."""
 
     def __init__(self, url: str, width: int = 80, height: int = 60, reconnect_s: float = 2.0):
         self.url, self.w, self.h = url, width, height
@@ -28,7 +32,16 @@ class CameraStream(FrameSource):
         self.last_attempt = 0.0
         self.is_device = url.isdigit()          # "0" = the computer's own webcam
         self.is_file = not self.is_device and not url.startswith(("http://", "https://", "rtsp://"))
+        self.threaded = not self.is_file
+        self._latest: np.ndarray | None = None
+        self._seq = 0
+        self._taken = 0
+        self._lock = threading.Lock()
+        self._stop = False
+        self.fps = 0.0
         self._open()
+        if self.threaded:
+            threading.Thread(target=self._pump, daemon=True).start()
 
     def _open(self) -> None:
         self.last_attempt = time.time()
@@ -46,29 +59,66 @@ class CameraStream(FrameSource):
                     print(f"[camera] {u.hostname} -> {ip}", flush=True)
                 except OSError:
                     print(f"[camera] cannot resolve {u.hostname}; is the camera on the network?", flush=True)
-        self.cap = cv2.VideoCapture(int(self.url) if self.is_device else url)
-        if not self.cap.isOpened():
+        cap = cv2.VideoCapture(int(self.url) if self.is_device else url)
+        if cap.isOpened():
+            cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+            self.cap = cap
+        else:
             self.cap = None
 
+    def _pump(self) -> None:
+        """Background reader: keep only the newest frame."""
+        n, t0 = 0, time.time()
+        while not self._stop:
+            cap = self.cap
+            if cap is None:
+                if time.time() - self.last_attempt > self.reconnect_s:
+                    self._open()
+                time.sleep(0.1)
+                continue
+            ok, frame = cap.read()
+            if not ok:
+                fails = getattr(self, "_fails", 0) + 1
+                self._fails = fails
+                if fails >= 5:
+                    print("[camera] stream stalled, reconnecting", flush=True)
+                    cap.release(); self.cap = None; self._fails = 0
+                else:
+                    time.sleep(0.05)
+                continue
+            self._fails = 0
+            with self._lock:
+                self._latest = frame
+                self._seq += 1
+            n += 1
+            if time.time() - t0 >= 2.0:
+                self.fps = n / (time.time() - t0); n, t0 = 0, time.time()
+
     def read(self) -> np.ndarray | None:
-        if self.cap is None:
-            if time.time() - self.last_attempt > self.reconnect_s:
-                self._open()
-            return None
-        ok, frame = self.cap.read()
-        if not ok:
-            if self.is_file:
+        if self.threaded:
+            with self._lock:
+                if self._seq == self._taken or self._latest is None:
+                    return None                   # nothing new since the last call
+                self._taken = self._seq
+                frame = self._latest
+        else:
+            if self.cap is None:
+                if time.time() - self.last_attempt > self.reconnect_s:
+                    self._open()
                 return None
-            self.cap.release()
-            self.cap = None
-            return None
-        self.preview = cv2.resize(frame, (320, 240), interpolation=cv2.INTER_AREA)
+            ok, frame = self.cap.read()
+            if not ok:
+                return None
+        self.preview = cv2.resize(frame, (320, 240), interpolation=cv2.INTER_AREA) if frame.shape[1] != 320 else frame
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY) if frame.ndim == 3 else frame
         return cv2.resize(gray, (self.w, self.h), interpolation=cv2.INTER_AREA)
 
     def close(self) -> None:
+        self._stop = True
+        time.sleep(0.05)
         if self.cap is not None:
             self.cap.release()
+            self.cap = None
 
 
 class SyntheticLooming(FrameSource):

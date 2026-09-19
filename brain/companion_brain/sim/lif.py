@@ -176,7 +176,7 @@ class LIFNetwork:
 
 if HAVE_NUMBA:
 
-    @numba.njit(cache=True, fastmath=True)
+    @numba.njit(cache=True, fastmath=True, nogil=True)
     def _run_numba(steps, v, g, adapt, resource, th_offset, ref_left, ring, ring_pos, rate, driven_idx, bg_idx, bg_lambda,
                    indptr, indices, data, counts,
                    a_mem, a_syn, v_rest, v_reset, v_th, ref_steps, dt_s, seed, adapt_mv, a_adapt, depress_u, a_depress):

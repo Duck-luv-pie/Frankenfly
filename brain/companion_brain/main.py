@@ -258,9 +258,11 @@ def cmd_run(args, cfg):
     print(f"[run] {c.n:,} neurons; camera={'synthetic' if args.sim_camera == 'synthetic' else (args.sim_camera or cam_cfg.url)}; "
           f"body={'dry' if args.dry_body else cfg.body.host}; vision={'retina (world) with camera fallback' if want_retina else 'camera'}. Ctrl-C to stop.", flush=True)
     feats = None
+    tick_hz, last_tick = 0.0, time.time()
     try:
         while True:
             tick = time.time()
+            tick_hz += 0.1 * (1.0 / max(tick - last_tick, 1e-3) - tick_hz); last_tick = tick
             # --- controls: webcam on/off (closing releases the camera; the window in the world goes dark)
             if dash is not None:
                 for ctl in [c_ for c_ in dash.controls if "webcam" in c_]:
@@ -380,7 +382,8 @@ def cmd_run(args, cfg):
                     "n_spikes": int(recent.sum()),
                     "top_types": dash.top_types(brain.window_counts()),
                     "brain": {"behind_ms": round(brain.behind_ms), "chunk_ms": round(brain.last_chunk_wall_ms, 1),
-                              "brain_s": round(brain.brain_ms / 1000, 1), "n": c.n},
+                              "brain_s": round(brain.brain_ms / 1000, 1), "n": c.n,
+                              "tick_hz": round(tick_hz, 1), "camera_fps": round(getattr(source, "fps", 0.0), 1) if source else 0.0},
                 }, frame=source.preview if source is not None else None)
             if args.verbose:
                 act = " ".join(f"{k}={v:.2f}" for k, v in d.motor.items() if abs(v) > 0.05)

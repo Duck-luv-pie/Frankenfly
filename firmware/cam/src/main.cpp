@@ -40,14 +40,15 @@ static volatile uint32_t frames_served = 0;
 static uint32_t boot_ms = 0;
 
 static const char *STREAM_CONTENT_TYPE = "multipart/x-mixed-replace;boundary=frame";
-static const char *STREAM_BOUNDARY = "\r\n--frame\r\n";
-static const char *STREAM_PART = "Content-Type: image/jpeg\r\nContent-Length: %u\r\n\r\n";
 
 static esp_err_t stream_handler(httpd_req_t *req) {
   esp_err_t res = httpd_resp_set_type(req, STREAM_CONTENT_TYPE);
   if (res != ESP_OK) return res;
   httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
-  char part[64];
+  // One TCP write per frame. Sending boundary, part header and JPEG as three small writes
+  // trips Nagle's algorithm against the client's delayed ACK and stalls the stream for ~200 ms.
+  static uint8_t *packet = nullptr;
+  static size_t packet_cap = 0;
   while (true) {
     camera_fb_t *fb = esp_camera_fb_get();
     if (!fb) {
@@ -55,11 +56,24 @@ static esp_err_t stream_handler(httpd_req_t *req) {
       res = ESP_FAIL;
       break;
     }
-    size_t hlen = snprintf(part, sizeof(part), STREAM_PART, fb->len);
-    res = httpd_resp_send_chunk(req, STREAM_BOUNDARY, strlen(STREAM_BOUNDARY));
-    if (res == ESP_OK) res = httpd_resp_send_chunk(req, part, hlen);
-    if (res == ESP_OK) res = httpd_resp_send_chunk(req, (const char *)fb->buf, fb->len);
-    esp_camera_fb_return(fb);
+    char part[96];
+    size_t hlen = snprintf(part, sizeof(part), "\r\n--frame\r\nContent-Type: image/jpeg\r\nContent-Length: %u\r\n\r\n", fb->len);
+    size_t need = hlen + fb->len;
+    if (need > packet_cap) {
+      free(packet);
+      packet = (uint8_t *)(psramFound() ? ps_malloc(need + 4096) : malloc(need + 4096));
+      packet_cap = packet ? need + 4096 : 0;
+    }
+    if (packet) {
+      memcpy(packet, part, hlen);
+      memcpy(packet + hlen, fb->buf, fb->len);
+      esp_camera_fb_return(fb);
+      res = httpd_resp_send_chunk(req, (const char *)packet, need);
+    } else {
+      res = httpd_resp_send_chunk(req, part, hlen);
+      if (res == ESP_OK) res = httpd_resp_send_chunk(req, (const char *)fb->buf, fb->len);
+      esp_camera_fb_return(fb);
+    }
     if (res != ESP_OK) break;  // client went away
     frames_served++;
   }
@@ -100,14 +114,14 @@ static bool init_camera() {
   c.pin_pwdn = PWDN_GPIO_NUM; c.pin_reset = RESET_GPIO_NUM;
   c.xclk_freq_hz = 20000000;
   c.pixel_format = PIXFORMAT_JPEG;
-  c.frame_size = FRAMESIZE_QVGA;   // 320x240: plenty for the 80x60 optic lobe, fast to stream
-  c.jpeg_quality = 12;
-  c.fb_count = psramFound() ? 2 : 1;
+  c.frame_size = FRAMESIZE_QQVGA;  // 160x120: the optic lobe only needs 80x60, and small frames stream fastest
+  c.jpeg_quality = 16;   // smaller frames stream faster; the brain only uses 80x60 of it
+  c.fb_count = psramFound() ? 3 : 1;
   c.grab_mode = CAMERA_GRAB_LATEST;  // always serve the freshest frame (low latency)
   if (esp_camera_init(&c) != ESP_OK) return false;
   sensor_t *s = esp_camera_sensor_get();
   if (s) {
-    s->set_framesize(s, FRAMESIZE_QVGA);
+    s->set_framesize(s, FRAMESIZE_QQVGA);
     s->set_vflip(s, 0);
     s->set_hmirror(s, 0);
   }
