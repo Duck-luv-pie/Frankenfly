@@ -22,3 +22,6 @@ assets/sounds/*.wav
 
 # OS
 .DS_Store
+
+# Person detector weights (downloaded on first use by senses/people.py)
+brain/data/models/

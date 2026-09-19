@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Real Hunt</title>
+<style>
+  :root { --bg: #0d1220; --panel: #151c2e; --ink: #e6ebf5; --dim: #8a94a6; --ok: #5ad36b; --cool: #5aa9ff; --warm: #ff9a4a; }
+  html, body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.4 -apple-system, "Segoe UI", sans-serif; }
+  #wrap { display: grid; grid-template-columns: minmax(280px, 1fr) minmax(280px, 1fr); gap: 16px; padding: 16px; max-width: 1100px; margin: 0 auto; }
+  @media (max-width: 720px) { #wrap { grid-template-columns: 1fr; } }
+  .panel { background: var(--panel); border-radius: 10px; padding: 12px; }
+  h1 { font-size: 16px; margin: 0 0 8px; } .dim { color: var(--dim); font-size: 12px; }
+  img#cam { width: 100%; aspect-ratio: 4/3; background: #000; border-radius: 6px; display: block; }
+  .cols { display: grid; grid-template-columns: repeat(24, 1fr); gap: 2px; height: 70px; align-items: end; margin: 6px 0; }
+  .cols i { display: block; background: var(--cool); border-radius: 2px 2px 0 0; min-height: 1px; }
+  .cols i.m { background: var(--warm); }
+  .row { display: flex; justify-content: space-between; margin: 3px 0; }
+  .bar { height: 10px; background: #22304a; border-radius: 5px; overflow: hidden; flex: 1; margin: 0 6px; position: relative; }
+  .bar i { position: absolute; top: 0; bottom: 0; background: var(--ok); }
+  .bar.c i { background: var(--cool); } .bar.h i { background: var(--warm); }
+  button { background: #22304a; color: var(--ink); border: 1px solid #34456a; border-radius: 6px; padding: 4px 9px; cursor: pointer; font: inherit; margin-right: 6px; }
+  button.off { opacity: .6; }
+  ul { margin: 4px 0 0; padding-left: 16px; font-size: 12px; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div class="panel">
+    <h1>What the fly sees <span class="dim" id="camstate"></span></h1>
+    <img id="cam" alt="camera">
+    <div class="dim" style="margin-top:8px">retina · 24 columns across the fly's 150° eye, left → right · blue = someone there, orange = moving · the camera covers the middle <span id="fov"></span>°</div>
+    <div class="cols" id="cols"></div>
+    <div class="row"><span class="dim">heat L</span><div class="bar h"><i id="hl"></i></div><span class="dim">heat R</span><div class="bar h"><i id="hr"></i></div></div>
+  </div>
+  <div class="panel">
+    <h1>The fly's answer</h1>
+    <div class="row"><span>forward</span><div class="bar"><i id="fwd"></i></div><span id="fwdv" class="dim">0</span></div>
+    <div class="row"><span>turn</span><div class="bar c"><i id="turn"></i></div><span id="turnv" class="dim">0</span></div>
+    <div class="row dim"><span>would-be speed / yaw</span><span id="motion">–</span></div>
+    <div class="row dim"><span>rover</span><span id="rover">not attached</span></div>
+    <div class="row dim"><span>spikes this tick</span><span id="spk">–</span></div>
+    <div class="row dim"><span>DNa02 L / R (pursuit)</span><span id="dna">–</span></div>
+    <ul id="top"></ul>
+    <div style="margin-top:10px"><button id="pause">pause</button><button id="rov">rover: on</button><button id="heat">heat: on</button></div>
+    <div class="dim" style="margin-top:8px">The person detector is NanoDet (COCO) through OpenCV: it finds people whole or partly in view. Step back so your body is in the frame, then walk.</div>
+  </div>
+</div>
+<script>
+const $ = id => document.getElementById(id);
+const cols = $('cols'); const bars = [];
+for (let i = 0; i < 24; i++) { const d = document.createElement('div'); d.style.display = 'grid'; d.style.gridTemplateRows = '1fr 1fr'; d.style.height = '100%'; d.style.alignItems = 'end';
+  const o = document.createElement('i'); const m = document.createElement('i'); m.className = 'm'; d.append(o, m); cols.append(d); bars.push([o, m]); }
+let paused = false, rover = true, heat = true;
+const post = o => fetch('/control', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(o) });
+$('pause').onclick = () => { paused = !paused; $('pause').textContent = paused ? 'resume' : 'pause'; post({ paused }); };
+$('rov').onclick = () => { rover = !rover; post({ rover }); };
+$('heat').onclick = () => { heat = !heat; post({ heat }); };
+const es = new EventSource('/events');
+es.onmessage = ev => {
+  const st = JSON.parse(ev.data);
+  st.vis.forEach((v, i) => { bars[i][0].style.height = (v * 100) + '%'; bars[i][1].style.height = (st.motion[i] * 100) + '%'; });
+  $('hl').style.width = (st.heat[0] * 100) + '%'; $('hr').style.width = (st.heat[1] * 100) + '%';
+  $('fwd').style.width = (Math.max(0, st.drive[0]) * 100) + '%'; $('fwdv').textContent = st.drive[0].toFixed(2);
+  const t = st.drive[1]; $('turn').style.left = (50 + Math.min(0, t) * 50) + '%'; $('turn').style.width = (Math.abs(t) * 50) + '%'; $('turnv').textContent = (t > 0 ? '+' : '') + t.toFixed(2);
+  $('motion').textContent = `${st.speed_mps.toFixed(2)} m/s · ${st.yaw_dps > 0 ? '+' : ''}${st.yaw_dps.toFixed(0)} °/s`;
+  $('rover').textContent = st.rover ? `sticks fwd ${(st.rover.sticks.forward * 100).toFixed(0)}% yaw ${(st.rover.sticks.yaw * 100).toFixed(0)}%${st.rover.saturated ? ' (maxed)' : ''}${st.rover_on ? '' : ' · off'}` : 'not attached';
+  $('rov').textContent = st.rover_on ? 'rover: on' : 'rover: off'; $('rov').classList.toggle('off', !st.rover_on); rover = st.rover_on;
+  $('heat').textContent = st.heat_on ? 'heat: on' : 'heat: off'; $('heat').classList.toggle('off', !st.heat_on);
+  $('spk').textContent = st.brain.n_spikes; $('dna').textContent = `${st.brain.rates.DNa02[0]} / ${st.brain.rates.DNa02[1]} Hz`;
+  $('top').innerHTML = st.brain.top.map(([t, n]) => `<li>${t} <span class="dim">${n}</span></li>`).join('');
+  $('fov').textContent = st.fov_deg; $('camstate').textContent = st.camera_ok ? `· ${st.boxes.length} ${st.boxes.length === 1 ? 'person' : 'people'} in view` : '· waiting for the camera';
+};
+setInterval(() => { $('cam').src = '/frame.jpg?' + Date.now(); }, 120);
+</script>
+</body>
+</html>
