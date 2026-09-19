@@ -125,7 +125,7 @@
 
 <section>
   <h2>Run order, before judges arrive</h2>
-  <p class="lede">Four terminals, in this order, all from the project directory. Ten minutes. The brain runs on the
+  <p class="lede">Five terminals, in this order, all from the project directory. Ten minutes. The brain runs on the
   laptop; the Pi rides the robot and turns the laptop's motor packets into S-Bus, and the ESP32-CAM streams
   through the Pi's Wi-Fi. Rehearse the whole sequence once with <code>--dry-run</code> so the wheels stay still.</p>
   <div class="steps-run">
@@ -159,8 +159,13 @@
 <span class="c"># 4. stream the frames into Tiger Data, until Ctrl-C</span>
 .venv/bin/python scripts/export_timeseries.py --live ws://localhost:8765 --run-id demo_$(date +%H%M)
 
-<span class="c"># 5. the wall chart -> http://localhost:8790 on the big screen, next to Ducks's 3-D viewer on ws://localhost:8765</span>
-.venv/bin/python scripts/live_chart.py</pre>
+<span class="c"># 5. the wall chart -> http://localhost:8790 on the big screen</span>
+.venv/bin/python scripts/live_chart.py
+
+<span class="c"># 6. Ducks's 3-D viewer with our brain in it -> http://localhost:8601. His files live on his s1-fly-brain</span>
+<span class="c">#    branch, checked out at ~/Downloads/filess/hunting-fly-s1; the copy on main is only the HTML and renders black.</span>
+.venv/bin/python scripts/viz_adapter.py --ui ~/Downloads/filess/hunting-fly-s1/brain/companion_brain/ui --live ws://localhost:8765
+open http://localhost:8601</pre>
   </div>
   <div class="scroll">
   <table>
@@ -173,6 +178,7 @@
       <tr><td>Walk in from 2 m</td><td>Robot turns to face you, rolls to your shoe</td><td>Stand at 1.5 m; <code>--show</code> to see boxes</td></tr>
       <tr><td>Press <b>6</b></td><td>Robot goes still, LC10a still lit on the wall</td><td>That is the control; if it keeps tracking, the shuffle did not apply</td></tr>
       <tr><td>Say "what do you see" to terminal 3</td><td>Bearing and distance in the fly's voice</td><td>Check the mic input device; <code>talk.py --check</code> prints the tool answers</td></tr>
+      <tr><td>Open localhost:8601</td><td>The fly, the person, the 15,000-neuron map with spikes, DNa02 bars moving</td><td>Black scene = wrong --ui folder; it must be the hunting-fly-s1 one</td></tr>
       <tr><td>Open localhost:8790</td><td>Three traces moving, "newest bucket" under 3 s</td><td>Terminal 4 running? Wi-Fi? <code>--report</code> shows the aggregate</td></tr>
       <tr><td>Badge in your pocket, charged</td><td>Swat, six white LEDs</td><td>Press DOWN if it flinches at rest</td></tr>
     </tbody>
