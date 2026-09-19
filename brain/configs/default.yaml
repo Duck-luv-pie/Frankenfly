@@ -1,0 +1,385 @@
+# Companion brain configuration.
+# Everything the robot does is a mapping between real FlyWire neuron groups and sensors/actuators.
+# Neuron groups are selected from the FlyWire annotations (Schlegel et al. 2024) by cell_type,
+# regex, or neurotransmitter. Left/right are resolved automatically from the `side` column.
+
+data:
+  raw_dir: data/raw
+  cache_dir: data/cache
+  atlas_dir: data/atlas/male-cns   # MaleCNS neuron atlas (Fly / Neural Atlas export: manifest.json, catalog.json.gz, skeletons-*.bin.gz)
+  files:
+    connectivity:
+      url: https://raw.githubusercontent.com/philshiu/Drosophila_brain_model/main/Connectivity_783.parquet
+      name: Connectivity_783.parquet
+      size: 100804642
+    completeness:
+      url: https://raw.githubusercontent.com/philshiu/Drosophila_brain_model/main/Completeness_783.csv
+      name: Completeness_783.csv
+      size: 3327347
+    annotations:
+      url: https://raw.githubusercontent.com/flyconnectome/flywire_annotations/main/supplemental_files/Supplemental_file1_neuron_annotations.tsv
+      name: neuron_annotations.tsv
+
+# Leaky integrate-and-fire parameters (Shiu et al. 2024, model.py defaults).
+lif:
+  v_rest_mv: -52.0
+  v_reset_mv: -52.0
+  v_thresh_mv: -45.0
+  tau_mem_ms: 20.0
+  tau_syn_ms: 5.0
+  refractory_ms: 2.2
+  delay_ms: 1.8
+  w_syn_mv: 0.275
+  dt_ms: 0.1
+  min_synapses: 5          # connections weaker than this are dropped (as in Shiu et al.)
+  force_inhibitory_classes: [ALLN]   # antennal-lobe local neurons are inhibitory (GABA/glutamate); the predicted
+                                     # signs make 62% of their synapses excitatory and the lobe runs away
+  adapt_mv: 2.0            # spike-frequency adaptation per spike (0 = reference model); tames runaway excitatory loops
+                           # (5 mV also kills the polysynaptic sugar -> proboscis pathway; 2 mV keeps it)
+  tau_adapt_ms: 200
+  depress_u: 0.0           # short-term synaptic depression per presynaptic spike (optional brake; 0.05 silences the sugar pathway)
+  tau_depress_ms: 200
+  background_hz: 1.0       # spontaneous firing floor (0 = silent brain, as in the paper) ...
+  background_classes: [central, descending, ascending, visual_centrifugal, endocrine]   # ... for these neurons only;
+                           # sensory and visual projection neurons fire only when the senses drive them
+  background_exclude_types: ['^KC']   # Kenyon cells are nearly silent at rest (high threshold, APL inhibition): no floor
+  threshold_offsets: []               # per-type spike threshold offsets (mV), e.g. [{regex: '^KC', mv: 4}]; with the
+                                      # antennal lobe fixed, Kenyon cells are already silent at rest and ~9% respond to an odor
+  synapse_gains:                      # scale a synapse class where the LIF calibration under-drives a known pathway
+    - {pre: '^VP', post: '^KC', gain: 4}   # thermo/hygrosensory (VP glomerulus) projection neurons -> Kenyon cells: one or two
+                                           # PNs per glomerulus cannot fire a KC at 0.275 mV/synapse; x4 gives a sparse thermal
+                                           # code (~3% of KCs to heat, left/right sets disjoint, silent at rest) so the fly can
+                                           # learn about warmth (Frank et al. 2015). Odor responses are unchanged.
+
+# Circuit pruning: keep neurons on paths from inputs to readouts.
+prune:
+  hops_forward: 2
+  hops_backward: 2
+  inhibitory_closure_min_synapses: 20   # also keep inhibitory neurons with >= this many synapses both from and into the circuit (0 = off)
+
+# --- Neuron groups -------------------------------------------------------------
+# Selector keys: cell_type (list), regex (matched against cell_type), hemibrain_type (list),
+# top_nt (neurotransmitter), super_class. Multiple keys are OR-ed within one group.
+groups:
+  # Visual projection neurons (the camera pretends to be the optic lobe feeding these)
+  LC4:    {cell_type: [LC4]}         # fast looming -> Giant Fiber
+  LPLC2:  {cell_type: [LPLC2]}       # looming, wide-field -> Giant Fiber
+  LC16:   {cell_type: [LC16]}        # looming -> backward walking
+  LC9:    {cell_type: [LC9]}         # the heaviest visual input to DNp09 (freezing): the hunter's brake (hunt_gpu.brain.near_groups)
+  LC11:   {cell_type: [LC11]}        # small moving object
+  LC10a:  {cell_type: [LC10a]}       # small object tracking
+  LC12:   {cell_type: [LC12]}        # vertical bar
+  LC15:   {cell_type: [LC15]}        # vertical bar
+  # Johnston's organ (antenna). C/E groups respond to wind / static deflection.
+  JO_wind: {regex: '^JO-(C|E)'}
+  # Smell, taste, touch, humidity: how the fly's world reaches it
+  ORN_fruit: {cell_type: [ORN_DM1, ORN_DM4, ORN_VA2, ORN_DM2]}   # fruit-ester / vinegar glomeruli (Semmelhack & Wang 2009): the grape
+  ORN_lemon: {cell_type: [ORN_VA6, ORN_DL1, ORN_VM4, ORN_DM3, ORN_DL4]}   # disjoint glomeruli (VA6 = Or82a, geranyl acetate): the lemon, odor B, never rewarded
+  GRN_sugar: {cell_sub_class: sugar/water}                        # sugar-sensing gustatory neurons -> feeding (Shiu et al. 2024)
+  BM_eye:    {cell_type: [BM_InOm]}                               # interommatidial bristles: dust on the eyes -> grooming (Seeds et al. 2014)
+  BM_head:   {cell_type: [BM_Ant, BM_Fr, BM_FrOr, BM_Or, BM_Oc, BM_InOc, BM_Vt_PoOc, BM_dOcci, BM_vOcci_vPoOr, BM_dPoOr]}
+  HRN_moist: {cell_type: [HRN_VP4]}                               # moist-air hygrosensory neurons
+  TRN_hot:   {cell_type: [TRN_VP2]}                               # arista hot cells (Gallio et al. 2011): warm bodies, per antenna (hunt arena)
+  GRN_bitter: {cell_sub_class: bitter}                            # bitter gustatory neurons: punishment (hunt arena timeout)
+  # Descending neurons (outputs to the ventral nerve cord)
+  GF:     {cell_type: [DNp01]}       # Giant Fiber: escape takeoff
+  DNp09:  {cell_type: [DNp09]}       # freezing / forward walking
+  MDN:    {cell_type: [MDN]}         # backward walking
+  DNa01:  {cell_type: [DNa01]}       # steering
+  DNa02:  {cell_type: [DNa02]}       # steering
+  DNg11:  {cell_type: [DNg11]}       # front-leg grooming
+  DNg12:  {regex: '^DNg12'}          # grooming
+  DN_groom: {cell_type: [DNg35, DNg84, DNg15, DNge132, DNg87]}   # descending neurons with the strongest direct input from head/eye bristles (from the connectome itself)
+  DNp02:  {cell_type: [DNp02]}       # wing / threat related
+  DNp04:  {cell_type: [DNp04]}
+  DNp11:  {cell_type: [DNp11]}
+  DNp07:  {cell_type: [DNp07]}       # landing
+  DNp10:  {cell_type: [DNp10]}       # landing
+  # Central-brain state readouts
+  pC1_social:     {cell_type: [pC1a, pC1b, pC1c]}   # female receptivity / social
+  pC1_aggression: {cell_type: [pC1d, pC1e]}         # aggression
+  # Valence from the wiring: MBONs whose compartment is innervated by reward DANs (PAM) drive avoidance and are
+  # depressed by reward; MBONs under punishment DANs (PPL1) drive approach (Aso et al. 2014b, Owald & Waddell 2015)
+  MBON_avoid:     {cell_type: [MBON01, MBON02, MBON03, MBON04, MBON05, MBON06, MBON07, MBON09, MBON24, MBON26]}
+  MBON_approach:  {cell_type: [MBON11, MBON12, MBON14, MBON17, MBON18, MBON20, MBON28, MBON30, MBON31, MBON32, MBON33, MBON35]}
+  DAN_reward:     {regex: '^PAM'}
+  DAN_punish:     {regex: '^PPL1'}
+  octopamine:     {top_nt: octopamine}
+  DN_all:         {super_class: descending}         # the whole descending population = general motor drive
+  MN_proboscis:   {cell_sub_class: [proboscis_motor_neuron, ingestion_motor_neuron]}   # feeding output
+
+# Which groups are stimulated (inputs) and which are read out (outputs) for pruning.
+inputs:  [LC4, LPLC2, LC16, LC11, LC10a, LC12, LC15, JO_wind, ORN_fruit, ORN_lemon, GRN_sugar, BM_eye, BM_head, HRN_moist, TRN_hot, GRN_bitter]
+readouts: [GF, DNp09, MDN, DNa01, DNa02, DNg11, DNg12, DNp02, DNp04, DNp11, DNp07, DNp10,
+           pC1_social, pC1_aggression, MBON_avoid, MBON_approach, DAN_reward, DAN_punish, octopamine, DN_all, MN_proboscis, DN_groom]
+
+# --- Senses -> input drive (Poisson rate in Hz per neuron, per hemifield) ------------
+senses:
+  max_rate_hz: 150
+  camera:
+    url: http://companion-cam.local:81/stream
+    width: 80
+    height: 60
+    fps: 15
+  features:                    # feature name -> {groups, gain}; rate = clip(feature*gain,0,1)*max_rate
+    loom_fast:   {groups: [LC4, LPLC2], gain: 1.0}
+    loom_slow:   {groups: [LC16],       gain: 1.0}
+    small_object: {groups: [LC11, LC10a], gain: 1.0, azimuth_weight: 0.0}   # azimuth_weight: retinotopic drive (periphery
+                                                                          # stronger than midline), tuned for the hunter
+    bar:         {groups: [LC12, LC15], gain: 0.4}
+  pir:
+    groups: [JO_wind]
+    rate_hz: 100
+    burst_ms: 500
+  sleep_after_s: 90            # nothing stimulating for this long -> sleep state
+  wake_motion: 0.15
+  vision: retina               # retina = the fly's own eyes in its 3D world (falls back to camera when no page is open)
+  efference_copy_gain: 0.9     # visual drive is scaled by (1 - gain * self_motion): walking/turning/flying is not looming
+  world:                       # senses posted by the world (dashboard) at ~10 Hz, each 0..1 -> Poisson drive
+    odor:  {groups: [ORN_fruit], max_hz: 150, lateral: true}   # per antenna (left/right): the grape
+    odor_b: {groups: [ORN_lemon], max_hz: 150, lateral: true}  # the lemon
+    sugar: {groups: [GRN_sugar], max_hz: 150}
+    dust:  {groups: [BM_eye, BM_head], max_hz: 60}
+    moist: {groups: [HRN_moist], max_hz: 60}
+    heat:  {groups: [TRN_hot], max_hz: 150, lateral: true}   # warm bodies: the arista's hot cells, per antenna (hunt arena)
+    bitter: {groups: [GRN_bitter], max_hz: 150}              # punishment taste (hunt arena: timeout)
+
+# --- Readouts -> behaviors -------------------------------------------------------------
+# The brain has spontaneous activity, so every readout has a resting rate. At startup the brain
+# runs with no sensory input for `calibrate_s` seconds and the mean/std of each group's rate is
+# recorded (cached). Everything below is measured as a z-score against that baseline:
+#   z = (rate - resting_mean) / resting_std,   score = clip(z / z_ref, 0, 1)
+decode:
+  window_ms: 500                 # default rate window (each behavior/channel may set its own window_ms)
+  calibrate_s: 6.0               # resting baseline: run this long with no senses ...
+  warmup_s: 3.0                  # ... after this long of settling (adaptation builds up over seconds)
+  baseline_drift_s: 120          # slowly re-center the resting mean on the running brain (0 = fixed)
+  min_std_hz: 2.0                # floor on the resting std: with a calm brain one chance spike of a 2-neuron group must not score
+  z0: 1.0                        # dead zone: excursions below this many sigma count as nothing
+  behaviors:                     # discrete states (label, robot eyes, sounds); priority wins, hold keeps it on
+    escape:     {groups: [GF],  window_ms: 300,       z_ref: 10, priority: 100, min_score: 0.6, hold_ms: 800}
+    backward:   {groups: [MDN],                        z_ref: 5, priority: 80,  min_score: 0.6, hold_ms: 600}
+    freeze:     {groups: [DNp09],                      z_ref: 5, priority: 70,  min_score: 0.7, hold_ms: 600}
+    threat:     {groups: [DNp02, DNp04, DNp11, pC1_aggression], z_ref: 5, priority: 60, min_score: 0.6, hold_ms: 600}
+    groom:      {groups: [DNg11, DNg12, DN_groom],     z_ref: 4, priority: 40,  min_score: 0.6, hold_ms: 1200}
+    land:       {groups: [DNp07, DNp10],               z_ref: 5, priority: 30,  min_score: 0.6, hold_ms: 600}
+    social:     {groups: [pC1_social],                 z_ref: 4, priority: 20,  min_score: 0.6, hold_ms: 1500}
+    feed:       {groups: [MN_proboscis],               z_ref: 4, priority: 25,  min_score: 0.6, hold_ms: 1500}
+    track:      {groups: [DNa01, DNa02], window_ms: 300, z_ref: 4, priority: 10, min_score: 0.5, hold_ms: 300}
+  motor:                         # continuous channels 0..1 (turn: -1..1), what actually moves the fly
+    smoothing_ms: 400
+    channels:
+      forward:  {groups: [DN_all], window_ms: 300, z_ref: 1.2, z0: 0.0, min_std_hz: 0.1}   # descending population (674 cells) = walking drive; its own std is ~0.07 Hz
+      backward: {groups: [MDN],                    z_ref: 5}
+      turn:     {groups: [DNa01, DNa02], window_ms: 300, z_ref: 4, lateral: true}   # right minus left
+      groom:    {groups: [DNg11, DNg12, DN_groom], z_ref: 4}
+      threat:   {groups: [DNp02, DNp04, DNp11, pC1_aggression], z_ref: 5}
+      song:     {groups: [pC1_social],             z_ref: 4}
+      land:     {groups: [DNp07, DNp10],           z_ref: 5}
+      freeze:   {groups: [DNp09],                  z_ref: 5}
+      jump:     {groups: [GF], window_ms: 300,     z_ref: 10}
+      feed:     {groups: [MN_proboscis],           z_ref: 4}   # proboscis extension
+  modulators:
+    valence:  {plus: MBON_approach, minus: MBON_avoid, z_ref: 3}   # -1..1, iris tint
+    arousal:  {plus: octopamine, z_ref: 3}                          # 0..1, pupil dilation
+    reward:   {plus: DAN_reward, minus: DAN_punish, z_ref: 3}
+  sounds:      # behavior -> DFPlayer track number (0 = silent)
+    escape: 1
+    backward: 2
+    groom: 3
+    threat: 4
+    social: 5
+  volume: 20
+
+# --- Learning: mushroom-body plasticity (the fly's own reinforcement learning) ---------------
+learning:
+  enabled: true                # toggle at runtime from the dashboard or with --no-learn
+  eta: 0.1                     # depression rate: fraction of a synapse per second of (eligibility x dopamine)
+  kc_excess_factor: 1.5        # a KC is "eligible" only when firing above this multiple of its own resting rate
+  tau_kc_rest_s: 120
+  kc_margin_hz: 1.0
+  dopamine_margin_hz: 3.0     # DAN rate must exceed rest by this much to count (PPL1 fluctuates at rest)
+  reward:                      # reinforcement delivered by the world (sugar reward reaches PAM DANs via nutrient
+    world: sugar               # signals, not only through the brain's wiring, which does not carry it in this model)
+    groups: [DAN_reward]
+    hz: 20
+  punish:                      # punishment (nothing in the world delivers it by default; e.g. world: bitter)
+    world: bitter
+    groups: [DAN_punish]
+    hz: 20
+  tau_elig_s: 2.0              # Kenyon-cell eligibility trace (odor must precede reward within seconds)
+  tau_dan_s: 0.3               # dopamine rate smoothing
+  tau_rest_s: 60               # slow resting estimate of each compartment's DAN rate
+  dopamine_ref_hz: 5           # DAN rate above rest that counts as full reinforcement
+  tau_forget_s: 900            # learned depression relaxes back over ~15 min
+  w_min_frac: 0.1              # a synapse cannot be depressed below this fraction of its original weight
+  kc_mbon_gain: 3.0            # KC->MBON synapses scaled up: the LIF's MBON odor responses (~0.5 Hz) are far below in vivo
+                               # (tens of Hz, Hige et al. 2015); x3 gives ~10 Hz odor responses that learning can abolish
+  compartment_min_synapses: 3  # DAN -> MBON connections at least this strong define a compartment
+  valence_steering: 1.0        # motor coupling: learned MBON valence steers toward / away from the smell (world side)
+  two_odor: true               # place the lemon (odor B, unrewarded) in the world next to the grape (odor A + sugar)
+
+# --- Hunt arena: the fly as a ground vehicle that must find and touch a walking human ------------
+# Meter-scale port of the Fly / People Lab arena (see docs/architecture.md, "Hunting"). The vehicle is
+# steered only by the brain's forward / backward / turn channels; it cannot fly or walk.
+hunt:
+  arena: {x: 7.4, z: 6.1}        # half-extents the vehicle can reach (m); people patrol inside ±7.1 / ±5.8
+  people: 4                      # walking humans (1..8) on seeded patrol ellipses
+  episode_s: 45                  # time allowed to touch someone; a timeout ends the episode with punishment
+  reward_s: 2.0                  # after a touch: stopped, sugar + reward dopamine for this long
+  punish_s: 2.0                  # after a timeout: stopped, bitter + punishment dopamine for this long
+  person_r: 0.20                 # a person is a solid cylinder of this radius (m); the vehicle's flank stops at its skin
+  nose_m: 0.16                   # the vehicle's nose is this far ahead of its centre (half its 32 cm body)
+  touch_m: 0.06                  # a touch: the nose within this distance of a person's skin (brushing past does not count)
+  body_solid: true               # the vehicle's body stops at a person's skin (nose_m from its centre); false: a 10 cm buffer around the person
+  frontal_deg: 30                # head-on contact (|bearing| below this) earns the full reward ...
+  side_reward: 0.5               # ... a glancing contact earns this fraction (sugar drive and score)
+  freeze_brakes: false           # the freeze channel (DNp09) does not stop the hunter
+  speed_max: 1.6                 # m/s forward at full descending drive (people walk at ~0.8 m/s)
+  speed_reverse: 0.0             # m/s backward (MDN); 0 = the hunter only goes forward
+  turn_max: 3.5                  # rad/s at full steering drive (200 deg/s: at 2.5 a runner darting across the nose at 0.7 m outturned the fly)
+  turn_gain: 1.0                 # steering ratio (tuned by `companion hunt --train`)
+  turn_sign: -1                  # the turn channel is DNa right minus left and DNa02 turns the fly toward its own side
+                                 # (measured: an object on the left fires the left DNa02); the world's heading grows leftward
+  fov_deg: 150                   # the hunter's eye (wide, like a fly's): a person in view is a small dark moving object + a bar
+  overrides:                     # fixed settings for the hunter, applied by `companion hunt` and `run --load-weights hunter.npz`
+    senses.features.loom_fast.gain: 0    # no looming drive: the Giant Fiber / escape circuit is never recruited
+    senses.features.loom_slow.gain: 0    # no backward walking from LC16 either
+  heat_gain: 1.0                 # heat drive scale (tuned)
+  heat_scale_m: 3.0              # distance at which a person's heat is at half strength
+  heat_lobe_deg: 45              # the two heat sensors look 45° left and right of ahead, cosine lobes
+  efference_copy_gain: 0.3       # visual drive is scaled by 1 - gain * self_motion; a chasing vehicle must keep seeing
+  valence_steer: 6.0             # learned MBON valence x heat gradient -> steering (scaled by learning.valence_steering)
+  tick_s: 0.05                   # world step; the brain advances 50 ms of brain time per tick
+
+# --- Hunt arena on a GPU (`companion hunt-gpu`, needs `uv sync --extra gpu`) ----------------------
+# A spinoff of the hunt: the same room, physics and seeds as `hunt` above, but thousands of rooms stepped
+# together as tensors and a compact recurrent fly (hot cells -> Kenyon cells -> MBONs, retinotopic LC
+# columns -> pursuit, a central-complex GRU, descending forward / turn drive) trained by PPO.
+hunt_gpu:
+  envs: 2048                     # rooms stepped in parallel (raise on a big GPU: 8192+)
+  people_min: 4                  # people per room, drawn per episode in [people_min, people_max] (max 8)
+  people_max: 4
+  vision_bins: 24                # retinotopic columns across the field of view (object + motion per column)
+  obs_noise: 0.02                # sensor noise on the observation during training (off at evaluation)
+  reward:
+    touch: 10.0                  # a touch (x side_reward for a glancing one) ...
+    fast: 10.0                   # ... plus this x the fraction of the episode still left: faster is better
+    timeout: 5.0                 # the cost of running out of time
+    progress: 1.0                # per metre closed on the chosen target (negative when it gets away)
+    time: 0.01                   # per tick
+    facing: 0.002                # per tick x cos(bearing to the target), while it is ahead
+    switch: 0.5                  # the cost of changing target ...
+    switch_margin_m: 1.0         # ... which happens only when someone else is this much closer
+    explore: 0.2                 # nobody in range: per new 1 m cell of the room the fly drives into (it searches ...)
+    idle: 0.01                   # ... and per tick it stands still instead)
+    cell_m: 1.0
+  senses:                        # the fly's range (0 = unlimited): beyond it people are neither seen nor felt
+    see_m: 6.0                   # a person is seen within this (in the 150 deg field of view)
+    heat_m: 5.0                  # ... and felt within this (the warmth fades out over the last metre)
+    pir:                         # an HC-SR501 PIR instead of the warmth lobes: one bit, high while a warm body MOVES in its cone
+      enabled: true
+      count: 1                   # one sensor feeds both hot cells; 2 = one per side, looking lobe_deg left and right
+      fov_deg: 110               # detection cone
+      range_m: 6.0               # detection range
+      hold_s: 2.0                # the output stays high this long after the last motion (retriggerable)
+      motion_mps: 0.05           # a person slower than this is invisible to it (as is a standing person); the vehicle's own motion also triggers it
+      lobe_deg: 45
+  track:                         # after the first touch the target is locked and the episode runs the whole clock
+    enabled: true                # false: the episode ends at the first touch (as on the CPU)
+    follow_m: 0.6                # tracking = the person's skin within this of the nose ...
+    follow_deg: 45               # ... and within this of straight ahead
+    reward: 0.05                 # per tracking tick (0.6 s of tracking is worth a metre of approach) ...
+    ramp_s: 5.0                  # ... growing linearly over this long of unbroken tracking ...
+    ramp_max: 3.0                # ... to this multiple (trailing them for a while is the point: attaching something takes time)
+    lost_m: 2.5                  # letting the locked person get further than this ...
+    lost: 0.02                   # ... costs this per tick
+    retouch: 2.0                 # touching the locked person again ...
+    cooldown_s: 2.0              # ... pays at most once per this
+    start_locked: 0.0            # this fraction of episodes begins at the first touch, locked on (tracking practice; 0 = every episode is a hunt)
+    facing: 0.02                 # per tick x cos(bearing to the locked person): keep them in front (negative when they are behind)
+    contact: 0.02                # per tick the nose touches the locked person head-on (within hunt.frontal_deg) ...
+    contact_ramp_s: 3.0          # ... growing linearly over this long of unbroken contact ...
+    contact_max: 3.0             # ... to this multiple (the streak resets when the contact breaks)
+    lose: 5.0                    # spinning away: losing the locked person right after a touch costs this, once per touch ...
+    hold_s: 2.0                  # ... "right after" = within this of the last touch ...
+    lose_deg: 90                 # ... "losing" = they are behind this bearing (or out of the senses) without a new touch
+  humans:                        # the other player
+    mode: wander                 # wander: people walking about, ignoring the fly | patrol: the CPU arena's seeded walkers | flee: a scripted run-away reflex | learn: runners trained by PPO against the fly
+    speed_max: 1.5               # runners still try to escape but are a touch slower than the fly (hunt.speed_max 1.6): it can catch them
+    turn_max: 4.0                # rad/s
+    alarm_m: 4.0                 # a runner minds the fly (evades) only when it is this close ...
+    calm_m: 6.0                  # ... and forgets it once it is this far; otherwise it strolls between random waypoints
+    walk_speed: 0.8              # m/s while strolling
+    flee_m: 6.0                  # (flee) sprint while the fly is within this, otherwise stroll
+    wall_m: 2.0                  # (flee) blend in a turn toward the middle from this far off a wall
+    stamina:                     # runners tire: the fly that keeps tracking catches up while they rest
+      sprint_s: 4.0              # sprinting (above half speed) empties the tank in this long ...
+      rest_s: 3.0                # ... and an exhausted runner stands still this long
+    pause:                       # and they stop now and then whatever their policy says: the fly's tracking practice
+      every_s: 8.0               # a stop every 0.5..1.5 x this (0 = never) ...
+      for_s: 2.5                 # ... for this long
+    reward:                      # a runner's reward (learn): keep away, do not get caught, do not get tracked
+      distance: 0.01             # per tick x min(1, distance to the fly / 5 m)
+      caught: 10.0               # the first touch, paid by the person touched
+      tracked: 0.05              # per tick the locked person is tracked (mirrors track.reward)
+      retouch: 2.0               # every renewed contact (mirrors track.retouch)
+      contact: 0.05             # per tick of being touched head-on (mirrors track.contact)
+    net: {hidden: 64}            # the runners' shared feed-forward policy
+    ppo: {lr: 3.0e-4, entropy: 0.003}   # overrides of the fly's ppo settings for the runners
+  net:
+    hidden: 128                  # central-complex GRU
+    kc: 256                      # Kenyon cells (fixed random expansion of the thermal projection neurons)
+    kc_active: 8                 # winners per tick (a ~3% sparse code, as in the mushroom body)
+    visual: 32                   # visual feature vector after the azimuth convolutions
+  ppo:
+    steps: 64                    # ticks per rollout (3.2 s of arena time per room)
+    epochs: 4
+    minibatches: 4
+    lr: 3.0e-4
+    gamma: 0.995                 # ~10 s horizon at 20 ticks/s
+    lam: 0.95
+    clip: 0.2
+    value_clip: 0.2
+    entropy: 0.003
+    value_coef: 0.5
+    max_grad_norm: 0.5
+    log_std_init: -0.5
+  updates: 300                   # default training length (~40 M ticks with 2048 rooms)
+  brain:                         # `companion hunt-brain`: the real fly's hunter subcircuit as a rate model in the arena
+    hops: [2, 1]                 # subcircuit: within this many synapses forward of the senses and backward of the descending readouts
+    kappa_mv: 2.5                # soft threshold of the mean-field LIF (fitted to the spiking subcircuit's responses)
+    syn_scale: 0.75              # synaptic efficacy scale of the mean field (fitted likewise)
+    substeps: 4                  # neuron updates per 50 ms arena tick (12.5 ms each)
+    near_groups: [LC9]           # a person filling > hunt.near_deg of the view drives these (-> DNp09 -> the freeze brake); needs hunt.near_gain > 0
+    turn_contrast: true          # turn = (right - left) / (right + left + z_ref) instead of the raw z difference: a centred person is not a hard turn
+    fresh_gains: []              # gains that start from the config instead of a resumed file (hunt-brain --fresh-brake fills this)
+    gain_max: 10                 # a synapse gain stays within 1/gain_max .. gain_max (sign fixed)
+    th_max_mv: 4                 # a threshold offset stays within +-this
+    reg: 0.01                    # stay-close-to-the-connectome penalty on log gains and thresholds
+    lr_brain: 0.01               # Adam step for the synapse gains and thresholds
+    lr_head: 0.003               # ... and for the sensory gains and decoder thresholds
+    bptt_ticks: 1                # ticks of backpropagation through the neurons before the state is detached (memory grows with it)
+    log_std_init: -0.7
+    log_std_min: -1.2            # floor on the exploration noise (sigma 0.3 of the drive range): PPO otherwise shrinks it until nothing new is tried
+    envs: 512                    # rooms in parallel (an 8.5k-neuron batch is heavier than the network fly)
+    ppo: {steps: 32, epochs: 2, minibatches: 2, critic_epochs: 4}    # few, large minibatches: the per-tick kernels are launch-bound below ~1k rooms
+    updates: 150
+
+# --- Body link -------------------------------------------------------------------------
+body:
+  host: companion-body.local
+  port: 4210
+  listen_port: 4211
+  rate_hz: 20
+  s1:                          # DJI RoboMaster S1 as the legs, S-Bus from the Pi (docs/wiring.md); `run --s1 [PORT]`
+    enabled: false
+    port: /dev/ttyAMA0         # Pi 5 header UART (dtparam=uart0=on); an FTDI adapter with inverted TX: /dev/ttyUSB0
+    max_stick: 0.5             # full brain drive = this fraction of stick throw; raise once it behaves
+    free_mode: true            # channel 4 turns the chassis (the hunt vehicle) rather than the gimbal
+    speed: slow                # S1 speed preset: slow | medium | fast
+    sign_forward: 1            # flip any of these if the bench test drives the wrong way
+    sign_strafe: 1
+    sign_yaw: 1
+    timeout_s: 0.5             # no brain packet for this long -> sticks centred
+    release_asleep: true       # the sleeping fly goes limp (chassis released)
