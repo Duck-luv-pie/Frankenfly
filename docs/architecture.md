@@ -55,8 +55,42 @@ and that the senses *modulate* rather than *create*:
 | Spike-frequency adaptation, 2 mV per spike decaying with τ = 200 ms | `lif.adapt_mv`, `lif.tau_adapt_ms` (also `lif.depress_u` for optional synaptic depression) | The plain LIF has no rate limit except the refractory period, so a self-exciting clique of antennal-lobe local neurons runs away to ~400 Hz and drags the rest along. 2 mV is the compromise found by sweeping: it keeps resting descending activity low and the looming → Giant Fiber, dust → grooming and sugar → proboscis pathways all working, while 5 mV or any synaptic depression silences the polysynaptic sugar pathway. The olfactory clique still saturates; it is documented, not hidden. |
 | Inhibitory closure in pruning: also keep inhibitory neurons with ≥ 20 synapses both from and into the circuit | `prune.inhibitory_closure_min_synapses` | Path pruning keeps excitatory chains but drops the inhibitory interneurons hanging off them; the full brain keeps the Giant Fiber at 0 Hz at rest while the unclosed pruned circuit had it at 25 Hz. Adds ~7k neurons (36k total). |
 
+| Antennal-lobe local neurons forced inhibitory | `lif.force_inhibitory_classes: [ALLN]` | The connectivity table signs synapses by predicted transmitter, which makes 62% of the synapses of antennal-lobe local neurons excitatory although these cells are overwhelmingly GABAergic or glutamatergic. They form a self-exciting clique (the 400 Hz hubs), projection neurons sit at 82 Hz, Kenyon cells fire at 12 Hz and every odor looks the same. With the correction: mean resting rate 0.44 Hz, no hub above ~50 Hz, projection neurons at 1 Hz responding to odor, Kenyon cells silent at rest with ~9% responding to an odor and near-zero overlap between odors. |
+
 `companion test-gf` and the reference test in `tests/` switch these off and reproduce the
 paper's behavior (silent brain, Giant Fiber at ~170 Hz on looming).
+
+## Learning: the mushroom body
+
+The fly's reinforcement-learning circuit is simulated with its own rule (`sim/plasticity.py`,
+config `learning`, toggle from the dashboard, `--no-learn`, or `learning.enabled`):
+
+- **Three-factor depression.** A Kenyon-cell → MBON synapse is weakened when its Kenyon cell
+  fired above its own resting rate within the last ~2 s (eligibility trace) *and* dopamine
+  arrives in that MBON's compartment. Weights floor at 10% and relax back over ~15 minutes.
+- **Compartments from the wiring.** For each MBON, its dopamine signal is the rate (above a slow
+  resting estimate) of the PAM or PPL1 neurons that synapse directly onto it. Reward DANs (PAM)
+  innervate the MBONs that drive avoidance, punishment DANs (PPL1) the MBONs that drive approach
+  (Aso et al. 2014b), so the valence readout uses those wiring-defined sets: reward pairing
+  weakens avoidance of the current smell.
+- **Reward delivery.** Sugar at the grape drives the sugar gustatory neurons *and* the PAM
+  dopamine neurons directly (the model's wiring does not carry sugar to PAM; in vivo the reward
+  signal also arrives through nutrient sensing). Punishment can be wired the same way
+  (`learning.punish`) but nothing in the world delivers it by default.
+- **KC → MBON gain ×3.** The LIF's MBON odor responses are ~0.5 Hz, far below the tens of Hz
+  measured in vivo; scaling these synapses gives ~10 Hz responses that learning can abolish.
+- **Behavior.** The learned MBON valence steers the fly: approach turns toward the stronger-
+  smelling antenna and speeds up, avoidance turns away (`learning.valence_steering`).
+
+**The two-odor experiment.** The world has two smells: the grape (odor A, glomeruli DM1/DM4/
+VA2/DM2) with sugar, and a lemon (odor B, glomeruli VA6/DL1/VM4/DM3/DL4) that is never rewarded.
+`companion experiment` runs it headless: probe both odors, train (A + sugar, then B alone), probe
+again. Result: odor A's drive onto avoidance-MBONs is abolished (≈ 8.6 → 0.1 Hz) while its drive
+onto approach-MBONs and odor B's responses are unchanged, and the synapses from A-cells fall to
+≈ 0.13 of naive vs ≈ 0.3 for B-cells (B shares some cells). `--no-learn` is the control. In the
+live world the Learning panel shows dopamine, compartment weights and eligible Kenyon cells, and
+"probe odors" replays both smells on a scratch copy of the brain.
+
 
 ### Reading a noisy brain: baselines and z-scores
 

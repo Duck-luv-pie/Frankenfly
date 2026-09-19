@@ -33,6 +33,7 @@ class Circuit:
     pos: np.ndarray | None = None            # float32 [N,3] anchor position (FAFB voxels), for display
     cell_type: np.ndarray | None = None      # str [N] annotation cell type, for display
     super_class: np.ndarray | None = None    # str [N] annotation super class (sensory, central, descending, ...)
+    cell_class: np.ndarray | None = None     # str [N] annotation cell class (ALLN, ALPN, Kenyon_Cell, ...)
 
     @property
     def n(self) -> int:
@@ -55,6 +56,8 @@ class Circuit:
             extra["cell_type"] = np.asarray(self.cell_type, dtype=str)
         if self.super_class is not None:
             extra["super_class"] = np.asarray(self.super_class, dtype=str)
+        if self.cell_class is not None:
+            extra["cell_class"] = np.asarray(self.cell_class, dtype=str)
         np.savez_compressed(path, root_ids=self.root_ids, pre=self.pre, post=self.post,
                             weight_mv=self.weight_mv, **flat, **extra)
         path.with_suffix(".json").write_text(json.dumps(self.meta, indent=1))
@@ -71,13 +74,15 @@ class Circuit:
         return cls(z["root_ids"], z["pre"], z["post"], z["weight_mv"], groups, meta,
                    pos=z["pos"] if "pos" in z.files else None,
                    cell_type=z["cell_type"] if "cell_type" in z.files else None,
-                   super_class=z["super_class"] if "super_class" in z.files else None)
+                   super_class=z["super_class"] if "super_class" in z.files else None,
+                   cell_class=z["cell_class"] if "cell_class" in z.files else None)
 
 
 def circuit_key(cfg: Config, full: bool) -> str:
     material = json.dumps({"groups": cfg.groups, "inputs": cfg.inputs, "readouts": cfg.readouts,
                            "prune": cfg.prune, "min_synapses": cfg.lif.min_synapses,
-                           "w_syn": cfg.lif.w_syn_mv, "full": full, "schema": 4}, sort_keys=True, default=str)
+                           "w_syn": cfg.lif.w_syn_mv, "full": full, "schema": 5,
+                           "force_inhibitory": cfg.lif.get("force_inhibitory_classes", [])}, sort_keys=True, default=str)
     return hashlib.sha1(material.encode()).hexdigest()[:10]
 
 
@@ -159,15 +164,27 @@ def build(cfg: Config, full: bool = False, verbose: bool = True) -> Circuit:
     pos = ann_kept[["pos_x", "pos_y", "pos_z"]].fillna(0).to_numpy(dtype=np.float32)
     cell_type = ann_kept["cell_type"].fillna("").replace("", "unnamed").to_numpy(dtype=str)
     super_class = ann_kept["super_class"].fillna("").to_numpy(dtype=str)
+    cell_class = ann_kept["cell_class"].fillna("").to_numpy(dtype=str)
     circuit_groups = {}
     for name, g in groups.items():
         circuit_groups[name] = {s: _to_new(id2i, new_index, g.side(s)) for s in ("left", "right", "all")}
 
+    # Sign corrections: the connectivity table signs synapses by predicted transmitter. Antennal-lobe
+    # local neurons are overwhelmingly inhibitory (GABA / glutamate) but many come out excitatory, and
+    # they form a self-exciting clique that runs away to the refractory ceiling and drowns the antennal
+    # lobe. Forcing the listed cell classes inhibitory (config lif.force_inhibitory_classes) fixes that.
+    w = (count[emask] * sign[emask] * cfg.lif.w_syn_mv).astype(np.float32)
+    forced = list(cfg.lif.get("force_inhibitory_classes", []))
+    if forced:
+        pre_class = cell_class[new_index[pre[emask]]]
+        flip = np.isin(pre_class, forced)
+        w[flip] = -np.abs(w[flip])
+        log(f"[prune] forced inhibitory: {flip.sum():,} synapses from {np.isin(cell_class, forced).sum():,} neurons of class {forced}")
     c = Circuit(
         root_ids=kept_ids,
         pre=new_index[pre[emask]],
         post=new_index[post[emask]],
-        weight_mv=(count[emask] * sign[emask] * cfg.lif.w_syn_mv).astype(np.float32),
+        weight_mv=w,
         groups=circuit_groups,
         meta={
             "full": full, "n": int(keep.sum()), "m": int(emask.sum()),
@@ -177,6 +194,7 @@ def build(cfg: Config, full: bool = False, verbose: bool = True) -> Circuit:
         pos=pos,
         cell_type=cell_type,
         super_class=super_class,
+        cell_class=cell_class,
     )
     log(f"[prune] circuit: {c.n:,} neurons, {c.m:,} connections")
     for name in list(cfg.inputs) + list(cfg.readouts):

@@ -17,7 +17,8 @@ Edit `brain/configs/default.yaml` to change any of this.
 | Moving vertical edge | `LC12`, `LC15` | 198/182, 52/54 | bar / edge detectors |
 | PIR rising edge (warm body arrived) | `JO_wind` = `JO-C*`, `JO-E*` | 229/204 | Johnston's organ C/E neurons respond to wind and static antennal deflection (Yorozu et al. 2009); A/B are the sound channels |
 
-| Fruit odor at each antenna (the grape in the fly's world) | `ORN_fruit` = `ORN_DM1`, `ORN_DM4`, `ORN_VA2`, `ORN_DM2` | 118/111 | vinegar / fruit-ester glomeruli, attraction (Semmelhack & Wang 2009); hunger raises ORN sensitivity (Root et al. 2011) |
+| Fruit odor at each antenna (the grape in the fly's world, odor A, rewarded) | `ORN_fruit` = `ORN_DM1`, `ORN_DM4`, `ORN_VA2`, `ORN_DM2` | 118/111 | vinegar / fruit-ester glomeruli, attraction (Semmelhack & Wang 2009); hunger raises ORN sensitivity (Root et al. 2011) |
+| Lemon odor (odor B, never rewarded) | `ORN_lemon` = `ORN_VA6`, `ORN_DL1`, `ORN_VM4`, `ORN_DM3`, `ORN_DL4` | 160/156 | disjoint glomeruli (VA6 = Or82a, geranyl acetate) |
 | Sugar on contact with the grape | `GRN_sugar` = gustatory `sugar/water` sub-class | 67/62 | sugar GRN activation drives proboscis extension in the model (Shiu et al. 2024) |
 | Pollen dust from the flower | `BM_eye` = `BM_InOm`, `BM_head` = `BM_Ant`, `BM_Fr`, … | 555/558, 78/83 | bristle mechanosensory neurons trigger the grooming sequence (Seeds et al. 2014, Hampel et al. 2015) |
 | Humid air near the water drop | `HRN_moist` = `HRN_VP4` | 15/14 | moist-air hygrosensory neurons (Enjin et al. 2016) |
@@ -45,7 +46,7 @@ Modulators (continuous, not states):
 
 | Modulator | Plus | Minus | Expression |
 |---|---|---|---|
-| valence | `MBON_approach` = MBON07, 09, 11, 12, 14 | `MBON_avoid` = MBON01, 02, 03, 05 | iris tint green ↔ red (approach/avoid assignment approximates Aso et al. 2014) |
+| valence | `MBON_approach` = MBONs whose compartment is innervated by PPL1 (punishment) dopamine neurons: MBON11, 12, 14, 17, 18, 20, 28, 30, 31, 32, 33, 35 | `MBON_avoid` = MBONs under PAM (reward) dopamine neurons: MBON01–07, 09, 24, 26 | steering toward / away from smells; sets read from the connectome (an MBON's valence is opposite to its dopamine input, Aso et al. 2014b) |
 | arousal | `octopamine` (top_nt) | | pupil dilation |
 | reward | `DAN_reward` = `PAM*` | `DAN_punish` = `PPL1*` | logged, free for future use |
 

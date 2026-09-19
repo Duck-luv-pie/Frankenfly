@@ -21,11 +21,21 @@ class BrainRunner:
                               LIFParams.from_config(dict(cfg.lif)), seed=seed, use_numba=use_numba)
         bg_classes = set(cfg.lif.get("background_classes", ["central", "descending", "ascending", "visual_centrifugal", "endocrine"]))
         if circuit.super_class is not None:
-            bg_idx = np.nonzero(np.isin(circuit.super_class, list(bg_classes)))[0]
+            bg_mask = np.isin(circuit.super_class, list(bg_classes))
+            import re
+            for pat in cfg.lif.get("background_exclude_types", []):
+                rx = re.compile(pat)
+                bg_mask &= ~np.array([bool(rx.search(t)) for t in circuit.cell_type])
+            bg_idx = np.nonzero(bg_mask)[0]
         else:
             bg_idx = np.arange(circuit.n)
         self.background_idx = bg_idx
         self.net.set_background(float(cfg.lif.get("background_hz", 0.0)), bg_idx)
+        for spec in cfg.lif.get("threshold_offsets", []):        # e.g. Kenyon cells: high threshold -> sparse odor code
+            import re
+            rx = re.compile(spec["regex"])
+            mask = np.array([bool(rx.search(t)) for t in circuit.cell_type]) if circuit.cell_type is not None else np.zeros(circuit.n, bool)
+            self.net.th_offset[mask] += float(spec["mv"])
         self.chunk_ms = chunk_ms
         self.window_ms = float(cfg.decode.window_ms)
         self.history: deque[np.ndarray] = deque(maxlen=max(1, int(round(1000.0 / chunk_ms))))   # last 1 s
@@ -35,6 +45,10 @@ class BrainRunner:
         self.behind_ms = 0.0
         self.last_chunk_wall_ms = 0.0
         self.since_take = np.zeros(circuit.n, dtype=np.int32)   # spike counts since take_recent()
+        self.plasticity = None
+        if cfg.get("learning") and cfg.learning.get("enabled", True) and circuit.cell_type is not None:
+            from .plasticity import MushroomBodyPlasticity
+            self.plasticity = MushroomBodyPlasticity(circuit, self.net, cfg, chunk_ms)
 
     # ---- drive ---------------------------------------------------------------------------
     def clear_drive(self) -> None:
@@ -52,6 +66,8 @@ class BrainRunner:
         self.last_chunk_wall_ms = (time.perf_counter() - t0) * 1e3
         self.history.append(counts)
         self.since_take += counts
+        if self.plasticity is not None:
+            self.plasticity.update(counts)
         self.brain_ms += self.chunk_ms
         return counts
 
@@ -75,9 +91,10 @@ class BrainRunner:
         """Mean firing rate (Hz per neuron) for each readout group over the last `window_ms`, by side."""
         if not self.history:
             return {g: {"left": 0.0, "right": 0.0, "all": 0.0} for g in self.readouts}
-        k = max(1, min(len(self.history), int(round((window_ms or self.window_ms) / self.chunk_ms))))
+        k_req = max(1, int(round((window_ms or self.window_ms) / self.chunk_ms)))
+        k = min(len(self.history), k_req)
         chunks = list(self.history)[-k:]
-        window_s = k * self.chunk_ms * 1e-3
+        window_s = k_req * self.chunk_ms * 1e-3      # a short history counts as silence, never as a burst
         total = np.sum(chunks, axis=0)
         out = {}
         for g in self.readouts:
@@ -93,6 +110,39 @@ class BrainRunner:
         out = self.since_take.copy()
         self.since_take[:] = 0
         return out
+
+    def probe(self, drives: dict[str, float], seconds: float = 1.0, settle_s: float = 1.0, capture=None):
+        """Measure readout rates in response to a stimulus on a scratch copy of the network state
+        (same synaptic weights, so learned changes show), without disturbing the live brain.
+        Returns (resting rates just before the stimulus, rates during the stimulus). `capture(runner)`
+        is called at the end of the stimulus, before the state is restored."""
+        net = self.net
+        saved = (net.v.copy(), net.g.copy(), net.adapt.copy(), net.resource.copy(), net.ref_left.copy(), net.ring.copy(), net.ring_pos, net.rate.copy(), net.step_count)
+        hist = list(self.history); since = self.since_take.copy()
+        plast = self.plasticity
+        enabled = plast.enabled if plast else False
+        if plast:
+            plast.enabled = False
+        try:
+            net.clear_rates()
+            for _ in range(int(settle_s * 1000 / self.chunk_ms)):
+                self.step_chunk()
+            rest = self.rates(min(settle_s, 1.0) * 1000)
+            for _ in range(int(seconds * 1000 / self.chunk_ms)):
+                net.clear_rates()
+                for g, hz in drives.items():
+                    self.drive(g, hz)
+                self.step_chunk()
+            if capture is not None:
+                capture(self)
+            return rest, self.rates(seconds * 1000)
+        finally:
+            net.v[:], net.g[:], net.adapt[:], net.resource[:], net.ref_left[:] = saved[0], saved[1], saved[2], saved[3], saved[4]
+            net.ring[:] = saved[5]; net.ring_pos = saved[6]; net.rate[:] = saved[7]; net.step_count = saved[8]
+            self.history.clear(); self.history.extend(hist); self.since_take[:] = since
+            if plast:
+                plast.enabled = enabled
+                plast.elig[:] = 0
 
     def calibrate(self, seconds: float, windows_ms: list[float] | None = None, warmup_s: float = 0.0,
                   verbose: bool = True) -> dict:

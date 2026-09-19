@@ -14,7 +14,7 @@ const lerp = (a, b, k) => a + (b - a) * k;
 const wrapAngle = a => Math.atan2(Math.sin(a), Math.cos(a));
 const mat = (color, roughness = .7, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness, ...extra });
 
-export function createFlyStage(host, retinaCanvas) {
+export function createFlyStage(host, retinaCanvas, opts = {}) {
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
   renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -36,7 +36,7 @@ export function createFlyStage(host, retinaCanvas) {
   for (let i = -ARENA - 3; i < ARENA + 3; i += 1.7) { const l = new THREE.Mesh(new THREE.PlaneGeometry(2 * ARENA + 6, .06), mat('#8a7458', .95)); l.rotation.x = -Math.PI / 2; l.position.set(0, .002, i + Math.sin(i) * .3); scene.add(l); }
   const rim = new THREE.Mesh(new THREE.BoxGeometry(2 * ARENA + 6, .6, 2 * ARENA + 6), mat('#4a3c2c', .9)); rim.position.y = -.31; rim.receiveShadow = true; scene.add(rim);
 
-  const world = { fruit: [], flowers: [], water: [], others: [] };
+  const world = { fruit: [], flowers: [], water: [], others: [], lemon: [] };
   // fruit: a grape at the far right, the fly's favourite smell (and sugar on contact)
   function addGrape(x, z) {
     const g = new THREE.Group(); g.position.set(x, 0, z);
@@ -48,6 +48,16 @@ export function createFlyStage(host, retinaCanvas) {
     scene.add(g); world.fruit.push({ group: g, pos: new THREE.Vector3(x, 0, z), radius: 1.5, mouth: new THREE.Vector3(x - .9, 0, z + 1.2) });
   }
   addGrape(6.5, 3.5);
+  // the lemon: a second smell (different glomeruli) with no sugar. Present only in the two-odor experiment.
+  function addLemon(x, z) {
+    const g = new THREE.Group(); g.position.set(x, 0, z);
+    const slice = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.5, .5, 28), mat('#f4d03f', .5)); slice.position.y = .25; slice.castShadow = true; slice.receiveShadow = true; g.add(slice);
+    const flesh = new THREE.Mesh(new THREE.CylinderGeometry(1.25, 1.25, .52, 28), mat('#fdf2a8', .7, { emissive: '#e8d070', emissiveIntensity: .15 })); flesh.position.y = .25; g.add(flesh);
+    for (let i = 0; i < 8; i++) { const seg = new THREE.Mesh(new THREE.BoxGeometry(1.2, .02, .06), mat('#f4d03f', .6)); seg.position.set(0, .52, 0); seg.rotation.y = i * Math.PI / 8; seg.geometry.translate(0, 0, 0); seg.position.set(Math.cos(i * Math.PI / 8) * .6 * 0, .52, 0); g.add(seg); }
+    scene.add(g); world.lemon.push({ group: g, pos: new THREE.Vector3(x, 0, z), radius: 1.5 });
+  }
+  world.lemon = [];
+  if (opts.twoOdor !== false) addLemon(-6.5, -3.5);
   // flower with pollen: walking into it dusts the fly
   function addFlower(x, z) {
     const g = new THREE.Group(); g.position.set(x, 0, z);
@@ -115,11 +125,11 @@ export function createFlyStage(host, retinaCanvas) {
   const S = { state: 'idle', asleep: false, objX: 0, objSeen: 0, t: 0, pos: new THREE.Vector3(0, 0, -2), heading: 0, walkPhase: 0,
               flight: 0, flightT: 0, airborne: 0, alt: 0, landingT: 0, restUntil: 0, songSide: 1, songT: 0, pose: {}, target: {},
               // body state that lives in the world, not the brain
-              satiety: 0.2, dust: 0, sugar: 0, odor: [0, 0], moist: 0, feeding: 0, selfMotion: 0 };
+              satiety: 0.2, dust: 0, sugar: 0, odor: [0, 0], odorB: [0, 0], moist: 0, feeding: 0, selfMotion: 0, valence: 0 };
   for (const k of Object.keys(fly.joints)) { S.pose[k] = 0; S.target[k] = 0; }
 
   function onPacket(p) {
-    S.state = p.state; S.asleep = !!p.asleep;
+    S.state = p.state; S.asleep = !!p.asleep; S.valence = p.valence || 0;
     if (p.motor) for (const k in M) if (k in p.motor) M[k] = p.motor[k];
     const s = p.sees; S.objSeen = s ? s.obj[2] : 0; S.objX = s ? s.obj[0] : 0;
     if (M.jump > 0.5 && S.flight <= 0 && !S.jumpCooldown && S.t > S.restUntil) takeoff();
@@ -141,6 +151,9 @@ export function createFlyStage(host, retinaCanvas) {
       if (S.airborne <= 0 && S.pos.distanceTo(f.pos) < f.radius + 1.6) sugar = 1;   // at the grape's skin: juice
     }
     S.odor = [Math.min(1, oL * hunger), Math.min(1, oR * hunger)];
+    let bL = 0, bR = 0;
+    for (const l of world.lemon) { bL += 1 / (1 + Math.pow(aL.distanceTo(l.pos) / 4, 2)); bR += 1 / (1 + Math.pow(aR.distanceTo(l.pos) / 4, 2)); }
+    S.odorB = [Math.min(1, bL * hunger), Math.min(1, bR * hunger)];
     S.sugar = sugar * hunger;
     // eating: proboscis out on sugar -> satiety rises, hunger falls
     S.feeding = sugar > 0 ? M.feed : 0;
@@ -167,7 +180,7 @@ export function createFlyStage(host, retinaCanvas) {
       const body = new Uint8Array(4 + RET_W * RET_H); body[0] = RET_W & 255; body[1] = RET_W >> 8; body[2] = RET_H & 255; body[3] = RET_H >> 8; body.set(retinaGray, 4);
       fetch('/retina', { method: 'POST', body }).catch(() => {});
       fetch('/world', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ odor: S.odor, sugar: +S.sugar.toFixed(3), dust: +S.dust.toFixed(3), moist: +S.moist.toFixed(3),
+        body: JSON.stringify({ odor: S.odor, odor_b: S.odorB, sugar: +S.sugar.toFixed(3), dust: +S.dust.toFixed(3), moist: +S.moist.toFixed(3),
                                satiety: +S.satiety.toFixed(3), airborne: S.airborne > 0, feeding: +S.feeding.toFixed(2),
                                self_motion: +S.selfMotion.toFixed(3) }) }).catch(() => {});
     }
@@ -232,6 +245,12 @@ export function createFlyStage(host, retinaCanvas) {
     } else {
       speed = (6.0 * M.forward - 3.0 * M.backward) * (1 - still);   // mm/s; a fly walks 10-20 mm/s at full tilt
       turn = 3.0 * M.turn * (1 - still * .5);
+      // mushroom-body output biases steering: approach valence turns toward the stronger-smelling side,
+      // avoidance turns away (MBON -> descending pathways; Aso et al. 2014b). Strength: learning.valence_steering
+      const gradA = S.odor[1] - S.odor[0], gradB = S.odorB[1] - S.odorB[0];
+      const grad = gradA + gradB;                      // right antenna minus left: +ve = smell is on the fly's right
+      turn += -(opts.valenceSteering ?? 1.0) * S.valence * grad * 6.0 * (1 - still);
+      speed += (opts.valenceSteering ?? 1.0) * Math.max(0, S.valence) * Math.max(...S.odor, ...S.odorB) * 2.0 * (1 - still);
       S.pos.y = lerp(S.pos.y, S.asleep ? -.08 : 0, .1);
       S.pos.x += Math.sin(S.heading) * speed * dt; S.pos.z += Math.cos(S.heading) * speed * dt;
       S.walkPhase += speed * 3.0 * dt;
@@ -242,7 +261,7 @@ export function createFlyStage(host, retinaCanvas) {
     if (edge > 0 && Math.abs(speed) > .01) { const want = speed > 0 ? toCenter : wrapAngle(toCenter + Math.PI); turn += wrapAngle(want - S.heading) * (2 + 6 * edge); }
     S.heading = wrapAngle(S.heading + turn * dt);
     S.pos.x = THREE.MathUtils.clamp(S.pos.x, -ARENA, ARENA); S.pos.z = THREE.MathUtils.clamp(S.pos.z, -ARENA, ARENA);
-    if (S.airborne <= 0) for (const o of [...world.fruit, ...world.water]) {   // solid things: stay outside them
+    if (S.airborne <= 0) for (const o of [...world.fruit, ...world.water, ...world.lemon]) {   // solid things: stay outside them
       const dx = S.pos.x - o.pos.x, dz = S.pos.z - o.pos.z, d = Math.hypot(dx, dz), min = o.radius + .6;
       if (d < min && d > 1e-4) { S.pos.x = o.pos.x + dx / d * min; S.pos.z = o.pos.z + dz / d * min; }
     }

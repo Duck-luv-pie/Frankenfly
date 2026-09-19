@@ -40,6 +40,7 @@
   .bars .val { text-align:right; color:var(--muted); font-variant-numeric: tabular-nums; }
   .scores { display:grid; grid-template-columns: 90px 1fr 40px; gap:4px 8px; align-items:center; font-size:12px; }
   .bars.motor { grid-template-columns: 64px 1fr 40px; margin-top:8px; }
+  #learn-bars { grid-template-columns: 124px 1fr 40px; }
   .bars.motor .bar i { background:#8fd3a5; }
   .bars.motor .bar.turn { position:relative; } .bars.motor .bar.turn i { position:absolute; top:0; height:100%; background:#4fd1ff; }
   .bars.motor .bar.turn::after { content:""; position:absolute; left:50%; top:0; bottom:0; width:1px; background:#3a4360; }
@@ -108,6 +109,15 @@
   </div>
 
   <div class="panel">
+    <h2>Learning <span>mushroom body · dopamine-gated KC→MBON depression</span></h2>
+    <div class="gauge"><label style="display:flex;align-items:center;gap:6px;color:var(--text)"><input type="checkbox" id="learn-toggle" checked> plasticity on</label>
+      <button class="mini" id="learn-probe">probe odors</button><button class="mini" id="learn-reset">reset synapses</button></div>
+    <div class="bars motor" id="learn-bars"></div>
+    <div id="learn-probe-out" style="font-size:12px;margin-top:6px;color:var(--muted)">no probe yet</div>
+    <small class="hint">The fly's own reinforcement learning. Kenyon cells that fired for the current smell, paired with dopamine from sugar (PAM neurons), lose their synapses onto the MBONs that drive avoidance, so the rewarded smell (grape, odor A) gains approach value; the lemon (odor B) is never rewarded. "Probe odors" replays each smell on a scratch copy of the brain and reports the odor-evoked valence. Weights are shown as a fraction of naive.</small>
+  </div>
+
+  <div class="panel">
     <h2>Behaviors <span>state label · z-score / z_ref</span></h2>
     <div class="scores" id="scores"></div>
   </div>
@@ -153,6 +163,7 @@ function onPacket(p) {
   renderRates(p.rates);
   renderScores(p.scores, p.state);
   renderMotor(p.motor);
+  renderLearning(p.learning);
   $('cam-note').textContent = p.vision === 'retina' ? 'what the fly sees → optic lobe' : 'webcam fallback (open this page to give the fly its own eyes)';
   if (p.world && p.world.odor) { const w = p.world; $('senses').textContent = `Smell L/R ${w.odor[0].toFixed(2)}/${w.odor[1].toFixed(2)} · sugar ${w.sugar.toFixed(2)} · dust ${w.dust.toFixed(2)} · humid ${w.moist.toFixed(2)} · satiety ${w.satiety.toFixed(2)}`; }
   renderTypes(p.top_types);
@@ -235,6 +246,28 @@ function renderScores(scores, state) {
     row.lbl.style.fontWeight = b === state ? '600' : '';
   }
 }
+const learnRows = {};
+function renderLearning(L) {
+  if (!L) return;
+  const box = $('learn-bars');
+  const rows = { 'dopamine reward': L.dopamine_reward, 'dopamine punish': L.dopamine_punish, 'weights, reward comp.': L.weight_reward_comp, 'weights, punish comp.': L.weight_punish_comp, 'eligible KCs': L.kc_eligible };
+  for (const k of Object.keys(rows)) {
+    if (!learnRows[k]) {
+      const lbl = document.createElement('div'); lbl.className = 'lbl'; lbl.textContent = k; lbl.style.width = '120px';
+      const bar = document.createElement('div'); bar.className = 'bar'; bar.innerHTML = '<i></i>';
+      const v = document.createElement('div'); v.className = 'val';
+      box.append(lbl, bar, v); learnRows[k] = { i: bar.firstChild, v };
+    }
+    const x = rows[k]; learnRows[k].i.style.width = (100 * Math.min(1, x)) + '%'; learnRows[k].v.textContent = x.toFixed(2);
+    learnRows[k].i.style.background = k.startsWith('dopamine') ? '#ffb347' : k.startsWith('weights') ? '#b69bea' : '#8fd3a5';
+  }
+  $('learn-toggle').checked = !!L.enabled;
+  if (L.probe && 'A' in L.probe) $('learn-probe-out').textContent = `probe at ${L.probe.t}s: odor A (grape) valence ${L.probe.A >= 0 ? '+' : ''}${L.probe.A.toFixed(2)} · odor B (lemon) ${L.probe.B >= 0 ? '+' : ''}${L.probe.B.toFixed(2)}`;
+}
+const control = body => fetch('/control', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).catch(() => {});
+$('learn-toggle').onchange = e => control({ learning: e.target.checked });
+$('learn-probe').onclick = () => { $('learn-probe-out').textContent = 'probing… (a few seconds)'; control({ probe: true }); };
+$('learn-reset').onclick = () => control({ reset: true });
 const motorRows = {};
 function renderMotor(motor) {
   const box = $('motor'); if (!motor) return;

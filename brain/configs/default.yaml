@@ -32,6 +32,8 @@ lif:
   w_syn_mv: 0.275
   dt_ms: 0.1
   min_synapses: 5          # connections weaker than this are dropped (as in Shiu et al.)
+  force_inhibitory_classes: [ALLN]   # antennal-lobe local neurons are inhibitory (GABA/glutamate); the predicted
+                                     # signs make 62% of their synapses excitatory and the lobe runs away
   adapt_mv: 2.0            # spike-frequency adaptation per spike (0 = reference model); tames runaway excitatory loops
                            # (5 mV also kills the polysynaptic sugar -> proboscis pathway; 2 mV keeps it)
   tau_adapt_ms: 200
@@ -40,6 +42,9 @@ lif:
   background_hz: 1.0       # spontaneous firing floor (0 = silent brain, as in the paper) ...
   background_classes: [central, descending, ascending, visual_centrifugal, endocrine]   # ... for these neurons only;
                            # sensory and visual projection neurons fire only when the senses drive them
+  background_exclude_types: ['^KC']   # Kenyon cells are nearly silent at rest (high threshold, APL inhibition): no floor
+  threshold_offsets: []               # per-type spike threshold offsets (mV), e.g. [{regex: '^KC', mv: 4}]; with the
+                                      # antennal lobe fixed, Kenyon cells are already silent at rest and ~9% respond to an odor
 
 # Circuit pruning: keep neurons on paths from inputs to readouts.
 prune:
@@ -62,7 +67,8 @@ groups:
   # Johnston's organ (antenna). C/E groups respond to wind / static deflection.
   JO_wind: {regex: '^JO-(C|E)'}
   # Smell, taste, touch, humidity: how the fly's world reaches it
-  ORN_fruit: {cell_type: [ORN_DM1, ORN_DM4, ORN_VA2, ORN_DM2]}   # fruit-ester / vinegar glomeruli (Semmelhack & Wang 2009)
+  ORN_fruit: {cell_type: [ORN_DM1, ORN_DM4, ORN_VA2, ORN_DM2]}   # fruit-ester / vinegar glomeruli (Semmelhack & Wang 2009): the grape
+  ORN_lemon: {cell_type: [ORN_VA6, ORN_DL1, ORN_VM4, ORN_DM3, ORN_DL4]}   # disjoint glomeruli (VA6 = Or82a, geranyl acetate): the lemon, odor B, never rewarded
   GRN_sugar: {cell_sub_class: sugar/water}                        # sugar-sensing gustatory neurons -> feeding (Shiu et al. 2024)
   BM_eye:    {cell_type: [BM_InOm]}                               # interommatidial bristles: dust on the eyes -> grooming (Seeds et al. 2014)
   BM_head:   {cell_type: [BM_Ant, BM_Fr, BM_FrOr, BM_Or, BM_Oc, BM_InOc, BM_Vt_PoOc, BM_dOcci, BM_vOcci_vPoOr, BM_dPoOr]}
@@ -84,8 +90,10 @@ groups:
   # Central-brain state readouts
   pC1_social:     {cell_type: [pC1a, pC1b, pC1c]}   # female receptivity / social
   pC1_aggression: {cell_type: [pC1d, pC1e]}         # aggression
-  MBON_avoid:     {cell_type: [MBON01, MBON02, MBON03, MBON05]}      # approx. Aso et al. 2014
-  MBON_approach:  {cell_type: [MBON07, MBON09, MBON11, MBON12, MBON14]}
+  # Valence from the wiring: MBONs whose compartment is innervated by reward DANs (PAM) drive avoidance and are
+  # depressed by reward; MBONs under punishment DANs (PPL1) drive approach (Aso et al. 2014b, Owald & Waddell 2015)
+  MBON_avoid:     {cell_type: [MBON01, MBON02, MBON03, MBON04, MBON05, MBON06, MBON07, MBON09, MBON24, MBON26]}
+  MBON_approach:  {cell_type: [MBON11, MBON12, MBON14, MBON17, MBON18, MBON20, MBON28, MBON30, MBON31, MBON32, MBON33, MBON35]}
   DAN_reward:     {regex: '^PAM'}
   DAN_punish:     {regex: '^PPL1'}
   octopamine:     {top_nt: octopamine}
@@ -93,7 +101,7 @@ groups:
   MN_proboscis:   {cell_sub_class: [proboscis_motor_neuron, ingestion_motor_neuron]}   # feeding output
 
 # Which groups are stimulated (inputs) and which are read out (outputs) for pruning.
-inputs:  [LC4, LPLC2, LC16, LC11, LC10a, LC12, LC15, JO_wind, ORN_fruit, GRN_sugar, BM_eye, BM_head, HRN_moist]
+inputs:  [LC4, LPLC2, LC16, LC11, LC10a, LC12, LC15, JO_wind, ORN_fruit, ORN_lemon, GRN_sugar, BM_eye, BM_head, HRN_moist]
 readouts: [GF, DNp09, MDN, DNa01, DNa02, DNg11, DNg12, DNp02, DNp04, DNp11, DNp07, DNp10,
            pC1_social, pC1_aggression, MBON_avoid, MBON_approach, DAN_reward, DAN_punish, octopamine, DN_all, MN_proboscis, DN_groom]
 
@@ -119,7 +127,8 @@ senses:
   vision: retina               # retina = the fly's own eyes in its 3D world (falls back to camera when no page is open)
   efference_copy_gain: 0.9     # visual drive is scaled by (1 - gain * self_motion): walking/turning/flying is not looming
   world:                       # senses posted by the world (dashboard) at ~10 Hz, each 0..1 -> Poisson drive
-    odor:  {groups: [ORN_fruit], max_hz: 100, lateral: true}   # per antenna (left/right)
+    odor:  {groups: [ORN_fruit], max_hz: 150, lateral: true}   # per antenna (left/right): the grape
+    odor_b: {groups: [ORN_lemon], max_hz: 150, lateral: true}  # the lemon
     sugar: {groups: [GRN_sugar], max_hz: 150}
     dust:  {groups: [BM_eye, BM_head], max_hz: 60}
     moist: {groups: [HRN_moist], max_hz: 60}
@@ -134,10 +143,10 @@ decode:
   calibrate_s: 6.0               # resting baseline: run this long with no senses ...
   warmup_s: 3.0                  # ... after this long of settling (adaptation builds up over seconds)
   baseline_drift_s: 120          # slowly re-center the resting mean on the running brain (0 = fixed)
-  min_std_hz: 1.0                # floor on the resting std so tiny groups don't explode
+  min_std_hz: 2.0                # floor on the resting std: with a calm brain one chance spike of a 2-neuron group must not score
   z0: 1.0                        # dead zone: excursions below this many sigma count as nothing
   behaviors:                     # discrete states (label, robot eyes, sounds); priority wins, hold keeps it on
-    escape:     {groups: [GF],  window_ms: 200,       z_ref: 8, priority: 100, min_score: 0.6, hold_ms: 800}
+    escape:     {groups: [GF],  window_ms: 300,       z_ref: 10, priority: 100, min_score: 0.6, hold_ms: 800}
     backward:   {groups: [MDN],                        z_ref: 5, priority: 80,  min_score: 0.6, hold_ms: 600}
     freeze:     {groups: [DNp09],                      z_ref: 5, priority: 70,  min_score: 0.7, hold_ms: 600}
     threat:     {groups: [DNp02, DNp04, DNp11, pC1_aggression], z_ref: 5, priority: 60, min_score: 0.6, hold_ms: 600}
@@ -157,7 +166,7 @@ decode:
       song:     {groups: [pC1_social],             z_ref: 4}
       land:     {groups: [DNp07, DNp10],           z_ref: 5}
       freeze:   {groups: [DNp09],                  z_ref: 5}
-      jump:     {groups: [GF], window_ms: 200,     z_ref: 8}
+      jump:     {groups: [GF], window_ms: 300,     z_ref: 10}
       feed:     {groups: [MN_proboscis],           z_ref: 4}   # proboscis extension
   modulators:
     valence:  {plus: MBON_approach, minus: MBON_avoid, z_ref: 3}   # -1..1, iris tint
@@ -170,6 +179,34 @@ decode:
     threat: 4
     social: 5
   volume: 20
+
+# --- Learning: mushroom-body plasticity (the fly's own reinforcement learning) ---------------
+learning:
+  enabled: true                # toggle at runtime from the dashboard or with --no-learn
+  eta: 0.1                     # depression rate: fraction of a synapse per second of (eligibility x dopamine)
+  kc_excess_factor: 1.5        # a KC is "eligible" only when firing above this multiple of its own resting rate
+  tau_kc_rest_s: 120
+  kc_margin_hz: 1.0
+  dopamine_margin_hz: 3.0     # DAN rate must exceed rest by this much to count (PPL1 fluctuates at rest)
+  reward:                      # reinforcement delivered by the world (sugar reward reaches PAM DANs via nutrient
+    world: sugar               # signals, not only through the brain's wiring, which does not carry it in this model)
+    groups: [DAN_reward]
+    hz: 20
+  punish:                      # punishment (nothing in the world delivers it by default; e.g. world: bitter)
+    world: bitter
+    groups: [DAN_punish]
+    hz: 20
+  tau_elig_s: 2.0              # Kenyon-cell eligibility trace (odor must precede reward within seconds)
+  tau_dan_s: 0.3               # dopamine rate smoothing
+  tau_rest_s: 60               # slow resting estimate of each compartment's DAN rate
+  dopamine_ref_hz: 5           # DAN rate above rest that counts as full reinforcement
+  tau_forget_s: 900            # learned depression relaxes back over ~15 min
+  w_min_frac: 0.1              # a synapse cannot be depressed below this fraction of its original weight
+  kc_mbon_gain: 3.0            # KC->MBON synapses scaled up: the LIF's MBON odor responses (~0.5 Hz) are far below in vivo
+                               # (tens of Hz, Hige et al. 2015); x3 gives ~10 Hz odor responses that learning can abolish
+  compartment_min_synapses: 3  # DAN -> MBON connections at least this strong define a compartment
+  valence_steering: 1.0        # motor coupling: learned MBON valence steers toward / away from the smell (world side)
+  two_odor: true               # place the lemon (odor B, unrewarded) in the world next to the grape (odor A + sugar)
 
 # --- Body link -------------------------------------------------------------------------
 body:

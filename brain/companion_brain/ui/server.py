@@ -30,6 +30,7 @@ class Dashboard:
         self.retina_at = 0.0
         self.world: dict = {}                       # latest world senses posted by the page
         self.world_at = 0.0
+        self.controls: list[dict] = []               # control commands from the page (learning on/off, probe, reset)
         self.atlas_dir = cfg.path("data.atlas_dir") if cfg.dotted("data.atlas_dir") else None
         self.circuit_json = self._circuit_json(circuit, cfg, self.atlas_dir)
         self.type_ids = self.type_names = None
@@ -80,6 +81,11 @@ class Dashboard:
                     try:
                         dash.world = json.loads(body.decode())
                         dash.world_at = time.time()
+                    except ValueError:
+                        pass
+                elif self.path == "/control":
+                    try:
+                        dash.controls.append(json.loads(body.decode()))
                     except ValueError:
                         pass
                 self._send(204, "text/plain", b"")

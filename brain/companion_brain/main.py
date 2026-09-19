@@ -88,6 +88,96 @@ def cmd_test_gf(args, cfg):
     sys.exit(0 if ok else 1)
 
 
+def cmd_experiment(args, cfg):
+    """Two-odor differential conditioning, headless: odor A (grape) is paired with sugar, odor B
+    (lemon) is presented alone. Before and after each training block the brain is probed with
+    each odor and the MBON valence (approach minus avoid, z-scored) is reported."""
+    from .data.prune import load_or_build, circuit_key
+    from .sim.runner import BrainRunner
+    from .body.decode import Decoder, load_or_calibrate
+    c = load_or_build(cfg, full=False)
+    r = BrainRunner(c, cfg, seed=args.seed)
+    base = load_or_calibrate(r, cfg, circuit_key(cfg, False))
+    dec = Decoder(cfg, base)
+    pl = r.plasticity
+    if pl is None:
+        print("[experiment] learning is disabled in the config"); sys.exit(1)
+    pl.enabled = not args.no_learn
+    print(f"[experiment] mushroom body: {pl.n_kc} Kenyon cells, {pl.n_mbon} MBONs with dopamine compartments, {pl.n_syn:,} plastic KC->MBON synapses; learning {'ON' if pl.enabled else 'OFF (control)'}")
+    odors = {"A (grape)": {"ORN_fruit": args.odor_hz}, "B (lemon)": {"ORN_lemon": args.odor_hz}}
+    kc = pl.kc_idx
+
+    mb_av, mb_ap = c.idx("MBON_avoid"), c.idx("MBON_approach")
+
+    def probe(reps=3):
+        """Odor-evoked MBON responses (Hz above rest) and decoded valence, averaged over probes."""
+        out = {}
+        for name, drive in odors.items():
+            vals, av, ap = [], [], []
+            for _ in range(reps):
+                cap = {}
+                rest, odor = r.probe(drive, seconds=1.0, capture=lambda rr: cap.update(w=rr.window_counts().copy()))
+                vals.append(dec.decode({w: odor for w in dec.windows}, now=0).valence
+                            - dec.decode({w: rest for w in dec.windows}, now=0).valence)
+                av.append(cap["w"][mb_av].mean() - rest["MBON_avoid"]["all"])
+                ap.append(cap["w"][mb_ap].mean() - rest["MBON_approach"]["all"])
+            out[name] = {"valence": float(np.mean(vals)), "avoid": float(np.mean(av)), "approach": float(np.mean(ap))}
+        return out
+
+    def odor_kcs(drive, hz):
+        """Kenyon cells excited by an odor (rate above rest during a probe)."""
+        found = {}
+        r.probe(drive, seconds=1.0, capture=lambda rr: found.update(e=pl.elig[kc].copy()))
+        return set(kc[np.nonzero(found["e"] > 0.05)[0]].tolist())
+
+    def specific_weights():
+        wa = [i for i, k in enumerate(pl.pre) if k in kcA and pl.kind_of[int(pl.post[i])] == "reward"]
+        wb = [i for i, k in enumerate(pl.pre) if k in kcB and pl.kind_of[int(pl.post[i])] == "reward"]
+        w = pl.net.data[pl.syn] / np.where(pl.w0 == 0, 1, pl.w0)
+        return (float(w[wa].mean()) if wa else 1.0, float(w[wb].mean()) if wb else 1.0, len(wa), len(wb))
+
+    # warm-up so DAN resting levels settle
+    for _ in range(int(6 * 100)):
+        r.step_chunk()
+    kcA = odor_kcs({"ORN_fruit": args.odor_hz}, args.odor_hz); kcB = odor_kcs({"ORN_lemon": args.odor_hz}, args.odor_hz)
+    print(f"[experiment] Kenyon cells excited by A: {len(kcA)}, by B: {len(kcB)}, shared: {len(kcA & kcB)}")
+    v0 = probe()
+    fmt = lambda v: f"avoid-MBONs {v['avoid']:+.1f} Hz, approach-MBONs {v['approach']:+.1f} Hz, valence {v['valence']:+.2f}"
+    print(f"[experiment] naive: A -> {fmt(v0['A (grape)'])} | B -> {fmt(v0['B (lemon)'])}")
+    for block in range(args.blocks):
+        # training: A + sugar for train_s, then rest, then B alone for train_s, then rest
+        for name, drive, sugar in (("A+sugar", {"ORN_fruit": args.odor_hz}, True), ("B alone", {"ORN_lemon": args.odor_hz}, False)):
+            dmax = 0.0
+            for _ in range(int(args.train_s * 100)):
+                r.clear_drive()
+                for g, hz in drive.items():
+                    r.drive(g, hz)
+                if sugar:
+                    r.drive("GRN_sugar", 150.0)
+                    for g in cfg.learning.reward.groups:
+                        r.drive(g, float(cfg.learning.reward.hz))
+                r.step_chunk()
+                dmax = max(dmax, float(pl.dop.max()) if len(pl.dop) else 0.0)
+            print(f"  block {block + 1} {name:8s}: peak dopamine {dmax:.2f}, eligible KCs {pl.summary()['kc_eligible']:.0%}")
+            r.clear_drive()
+            for _ in range(int(3 * 100)):
+                r.step_chunk()
+            sm = pl.summary(); wa, wb, na, nb = specific_weights()
+            print(f"  block {block + 1} {name:8s}: KC->MBON weight in reward compartments from A-cells {wa:.2f} (n={na}) vs B-cells {wb:.2f} (n={nb}); "
+                  f"all reward comps {sm['weight_reward_comp']:.2f}, punishment comps {sm['weight_punish_comp']:.2f}")
+        v = probe()
+        print(f"[experiment] after block {block + 1}: A -> {fmt(v['A (grape)'])} | B -> {fmt(v['B (lemon)'])}")
+    a0, a1 = v0["A (grape)"]["avoid"], v["A (grape)"]["avoid"]
+    b0, b1 = v0["B (lemon)"]["avoid"], v["B (lemon)"]["avoid"]
+    wa, wb, _, _ = specific_weights()
+    drop_a = (a0 - a1) / max(a0, 0.5); drop_b = (b0 - b1) / max(b0, 0.5)
+    ok = a0 > 1.0 and drop_a > 0.5 and drop_a > drop_b + 0.25 and wa < 0.7 * wb
+    print(f"[experiment] avoidance drive of the rewarded odor fell {100 * drop_a:.0f}% (unrewarded: {100 * drop_b:.0f}%); "
+          f"KC->MBON synapses from A-cells at {wa:.2f} of naive vs B-cells {wb:.2f}")
+    print("[experiment]", "LEARNED: the rewarded smell no longer drives avoidance; the unrewarded one is unchanged" if ok else "no differential learning measured")
+    return ok
+
+
 def cmd_run(args, cfg):
     from .data.prune import load_or_build
     from .sim.runner import BrainRunner
@@ -100,8 +190,30 @@ def cmd_run(args, cfg):
 
     c = load_or_build(cfg, full=args.full)
     brain = BrainRunner(c, cfg, seed=None)
+    if brain.plasticity is not None:
+        brain.plasticity.enabled = not args.no_learn
+        pl = brain.plasticity
+        print(f"[learning] mushroom body: {pl.n_kc} Kenyon cells, {pl.n_mbon} MBON compartments, {pl.n_syn:,} plastic synapses; "
+              f"{'ON' if pl.enabled else 'OFF'} (toggle from the dashboard)", flush=True)
     baseline = load_or_calibrate(brain, cfg, circuit_key(cfg, args.full), rebuild=args.recalibrate)
     cam_cfg = cfg.senses.camera
+    probe_result = {}
+    odor_probes = {"A": {"ORN_fruit": 120.0}, "B": {"ORN_lemon": 120.0}}
+
+    def run_probe():
+        if brain.plasticity is None:
+            return
+        out = {}
+        for name, drive in odor_probes.items():
+            vals = []
+            for _ in range(2):
+                rest, odor = brain.probe(drive, seconds=1.0)
+                vals.append(decoder.decode({w: odor for w in decoder.windows}, now=0).valence
+                            - decoder.decode({w: rest for w in decoder.windows}, now=0).valence)
+            out[name] = round(float(np.mean(vals)), 3)
+        out["t"] = round(time.time() - t_start, 1)
+        probe_result.clear(); probe_result.update(out)
+        print(f"[learning] probe: odor A (grape) valence {out['A']:+.2f}, odor B (lemon) {out['B']:+.2f}", flush=True)
     dash = None
     if not args.no_ui:
         from .ui.server import Dashboard
@@ -155,6 +267,18 @@ def cmd_run(args, cfg):
             world = dash.world if (dash is not None and tick - dash.world_at < 1.0) else {}
             if any(_world_value(world.get(k)) > 0.3 for k in cfg.senses.world):
                 last_motion = tick
+            # --- controls from the dashboard
+            if dash is not None and dash.controls:
+                for ctl in dash.controls:
+                    if brain.plasticity is not None and "learning" in ctl:
+                        brain.plasticity.enabled = bool(ctl["learning"])
+                        print(f"[learning] {'ON' if brain.plasticity.enabled else 'OFF'}", flush=True)
+                    if brain.plasticity is not None and ctl.get("reset"):
+                        brain.plasticity.reset(); probe_result.clear()
+                        print("[learning] synapses reset to naive", flush=True)
+                    if ctl.get("probe"):
+                        run_probe()
+                dash.controls.clear()
             body.poll()
             if body.pir and not last_pir:
                 pir_until = tick + float(cfg.senses.pir.burst_ms) * 1e-3
@@ -170,6 +294,12 @@ def cmd_run(args, cfg):
             if tick < pir_until:
                 for g in cfg.senses.pir.groups:
                     brain.drive(g, float(cfg.senses.pir.rate_hz))
+            if brain.plasticity is not None:
+                for key in ("reward", "punish"):
+                    spec = cfg.learning.get(key)
+                    if spec and _world_value(world.get(spec["world"])) > 0:
+                        for g in spec["groups"]:
+                            brain.drive(g, float(np.clip(_world_value(world.get(spec["world"])), 0, 1)) * float(spec["hz"]))
             for name, spec in cfg.senses.world.items():
                 v = world.get(name)
                 if v is None:
@@ -213,6 +343,7 @@ def cmd_run(args, cfg):
                     "asleep": asleep, "pir": int(body.pir),
                     "sees": feats.as_dict() if feats else None,
                     "vision": vision, "world": world,
+                    "learning": ({**brain.plasticity.summary(), "probe": probe_result} if brain.plasticity is not None else None),
                     "rates": {g: {s: round(v, 1) for s, v in r.items()} for g, r in brain.rates().items()},
                     "spikes": spiking.tolist(),
                     "n_spikes": int(recent.sum()),
@@ -256,11 +387,16 @@ def main(argv=None):
     p = sub.add_parser("bench"); p.add_argument("--full", action="store_true"); p.add_argument("--numpy", action="store_true", help="force the NumPy engine")
     p.add_argument("--seconds", type=float, default=3.0); p.set_defaults(fn=cmd_bench)
     p = sub.add_parser("test-gf"); p.add_argument("--full", action="store_true"); p.set_defaults(fn=cmd_test_gf)
+    p = sub.add_parser("experiment", help="two-odor conditioning, headless")
+    p.add_argument("--blocks", type=int, default=3); p.add_argument("--train-s", type=float, default=15.0)
+    p.add_argument("--odor-hz", type=float, default=80.0); p.add_argument("--seed", type=int, default=0)
+    p.add_argument("--no-learn", action="store_true", help="control run with plasticity switched off"); p.set_defaults(fn=cmd_experiment)
     p = sub.add_parser("run"); p.add_argument("--full", action="store_true")
     p.add_argument("--sim-camera", default=None, metavar="SRC", help="'synthetic' or a video file / URL instead of the ESP32-CAM")
     p.add_argument("--dry-body", action="store_true", help="print body packets instead of sending UDP")
     p.add_argument("-v", "--verbose", action="store_true")
     p.add_argument("--recalibrate", action="store_true", help="re-measure the resting baseline")
+    p.add_argument("--no-learn", action="store_true", help="start with mushroom-body plasticity switched off")
     p.add_argument("--no-ui", action="store_true", help="do not start the live dashboard")
     p.add_argument("--ui-port", type=int, default=8600)
     p.add_argument("--open", action="store_true", help="open the dashboard in the default browser")

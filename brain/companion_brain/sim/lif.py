@@ -70,6 +70,7 @@ class LIFNetwork:
         self.g = np.zeros(n, dtype=np.float32)
         self.adapt = np.zeros(n, dtype=np.float32)       # adaptation variable (mV, subtracted from drive)
         self.resource = np.ones(n, dtype=np.float32)     # synaptic resources per presynaptic neuron (1 = full)
+        self.th_offset = np.zeros(n, dtype=np.float32)   # per-neuron spike threshold offset (mV), e.g. Kenyon cells
         self.ref_left = np.zeros(n, dtype=np.int32)
         # delay ring: spike flags per step for the last delay_steps steps
         self.ring = np.zeros((self.delay_steps, n), dtype=np.bool_)
@@ -113,7 +114,7 @@ class LIFNetwork:
             driven_idx = np.nonzero(self.rate > 0)[0].astype(np.int32)
             bg_lambda = float(self.background_hz * self.p.dt_ms * 1e-3 * len(self.background_idx))
             self.ring_pos = _run_numba(
-                steps, self.v, self.g, self.adapt, self.resource, self.ref_left, self.ring, self.ring_pos, self.rate, driven_idx,
+                steps, self.v, self.g, self.adapt, self.resource, self.th_offset, self.ref_left, self.ring, self.ring_pos, self.rate, driven_idx,
                 self.background_idx, bg_lambda,
                 self.indptr, self.indices, self.data, counts,
                 np.float32(self.a_mem), np.float32(self.a_syn), np.float32(self.p.v_rest_mv),
@@ -154,7 +155,7 @@ class LIFNetwork:
         self.v[active] = p.v_rest_mv + (self.v[active] - p.v_rest_mv) * self.a_mem + (self.g[active] - self.adapt[active]) * (1.0 - self.a_mem)
         self.ref_left[~active] -= 1
         # 3) spikes: threshold crossings + Poisson-driven
-        spk = (self.v > p.v_thresh_mv) & active
+        spk = (self.v > p.v_thresh_mv + self.th_offset) & active
         driven = self.rate > 0
         if driven.any():  # driven neurons may fire even while refractory (reference model)
             u = self.rng.random(int(driven.sum()))
@@ -176,7 +177,7 @@ class LIFNetwork:
 if HAVE_NUMBA:
 
     @numba.njit(cache=True, fastmath=True)
-    def _run_numba(steps, v, g, adapt, resource, ref_left, ring, ring_pos, rate, driven_idx, bg_idx, bg_lambda,
+    def _run_numba(steps, v, g, adapt, resource, th_offset, ref_left, ring, ring_pos, rate, driven_idx, bg_idx, bg_lambda,
                    indptr, indices, data, counts,
                    a_mem, a_syn, v_rest, v_reset, v_th, ref_steps, dt_s, seed, adapt_mv, a_adapt, depress_u, a_depress):
         np.random.seed(seed)
@@ -205,7 +206,7 @@ if HAVE_NUMBA:
                     continue
                 g[i] *= a_syn
                 v[i] = v_rest + (v[i] - v_rest) * a_mem + (g[i] - adapt[i]) * (1.0 - a_mem)
-                if v[i] > v_th:
+                if v[i] > v_th + th_offset[i]:
                     v[i] = v_reset
                     g[i] = 0.0
                     adapt[i] += adapt_mv
