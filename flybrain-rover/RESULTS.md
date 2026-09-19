@@ -63,9 +63,25 @@ Learning bought speed and persistence, not the behaviour. Lobotomizing the demo 
 
 Negative results we are not hiding: four overnight biological training runs were flat, because a rover that cannot advance never earns reward, and because the Kenyon cells, the fly's actual learning site, are silent in this task, so mushroom-body plasticity had nothing to act on. An earlier run with a non-biological tonic "walking" current did raise contact but saturated DNa02 at 300 Hz; we do not call that learning.
 
-## 5. Anatomy that carries no signal
+## 5. Two ways for a descending neuron to be silent
 
-The shortest paths from the eye to the classic forward-walking neurons exist: LC10a reaches DNp09 in one to three hops (550 source-target pairs) and DNa01 in two to three. 739 of the 795 neurons on those paths were already in the circuit; forcing in the remaining 56 changed nothing measurable. With a centred person at 2 m, DNp09 and DNa01 stay below 2 Hz at every non-seizing gain. We therefore read forward speed from the descending population as a whole, and say so.
+This began as our biggest problem, that the eye does not drive the forward-walking neurons, and turned into the most interesting thing we found. `scripts/why_silent.py` drives the eye, then strips the inhibitory inputs onto a chosen descending neuron one source at a time, strongest first, and watches what happens.
+
+**DNa10 is held silent on purpose.** It receives 801 synapses straight from LC10a, the largest direct eye-to-descending projection in the circuit, and never fires: 0.0 Hz at every drive from 1.5 to 80 mV per step, while the eye itself saturates at 326 Hz. It is not weakly wired. The same eye signal also drives AOTU041, AOTU063_a and AOTU063_b, which place 1,201 inhibitory synapses on it. Peel those off and it comes straight up:
+
+| inhibitory sources removed (cumulative) | DNa10 |
+|---|---|
+| none | 0.0 Hz |
+| AOTU063_b | 0.0 Hz |
+| + AOTU041 | 32.5 Hz |
+| + AOTU063_a | 91.0 Hz |
+| + AOTU042 | 106.8 Hz |
+
+The connectome is running feedforward inhibition that gates this pathway off while the tracking pathway is active. That fits the published picture: DNa10 sits downstream of LC10d and drives object *avoidance*, and a male fly tracking a female has no business triggering avoidance.
+
+**DNp09 and DNa01 are silent for the opposite reason.** Removing every inhibitory input onto them, eight sources each, leaves both at exactly 0.0 Hz. Nothing is sitting on them; the excitation never arrives. Meanwhile **DNa02**, which receives no direct LC10a synapse at all, reaches 126 Hz through a three-hop path, and the shortest anatomical paths to DNp09 and DNa01 do exist (550 source-target pairs within three hops; 739 of the 795 neurons on them were already in the circuit, and forcing in the remaining 56 changed nothing).
+
+Anatomy is not drive, and there are at least two distinguishable ways for that to be true. This is also why we read forward speed from the descending population rather than from DNa01 and DNp09: not a workaround we chose, a fact we measured.
 
 ## 6. Speed
 

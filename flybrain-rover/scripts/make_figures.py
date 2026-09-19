@@ -102,7 +102,27 @@ def fig_lesions(out):
     fig.savefig(f"{out}/lesions.png", dpi=200, facecolor=BG); plt.close(fig)
 
 
+def fig_silence(out):
+    fig, ax = frame("Two different ways for a neuron to be silent.",
+                    "The eye is driven; the inhibitory inputs onto each descending neuron are then removed, strongest "
+                    "first. DNa10 receives 801 synapses straight from the tracking cells and still never fires, until "
+                    "its inhibition is lifted. DNp09 and DNa01 never fire at all.")
+    dna10 = [0.0, 0.0, 32.5, 91.0, 106.8, 117.3, 112.4]
+    ax.plot(range(len(dna10)), dna10, "-o", color=CORAL, lw=2.5, ms=8, label="DNa10 (801 direct synapses from the eye)")
+    ax.plot(range(9), [0.0] * 9, "--s", color=BLUE, lw=2, ms=7, label="DNp09 and DNa01 (forward walking)")
+    ax.annotate("held down by feedforward inhibition\nfrom AOTU041 and AOTU063", xy=(3, 91), xytext=(3.25, 45),
+                color=DIM, fontsize=10, linespacing=1.6,
+                arrowprops=dict(arrowstyle="->", color=DIM, lw=1.2))
+    ax.text(4.1, 6, "no excitation ever arrives", color=BLUE, fontsize=10)
+    ax.set_xlabel("inhibitory sources removed (cumulative, strongest first)")
+    ax.set_ylabel("firing rate (Hz)"); ax.set_ylim(-6, 155); ax.set_xlim(-0.3, 8.3)
+    leg = ax.legend(frameon=False, fontsize=10, loc="upper left", bbox_to_anchor=(0.005, 1.0))
+    for t in leg.get_texts():
+        t.set_color(FG)
+    fig.savefig(f"{out}/silence.png", dpi=200, facecolor=BG); plt.close(fig)
+
+
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(); ap.add_argument("--out", default="devpost"); a = ap.parse_args()
-    fig_control(a.out); fig_graded(a.out); fig_lesions(a.out)
-    print(f"wrote {a.out}/control.png, {a.out}/graded.png, {a.out}/lesions.png")
+    fig_control(a.out); fig_graded(a.out); fig_lesions(a.out); fig_silence(a.out)
+    print(f"wrote {a.out}/control.png, {a.out}/graded.png, {a.out}/lesions.png, {a.out}/silence.png")

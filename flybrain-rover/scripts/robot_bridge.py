@@ -26,6 +26,7 @@ import argparse
 import csv
 import json
 import os
+import random
 import socket
 import struct
 import sys
@@ -357,6 +358,7 @@ class SbusRover:
         cfg = dict(rotation_only=False, speed="slow", free_mode=True, timeout_s=0.5,
                    stick_forward=(stick_forward if stick_forward is not None else min(1.0, v_max / s1.DEFAULTS["speed_mps_full"])),
                    stick_yaw=min(1.0, w_max_deg / s1.DEFAULTS["yaw_dps_full"]), sign_yaw=sign_yaw, sign_forward=sign_forward)
+        self.cfg, self.port = cfg, port
         self.body = s1.S1Body(cfg, port=port)
         self.v_max, self.w_max = v_max, w_max_deg
         print(f"S-Bus rover on {port}: full forward stick {cfg['stick_forward']:.2f}, full yaw stick {cfg['stick_yaw']:.2f} (turn>0 = right)", flush=True)
@@ -370,6 +372,16 @@ class SbusRover:
     def stop(self):
         self.body.send({"motor": {"forward": 0.0, "turn": 0.0}})
 
+    def reconnect(self):
+        """The USB-serial link dropped (a knocked cable at a demo table). Rebuild it."""
+        try:
+            self.body.close()
+        except Exception:  # noqa: BLE001
+            pass
+        import importlib
+        s1 = importlib.import_module("companion_brain.body.s1")
+        self.body = s1.S1Body(self.cfg, port=self.port)
+
     def close(self):
         try:
             self.stop(); time.sleep(0.05); self.body.close()
@@ -381,6 +393,7 @@ class RemoteRover:
     """Client for scripts/robot_daemon.py (the SDK lives in a Python 3.8 x86_64 process). Frames arrive as
     JPEG over localhost TCP; commands go back as 'V x y z' lines. Same interface as Rover."""
     def __init__(self, addr="127.0.0.1:9500", v_max=0.7, w_max_deg=90.0):
+        self.addr = addr
         host, port = addr.split(":")
         self.sock = socket.create_connection((host, int(port)), timeout=5.0)
         self.sock.settimeout(1.0)
@@ -413,6 +426,15 @@ class RemoteRover:
 
     def drive(self, forward, turn):
         self.sock.sendall(f"V {forward * self.v_max:.3f} 0 {turn * self.w_max:.2f}\n".encode())
+
+    def reconnect(self):
+        try:
+            self.sock.close()
+        except OSError:
+            pass
+        host, port = self.addr.split(":")
+        self.sock = socket.create_connection((host, int(port)), timeout=5.0)
+        self.sock.settimeout(1.0); self.buf = b""
 
     def stop(self):
         self.sock.sendall(b"S\n")
@@ -466,6 +488,8 @@ def main(argv=None, hotkeys=None):
     ap.add_argument("--no-camera", action="store_true", help="synthetic 320x240 frames at 30 fps (no OpenCV needed)")
     ap.add_argument("--dry-run", action="store_true", help="print wheel commands instead of sending them")
     ap.add_argument("--watchdog-ms", type=float, default=300.0)
+    ap.add_argument("--chaos", type=float, default=0.0, metavar="P",
+                    help="rehearsal: fail the camera, detector, brain and wheels at probability P per frame")
     ap.add_argument("--latency-log", default="logs/bridge_latency.csv")
     ap.add_argument("--explore", action="store_true", help="search when nobody is in view (exploratory internal state)")
     ap.add_argument("--shuffle", action="store_true",
@@ -564,13 +588,40 @@ def main(argv=None, hotkeys=None):
         lat_w.writerow(["frame", "t_cam", "det_ms", "brain_ms", "cmd_ms", "total_ms", "boxes", "forward", "turn", "watchdog"])
     lats = []
 
+    fails = {}
+
+    def guard(label, fn, default=None, recover=None):
+        """A demo degrades, it does not exit. Any failure in the camera, the detector, the brain, the
+        wheels or the viewer is logged (rate limited), optionally recovered from, and the loop carries on."""
+        try:
+            return fn()
+        except Exception as e:  # noqa: BLE001
+            c = fails[label] = fails.get(label, 0) + 1
+            if c <= 3 or c % 50 == 0:
+                print(f"[{label}] {type(e).__name__}: {str(e)[:90]} (failure {c})", flush=True)
+            if recover is not None and c % 10 == 0:
+                try:
+                    recover(); print(f"[{label}] reconnected", flush=True)
+                except Exception as e2:  # noqa: BLE001
+                    print(f"[{label}] reconnect failed: {type(e2).__name__}", flush=True)
+            return default
+
+    def chaos(label):
+        """--chaos p injects failures at probability p so a rehearsal proves the guards work."""
+        if a.chaos and random.random() < a.chaos:
+            raise RuntimeError(f"injected {label} failure")
+
     def send(fwd, turn, why=""):
-        if rover and not a.dry_run:
-            rover.drive(fwd, turn)
-        elif a.dry_run and why:
-            print(f"[dry-run] drive_speed(x={fwd * a.v_max:+.2f} m/s, y=0, z={turn * a.w_max:+.1f} deg/s) {why}")
+        def _send():
+            chaos("wheels")
+            if rover and not a.dry_run:
+                rover.drive(fwd, turn)
+            elif a.dry_run and why:
+                print(f"[dry-run] drive_speed(x={fwd * a.v_max:+.2f} m/s, y=0, z={turn * a.w_max:+.1f} deg/s) {why}")
+        guard("wheels", _send, recover=getattr(rover, "reconnect", None))
 
     n = 0
+    last_boxes = []
     last_frame_t = time.time()
     fps_period = 1 / 30
     try:
@@ -578,7 +629,8 @@ def main(argv=None, hotkeys=None):
             if a.no_camera:
                 t_cam = time.time(); frame = None; W, H = 320, 240
             else:
-                frame = eye.read() if eye is not None else (cap.read()[1] if cap is not None else rover.frame())
+                frame = guard("camera", lambda: (chaos("camera"), eye.read() if eye is not None
+                                                 else (cap.read()[1] if cap is not None else rover.frame()))[1])
                 t_cam = time.time()
                 if frame is None:
                     if eye is not None:
@@ -594,10 +646,17 @@ def main(argv=None, hotkeys=None):
             last_frame_t = t_cam
             while pending_keys:
                 run_hotkey(pending_keys.pop(0))
-            boxes = scale_boxes(detector(frame), W, H, brain.cam)
+            raw = guard("detector", lambda: (chaos("detector"), detector(frame))[1])
+            if raw is None:                      # a detector hiccup: reuse the last boxes briefly, then give up on them
+                stale = fails.get("_stale", 0) + 1; fails["_stale"] = stale
+                raw = last_boxes if stale <= 5 else []
+            else:
+                fails["_stale"] = 0
+            last_boxes = raw
+            boxes = scale_boxes(raw, W, H, brain.cam)
             t_det = time.time()
             h = heat.read() if heat else (0.0, 0.0)
-            fwd, turn = brain.step(boxes, h, t_cam)
+            fwd, turn = guard("brain", lambda: (chaos("brain"), brain.step(boxes, h, t_cam))[1], (0.0, 0.0))
             t_brain = time.time()
             if wd:
                 send(0.0, 0.0, "WATCHDOG: frame gap"); fwd, turn = 0.0, 0.0
@@ -606,7 +665,8 @@ def main(argv=None, hotkeys=None):
             t_cmd = time.time()
             n += 1
             if brain.viz is not None and brain.last_r is not None:
-                brain.viz.frame(t_cam, boxes, fwd, turn, brain.last_r, brain.last_heat[0].tolist(), brain.last_exploring)
+                guard("viz", lambda: brain.viz.frame(t_cam, boxes, fwd, turn, brain.last_r,
+                                                     brain.last_heat[0].tolist(), brain.last_exploring))
             total = (t_cmd - t_cam) * 1000
             lats.append(total)
             lat_w.writerow([n, f"{t_cam:.4f}", f"{1000 * (t_det - t_cam):.1f}", f"{1000 * (t_brain - t_det):.1f}",
