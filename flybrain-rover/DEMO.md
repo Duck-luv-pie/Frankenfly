@@ -18,6 +18,8 @@ A real fruit fly's brain wiring, running live, in a robot, turning toward and re
 5. Rehearse once with `--dry-run` added to the demo.py line (wheels don't move, everything else runs). Then run it live and walk in from 2 m: the robot should turn to face you and roll forward until it touches your shoe.
 6. Person starts IN VIEW (1 to 3 m, inside the ±49° camera cone). Search from out of view exists (`--explore`) but the demo starts with the person visible, by decision.
 
+Add `--voice` to have the fly say what was just done to it (cached audio, no network needed; generate once with `python scripts/voice.py --generate` and an ElevenLabs key). Add `--brain data/brain_tiny.npz` to run the 2,211-neuron circuit instead of the full one.
+
 Hotkeys (in the window, or type the digit and Enter in terminal 2): **1** baseline, **2** lesion LC10a, **3** restore, **4** lobotomize, **5** restore learning, **6** wiring shuffle on/off, **7** remove another quarter of LC10a, **r/p** reward/punish, **space** E-stop, **q** quit.
 
 ## The two-minute script

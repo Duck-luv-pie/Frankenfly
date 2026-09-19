@@ -55,6 +55,7 @@ python scripts/demo.py --checkpoint checkpoints/demo_brain.pt \
 | `scripts/why_silent.py` | why a descending neuron does not fire: strips its inhibition source by source |
 | `scripts/dropout.py` | how much of the connectome can be deleted before the behaviour goes |
 | `scripts/minimal_circuit.py` | the smallest brain file that still finds a person: 2,211 neurons, 10,387 synapses |
+| `scripts/voice.py` | the fly narrates lesions and restores, from audio generated once and played from disk |
 | `edge/flybrain_mini.py` | the whole brain in one numpy file, no PyTorch: bit-identical, and five times faster at batch one |
 | `scripts/export_timeseries.py` | the recordings into TimescaleDB, TigerData Cloud or a local SQLite file |
 | `scripts/` | milestones, evaluation, lesion tables, pruning, benchmarks, replay, the robot bridge and the demo |

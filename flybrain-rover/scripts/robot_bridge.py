@@ -49,9 +49,9 @@ from brain.senses import Senses  # noqa: E402
 class Brain:
     def __init__(self, checkpoint=None, gain=0.05, device=None, engine="auto", k_t=0.02, k_f=0.3,
                  amps=None, substeps=20, forward_source="dn_all", retinotopy="rank", explore=False,
-                 shuffle=False):
+                 shuffle=False, brain_path="data/brain.npz"):
         self.device = pick_device(device)
-        d, N, groups = load_brain()
+        d, N, groups = load_brain(brain_path)
         self.lif = LIF(torch.as_tensor(d["W_indices"]), torch.as_tensor(d["W_values"]), N, 1,
                        device=self.device, engine=engine, g=gain)
         amps = dict(amps or {})
@@ -479,6 +479,8 @@ def main(argv=None, hotkeys=None):
                     help="drive the RoboMaster through scripts/robot_daemon.py (recommended: SDK in its own py3.8 process)")
     ap.add_argument("--conn", default="ap", choices=["ap", "sta", "rndis"])
     ap.add_argument("--checkpoint", default=None)
+    ap.add_argument("--brain", default="data/brain.npz",
+                    help="which circuit to run, e.g. data/brain_tiny.npz for the 2,211-neuron version")
     ap.add_argument("--gain", type=float, default=0.05)
     ap.add_argument("--substeps", type=int, default=20)
     ap.add_argument("--device", default=None)
@@ -507,7 +509,7 @@ def main(argv=None, hotkeys=None):
     a = ap.parse_args(argv)
 
     brain = Brain(a.checkpoint, gain=a.gain, device=a.device, engine=a.engine, substeps=a.substeps, explore=a.explore,
-                  shuffle=a.shuffle)
+                  shuffle=a.shuffle, brain_path=a.brain)
     if a.viz_jsonl or a.viz_ws:
         brain.viz = VizFeed(brain, jsonl=a.viz_jsonl, ws_port=a.viz_ws)
     print(f"brain on {brain.device} ({brain.lif.engine}), {a.substeps} x 1 ms per frame")
