@@ -15,6 +15,10 @@ dependencies = [
 
 [project.optional-dependencies]
 fast = ["numba>=0.59"]
+s1 = ["pyserial>=3.5"]
+gpu = [
+    "torch>=2.2",
+]
 
 [project.scripts]
 companion = "companion_brain.main:main"

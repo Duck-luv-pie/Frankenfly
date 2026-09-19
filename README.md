@@ -21,6 +21,7 @@ ESP32-CAM ──MJPEG /stream (WiFi)──▶ Mac brain ──UDP JSON 20 Hz─�
 | `brain/` | Python: connectome download, circuit pruning, real-time LIF simulation, camera → fly-vision features, descending-neuron readout, UDP link to the body |
 | `firmware/body/` | PlatformIO project for the ESP32 DevKit: eyes, DFPlayer audio, PIR, WiFi link |
 | `firmware/cam/` | PlatformIO project for the ESP32-CAM: MJPEG stream server |
+| `firmware/sbus-bridge/` | PlatformIO project: a spare ESP32 as the S-Bus inverter between the Pi and a RoboMaster S1 |
 | `docs/` | [architecture](docs/architecture.md), [neuron map](docs/neuron-map.md), [wiring](docs/wiring.md) |
 | `hardware/` | [bill of materials](hardware/bom.md) |
 | `tools/` | `make_sounds.py` synthesizes the fly sounds for the SD card |
@@ -40,6 +41,9 @@ uv run companion bench                    # checks the circuit runs faster than 
 uv run companion test-gf                  # looming neurons → Giant Fiber escape sanity test
 uv run companion experiment                              # two-odor conditioning, headless neural readout (--no-learn = control)
 uv run companion batch --runs 6 --control --save         # 6 flies + 6 controls through the arena assay in parallel; saves the best synapses
+uv run companion hunt --episodes 6                       # hunt arena: the fly as a vehicle among walking humans (heat + vision)
+uv run companion hunt --train --generations 20           # CMA-ES + mushroom-body learning on all cores -> data/cache/hunter.npz
+uv sync --extra gpu && uv run companion hunt-gpu --train  # the hunt on a GPU: thousands of rooms as tensors, PPO -> data/cache/hunter_gpu.pt
 uv run companion run --sim-camera 0 --dry-body --open   # no robot yet: Mac webcam + live dashboard
 uv run companion run                                      # ESP32-CAM + real robot (dashboard too)
 ```
@@ -62,6 +66,22 @@ The fly also learns: its mushroom body runs dopamine-gated plasticity (toggle on
 The table holds a grape (rewarded with sugar) and a lemon (never rewarded), and a second world,
 the two-odor arena, runs the classic choice assay with a before/after preference index. See
 `docs/architecture.md`, "Learning".
+
+A third world is the **hunt arena**: a meter-scale room with the walking humans of the Fly / People
+Lab (their GLB exports live in `brain/companion_brain/ui/models/humans/`), where the fly is a 32 cm
+ground vehicle driven by its descending neurons that must find and touch a person using heat (the
+arista's hot cells) and vision, rewarded with sugar and dopamine, punished on a timeout. `companion
+hunt --train` trains many flies in parallel (mushroom-body plasticity plus CMA-ES over a few gains)
+and saves the trained fly's synapses and gains; `run --load-weights` puts it on the dashboard. See
+`docs/architecture.md`, "Hunting". `companion hunt-gpu` is the same hunt built for a GPU: the room as
+a batch of tensors (thousands of episodes stepped together, same physics and seeds) and a compact
+fly-shaped network (hot cells → Kenyon cells → MBONs, retinal columns → pursuit, a central-complex
+GRU) trained by PPO, rewarded for picking a person, hitting them fast and then staying on them as they
+walk away (`brain/companion_brain/hunt_gpu/`). The humans are the other player: runners faster than the fly,
+trained by PPO in the same rollouts to keep away from it, who tire and must rest so a tracking fly can catch up;
+`hunt-gpu --watch --open` shows the chase live in the 3-D room. `companion hunt-brain` does the same for the real fly: the
+hunter subcircuit of the connectome (8.5k neurons) runs as a differentiable rate model in the arena, its synapse gains and
+thresholds learn by PPO, and the result loads back into the spiking brain (`--watch` shows the neurons lighting up as it hunts).
 
 Firmware (needs [PlatformIO](https://platformio.org/) CLI, `uv tool install platformio`):
 

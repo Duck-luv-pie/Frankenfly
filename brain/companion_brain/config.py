@@ -51,6 +51,19 @@ def load_config(path: str | Path | None = None, overrides: dict | None = None) -
     return _wrap(raw)
 
 
+def apply_dotted(cfg: Config, values: dict) -> Config:
+    """Set dotted keys (e.g. 'decode.motor.channels.turn.z_ref') on a loaded config, in place."""
+    for key, v in values.items():
+        node: Any = cfg
+        parts = key.split(".")
+        for part in parts[:-1]:
+            if not isinstance(node.get(part), dict):
+                node[part] = Config()
+            node = node[part]
+        node[parts[-1]] = _wrap(v)
+    return cfg
+
+
 def _deep_update(base: dict, upd: dict) -> dict:
     for k, v in upd.items():
         if isinstance(v, dict) and isinstance(base.get(k), dict):

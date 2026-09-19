@@ -22,6 +22,8 @@ Edit `brain/configs/default.yaml` to change any of this.
 | Sugar on contact with the grape | `GRN_sugar` = gustatory `sugar/water` sub-class | 67/62 | sugar GRN activation drives proboscis extension in the model (Shiu et al. 2024) |
 | Pollen dust from the flower | `BM_eye` = `BM_InOm`, `BM_head` = `BM_Ant`, `BM_Fr`, … | 555/558, 78/83 | bristle mechanosensory neurons trigger the grooming sequence (Seeds et al. 2014, Hampel et al. 2015) |
 | Humid air near the water drop | `HRN_moist` = `HRN_VP4` | 15/14 | moist-air hygrosensory neurons (Enjin et al. 2016) |
+| Warm bodies (hunt arena: two heat sensors, 45° left / right) | `TRN_hot` = `TRN_VP2` | 3/4 | the arista's hot cells (Gallio et al. 2011); their VP2 projection neurons reach the lateral horn and the mushroom body (Frank et al. 2015) |
+| Timeout in the hunt arena | `GRN_bitter` = gustatory `bitter` sub-class | 32/33 | bitter taste as punishment, paired with the PPL1 dopamine neurons |
 
 Visual groups are driven as a Poisson process at `feature × gain × 150 Hz` on the side of the
 hemifield where the feature was seen, scaled down by the fly's own motion (efference copy).

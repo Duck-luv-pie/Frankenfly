@@ -171,6 +171,7 @@ class Dashboard:
             "behaviors": list(cfg.decode.behaviors.keys()),
             "connections": int(circuit.m),
             "atlas": atlas,
+            "hunt": {k: v for k, v in dict(cfg.get("hunt", {})).items() if not str(k).startswith("_")},
         }, separators=(",", ":")).encode()
 
     def top_types(self, counts: np.ndarray, k: int = 10) -> list:

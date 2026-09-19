@@ -7,6 +7,8 @@ from __future__ import annotations
 from dataclasses import dataclass, asdict
 
 import numpy as np
+import time
+import math
 
 from .decode import Decoded
 
@@ -19,10 +21,13 @@ class Eye:
     ut: float = 0.85
     lt: float = 0.85
     tint: tuple = (90, 200, 255)
+    tilt: float = 0.0  # upper-lid slope; mirrored across the pair
 
 
 # Base pose per state: (pr, ut, lt)
 POSES = {
+    "angry":    (0.28, 0.36, 0.48),
+    "searching": (0.35, 0.38, 0.42),
     "idle":     (0.45, 0.85, 0.85),
     "sleep":    (0.40, 0.08, 0.10),
     "escape":   (0.25, 1.00, 1.00),
@@ -37,8 +42,9 @@ POSES = {
 }
 
 
-def eyes_for(d: Decoded, gaze_x: float, gaze_y: float, blink: bool = False) -> dict:
-    pr, ut, lt = POSES.get(d.state, POSES["idle"])
+def eyes_for(d: Decoded, gaze_x: float, gaze_y: float, blink: bool = False, *, expression: str | None = None, now: float | None = None) -> dict:
+    state = expression or d.state
+    pr, ut, lt = POSES.get(state, POSES["idle"])
     pr = float(np.clip(pr + 0.25 * d.arousal, 0.15, 0.9))
     # iris tint: valence -1 (red) .. 0 (cyan) .. 1 (green)
     v = d.valence
@@ -46,23 +52,40 @@ def eyes_for(d: Decoded, gaze_x: float, gaze_y: float, blink: bool = False) -> d
         tint = (int(90 * (1 - v)), int(200 + 40 * v), int(255 * (1 - v) + 80 * v))
     else:
         tint = (int(90 + 165 * -v), int(200 * (1 + v)), int(255 * (1 + v)))
-    if d.state == "threat":
+    if state in ("threat", "angry"):
         tint = (255, 120, 40)
     px, py = float(np.clip(gaze_x, -1, 1)), float(np.clip(gaze_y, -1, 1))
-    if d.state == "escape":
+    if state == "escape":
         px, py = -px * 0.8, py * 0.5          # look away from the threat
-    elif d.state == "backward":
+    elif state == "backward":
         px, py = px * 0.3, 0.3
-    elif d.state == "groom":
+    elif state == "groom":
         px, py = 0.0, 0.5
-    elif d.state == "sleep":
+    elif state == "sleep":
         px, py = 0.0, 0.3
-    steer = d.lateral.get("track", 0.0) * 0.5 if d.state in ("track", "idle") else 0.0
+    steer = d.lateral.get("track", 0.0) * 0.5 if state in ("track", "idle") else 0.0
     px = float(np.clip(px + steer, -1, 1))
+    if state == "searching":
+        # Quick saccades followed by deliberate holds; repeatable with explicit time.
+        t = time.monotonic() if now is None else now
+        stops = [(-.72, -.12), (.62, -.08), (.20, .24), (-.30, .12), (.0, -.18)]
+        phase = t % 6.0
+        index = int(phase / 1.2)
+        f = min(1.0, (phase % 1.2) / .22)
+        f = f * f * (3 - 2 * f)
+        a, b = stops[(index - 1) % len(stops)], stops[index]
+        px, py = a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f
+        ut += .025 * math.sin(t * 2.2)
     l = Eye(px, py, pr, ut, lt, tint)
     r = Eye(px, py, pr, ut, lt, tint)
-    if d.state == "groom":  # asymmetric squint while grooming
+    if state in ("angry", "threat"):
+        l.tilt, r.tilt = .36, -.36
+        l.ut = r.ut = .36
+    if state == "groom":  # asymmetric squint while grooming
         r.ut, r.lt = 0.3, 0.5
+    if blink:
+        l.ut = l.lt = r.ut = r.lt = 0.0
+        l.tilt = r.tilt = 0.0
     return {"l": _pack(l), "r": _pack(r)}
 
 

@@ -6,6 +6,7 @@ struct EyeParams {
   float px = 0, py = 0;       // pupil position -1..1
   float pr = 0.45f;           // pupil radius 0..1
   float ut = 0.85f, lt = 0.85f;  // upper / lower lid openness 0..1
+  float tilt = 0.0f;         // upper-lid slope -0.6..0.6
   uint8_t r = 90, g = 200, b = 255;  // iris tint
 };
 

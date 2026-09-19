@@ -6,11 +6,12 @@
 // and humidity (near the water drop), which the brain receives on the matching sensory neurons.
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { createFly, demonstrationPose } from './fly.js';
 
 const ARENA = 11;             // mm, half-size of the table
 const bounds = { x: ARENA, z: ARENA };   // walkable half-extents of the current world
-const RET_W = 80, RET_H = 60; // retina resolution (matches the optic lobe)
+let RET_W = 80, RET_H = 60;   // retina resolution (the optic lobe adapts to it; the hunt arena's wide eye uses 160x120)
 const lerp = (a, b, k) => a + (b - a) * k;
 const wrapAngle = a => Math.atan2(Math.sin(a), Math.cos(a));
 const mat = (color, roughness = .7, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness, ...extra });
@@ -130,10 +131,18 @@ export function createFlyStage(host, retinaCanvas, opts = {}) {
   // the fly's own eyes: a wide camera on the head, rendered to a tiny retina
   const eyeCam = new THREE.PerspectiveCamera(95, RET_W / RET_H, .08, 80);
   const headNode = fly.joints['head.yaw'].node; headNode.add(eyeCam); eyeCam.position.set(0, .12, .55); eyeCam.rotation.y = Math.PI;   // rig: +Z anterior; camera looks down -Z
-  const retinaRT = new THREE.WebGLRenderTarget(RET_W, RET_H, { depthBuffer: true });
-  const retinaPixels = new Uint8Array(RET_W * RET_H * 4), retinaGray = new Uint8Array(RET_W * RET_H);
+  let retinaRT = new THREE.WebGLRenderTarget(RET_W, RET_H, { depthBuffer: true });
+  let retinaPixels = new Uint8Array(RET_W * RET_H * 4), retinaGray = new Uint8Array(RET_W * RET_H);
   const retinaCtx = retinaCanvas ? retinaCanvas.getContext('2d') : null;
-  const retinaImg = retinaCtx ? retinaCtx.createImageData(RET_W, RET_H) : null;
+  let retinaImg = retinaCtx ? retinaCtx.createImageData(RET_W, RET_H) : null;
+  function setRetina(w, h) {
+    if (w === RET_W && h === RET_H) return;
+    RET_W = w; RET_H = h; retinaRT.dispose(); retinaRT = new THREE.WebGLRenderTarget(w, h, { depthBuffer: true });
+    retinaPixels = new Uint8Array(w * h * 4); retinaGray = new Uint8Array(w * h);
+    if (retinaCanvas) { retinaCanvas.width = w; retinaCanvas.height = h; }
+    retinaImg = retinaCtx ? retinaCtx.createImageData(w, h) : null;
+    eyeCam.aspect = w / h; eyeCam.updateProjectionMatrix();
+  }
   let lastRetina = 0, lastWorldPost = 0;
 
   const M = { forward: 0, backward: 0, turn: 0, groom: 0, threat: 0, song: 0, land: 0, freeze: 0, jump: 0, feed: 0 };
@@ -169,9 +178,127 @@ export function createFlyStage(host, retinaCanvas, opts = {}) {
     S.pos.set(0, 0, 0); S.heading = Math.PI / 2 * (Math.random() < .5 ? 1 : -1);   // start in the middle, facing along the chamber
     windowMesh.visible = false;
   }
+
+  // ---- the third world: the hunt arena ----------------------------------------------------
+  // A meter-scale room (the Fly / People Lab arena) with walking humans loaded from that project's
+  // GLB exports. The fly is a 32 cm ground vehicle: forward / backward / turn only, no walking, no
+  // flight. Touching a person -> sugar + reward dopamine; running out of time -> bitter + punishment.
+  // Senses: two heat sensors (45° left / right cosine lobes) -> the arista's hot cells; vision is the
+  // retina as in every world. Layouts come from the same seeded generator as sim/hunt_arena.py, so a
+  // training seed shows the same people, patrols and start pose here. Physics mirrors that file.
+  const HUNT = { arena: { x: 7.4, z: 6.1 }, people: 4, episode_s: 45, reward_s: 2, punish_s: 2, person_r: .2, nose_m: .16, touch_m: .06, frontal_deg: 30, side_reward: .5, freeze_brakes: false, speed_max: 1.6, speed_reverse: 0, turn_max: 2.5, turn_gain: 1, turn_sign: -1, heat_gain: 1, heat_scale_m: 3, heat_lobe_deg: 45, valence_steer: 6, fov_deg: 150 };
+  const H = { phase: 'idle', t: 0, phaseT: 0, episode: 0, seed: 2048, touches: 0, frontal: 0, misses: 0, log: [], heat: [0, 0], nearest: 0, sugar: 0, bitter: 0, reward: 0, people: [] };
+  const humanFiles = ['human-shorts.glb', 'human-jeans.glb', 'human-chinos.glb', 'human-joggers.glb'];
+  const gltfLoader = new GLTFLoader();
+  let mixers = [], huntFx = null;
+  // seededRandom from the fly project's human.js (mulberry32), verbatim, so layouts match Python
+  function mulberry32(seed) { let state = Number(seed) >>> 0; return () => { state += 0x6D2B79F5; let t = state; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+  function huntLayout(seed) {
+    const rng = mulberry32(seed); for (let i = 0; i < 7; i++) rng();
+    const n = Math.max(1, Math.min(8, HUNT.people | 0)), people = [];
+    for (let i = 0; i < n; i++) { const p = { slot: i, anchorX: ((i % 4) - 1.5) * 3.25, anchorZ: Math.floor(i / 4) * 4 - 1.8, offset: rng() * Math.PI * 2, pace: .66 + rng() * .17, x: 0, z: 0, yaw: 0, speed: 0 }; rng(); people.push(p); }
+    rng();
+    return { people, rng };
+  }
+  function placePeople(t) { for (const p of H.people) { const th = t * p.pace + p.offset, ox = p.x, oz = p.z; p.x = Math.max(-7.1, Math.min(7.1, p.anchorX + 1.14 * Math.cos(th))); p.z = Math.max(-5.8, Math.min(5.8, p.anchorZ + 1.05 * Math.sin(th))); p.yaw = Math.atan2(-1.14 * Math.sin(th), 1.05 * Math.cos(th)); p.speed = Math.hypot(p.x - ox, p.z - oz); } }
+  function huntBearing(px, pz) { const dx = px - S.pos.x, dz = pz - S.pos.z; const fwd = dx * Math.sin(S.heading) + dz * Math.cos(S.heading), left = dx * Math.cos(S.heading) - dz * Math.sin(S.heading); return [Math.hypot(dx, dz), Math.atan2(left, fwd)]; }
+  function huntNearest() { let best = [1e9, 0]; for (const p of H.people) { const b = huntBearing(p.x, p.z); if (b[0] < best[0]) best = b; } return best; }
+  function startEpisode(seed) {
+    H.seed = seed >>> 0; const { people, rng } = huntLayout(H.seed);
+    for (let i = 0; i < H.people.length && i < people.length; i++) Object.assign(H.people[i], { offset: people[i].offset, pace: people[i].pace });   // keep the models, new patrols
+    H.t = 0; placePeople(0);
+    for (let k = 0; k < 20; k++) { S.pos.set((rng() * 2 - 1) * (HUNT.arena.x - 1), 0, (rng() * 2 - 1) * (HUNT.arena.z - 1)); S.heading = rng() * Math.PI * 2 - Math.PI; if (huntNearest()[0] > 2) break; }
+    H.phase = 'hunt'; H.phaseT = 0; H.sugar = 0; H.bitter = 0; H.reward = 0; H.episode++;
+  }
+  function buildHunt() {
+    world.name = 'hunt'; bounds.x = HUNT.arena.x; bounds.z = HUNT.arena.z; mixers = [];
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(2 * HUNT.arena.x + 2, 2 * HUNT.arena.z + 2), mat('#d8d2c4', .95)); floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; worldGroup.add(floor);
+    const grid = new THREE.GridHelper(16, 16, '#b9b2a4', '#c9c2b4'); grid.position.y = .003; grid.material.transparent = true; grid.material.opacity = .5; worldGroup.add(grid);
+    const railMat = mat('#8a8578', .9);
+    for (const side of [-1, 1]) { const rail = new THREE.Mesh(new THREE.BoxGeometry(.16, .22, 2 * HUNT.arena.z + 2), railMat); rail.position.set(side * (HUNT.arena.x + .6), .11, 0); rail.castShadow = true; worldGroup.add(rail); const back = new THREE.Mesh(new THREE.BoxGeometry(2 * HUNT.arena.x + 2, .22, .16), railMat); back.position.set(0, .11, side * (HUNT.arena.z + .6)); back.castShadow = true; worldGroup.add(back); }
+    huntFx = new THREE.Mesh(new THREE.RingGeometry(.5, .6, 48), mat('#7fd68a', .5, { transparent: true, opacity: .8, side: THREE.DoubleSide, emissive: '#3c8a45', emissiveIntensity: .6 })); huntFx.rotation.x = -Math.PI / 2; huntFx.position.y = .01; huntFx.visible = false; worldGroup.add(huntFx);
+    const { people } = huntLayout(H.seed);
+    H.people = people.map(p => ({ ...p, model: null, mixer: null, glow: null }));
+    for (const p of H.people) {
+      const glow = new THREE.Mesh(new THREE.CircleGeometry(1.0, 40), mat('#ff9a4a', 1, { transparent: true, opacity: .22, emissive: '#ff6a00', emissiveIntensity: .5, depthWrite: false })); glow.rotation.x = -Math.PI / 2; glow.position.y = .006; worldGroup.add(glow); p.glow = glow;
+      gltfLoader.load('/models/humans/' + humanFiles[p.slot % humanFiles.length], g => {
+        if (world.name !== 'hunt' || !H.people.includes(p)) return;
+        g.scene.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+        worldGroup.add(g.scene); p.model = g.scene;
+        if (g.animations.length) { const mixer = new THREE.AnimationMixer(g.scene); mixer.clipAction(g.animations[0]).play(); p.mixer = mixer; mixers.push(mixer); }
+      }, undefined, err => console.warn('human model failed to load', err));
+    }
+    windowMesh.visible = false;
+    fly.root.scale.setScalar(.135); other.root.visible = false;
+    eyeCam.far = 600;                                   // the head camera lives in the scaled rig: 600 x 0.135 = 81 m
+    eyeCam.fov = HUNT.fov_deg; eyeCam.updateProjectionMatrix();   // the hunter's wide eye ...
+    setRetina(160, 120);                                          // ... needs more pixels: a person 7 m away is still 2 px wide
+    H.touches = 0; H.frontal = 0; H.misses = 0; H.episode = 0; H.log = [];
+    startEpisode(H.seed);
+  }
+  function senseHunt() {
+    S.odor = [0, 0]; S.odorB = [0, 0]; S.dust = 0; S.moist = 0; S.feeding = 0; S.satiety = 0;
+    let hl = 0, hr = 0; const lobe = HUNT.heat_lobe_deg * Math.PI / 180;
+    for (const p of H.people) { const [d, b] = huntBearing(p.x, p.z); const w = 1 / (1 + Math.pow(d / HUNT.heat_scale_m, 2)); hl += w * Math.max(0, Math.cos(b - lobe)); hr += w * Math.max(0, Math.cos(b + lobe)); }
+    H.heat = [Math.min(1, hl * HUNT.heat_gain), Math.min(1, hr * HUNT.heat_gain)];
+    H.nearest = huntNearest()[0];
+    H.sugar = H.phase === 'reward' ? H.reward : 0; H.bitter = H.phase === 'punish' ? 1 : 0;
+    S.sugar = H.sugar;
+  }
+  function stepHunt(dt) {
+    if (H.phase !== 'idle') { H.t += dt; placePeople(H.t); }
+    for (const p of H.people) { if (p.model) { p.model.position.set(p.x, 0, p.z); p.model.rotation.y = p.yaw; } if (p.mixer) p.mixer.timeScale = Math.min(1.6, p.speed / Math.max(dt, 1e-3) / .9); if (p.glow) p.glow.position.set(p.x, .006, p.z); }
+    for (const m of mixers) m.update(dt);
+    let speed = 0, turn = 0;
+    if (H.phase === 'reward' || H.phase === 'punish') {
+      H.phaseT += dt; huntFx.visible = true; huntFx.position.set(S.pos.x, .01, S.pos.z);
+      const col = H.phase === 'punish' ? ['#e06060', '#8a2f2f'] : H.reward >= 1 ? ['#7fd68a', '#3c8a45'] : ['#e8d060', '#8a7a20'];   // green head-on, yellow glancing, red timeout
+      huntFx.material.color.set(col[0]); huntFx.material.emissive.set(col[1]);
+      if (H.phaseT >= (H.phase === 'reward' ? HUNT.reward_s : HUNT.punish_s)) { huntFx.visible = false; startEpisode(H.seed + 1); }
+    } else if (H.phase === 'hunt') {
+      const brake = HUNT.freeze_brakes ? 1 - M.freeze : 1;
+      speed = (HUNT.speed_max * M.forward - HUNT.speed_reverse * M.backward) * brake;
+      turn = HUNT.turn_sign * HUNT.turn_max * HUNT.turn_gain * M.turn;                     // heading rate, +ve = left
+      // learned steering: mushroom-body valence x heat gradient (as the other worlds do with smell)
+      const vs = opts.valenceSteering ?? 1.0, grad = H.heat[1] - H.heat[0];
+      turn += -vs * S.valence * grad * HUNT.valence_steer;
+      S.smoothVal = (S.smoothVal ?? S.valence) + 0.3 * (S.valence - (S.smoothVal ?? S.valence));
+      const dV = (S.smoothVal - (S.lastVal ?? S.smoothVal)) / Math.max(dt, 1e-3); S.lastVal = S.smoothVal;
+      const trend = THREE.MathUtils.clamp(dV * 4, -1, 1);
+      if (trend > 0.05) S.turnBias = Math.random() < .5 ? 1 : -1;
+      turn += vs * Math.max(0, -trend) * 2.5 * (S.turnBias ?? 1);
+      speed += vs * (Math.max(0, trend) * .5 + Math.max(0, S.valence) * .3) * HUNT.speed_max * brake;
+      speed = THREE.MathUtils.clamp(speed, -HUNT.speed_reverse, HUNT.speed_max);
+      const toCenter = Math.atan2(-S.pos.x, -S.pos.z), edge = Math.max(Math.abs(S.pos.x) - (bounds.x - 1.2), Math.abs(S.pos.z) - (bounds.z - 1.2));
+      if (edge > 0 && Math.abs(speed) > .01) { const want = speed > 0 ? toCenter : wrapAngle(toCenter + Math.PI); turn += wrapAngle(want - S.heading) * (2 + 6 * edge); }
+      S.heading = wrapAngle(S.heading + turn * dt);
+      let nx = THREE.MathUtils.clamp(S.pos.x + Math.sin(S.heading) * speed * dt, -bounds.x, bounds.x), nz = THREE.MathUtils.clamp(S.pos.z + Math.cos(S.heading) * speed * dt, -bounds.z, bounds.z);
+      const solid = HUNT.person_r + .1;                                 // people are solid: the flank stops at their skin
+      for (const p of H.people) { const d = Math.hypot(p.x - nx, p.z - nz); if (d < solid && d > 1e-6) { nx = p.x + (nx - p.x) / d * solid; nz = p.z + (nz - p.z) / d * solid; } }
+      S.pos.x = nx; S.pos.z = nz;
+      const d = huntNearest()[0];
+      const noseX = S.pos.x + Math.sin(S.heading) * HUNT.nose_m, noseZ = S.pos.z + Math.cos(S.heading) * HUNT.nose_m;   // the nose must touch the skin
+      let hit = null; for (const p of H.people) if (Math.hypot(p.x - noseX, p.z - noseZ) <= HUNT.person_r + HUNT.touch_m) { const b = huntBearing(p.x, p.z)[1]; if (hit === null || Math.abs(b) < Math.abs(hit)) hit = b; }
+      if (hit !== null) { const frontal = Math.abs(hit) < HUNT.frontal_deg * Math.PI / 180; H.reward = frontal ? 1 : HUNT.side_reward; H.phase = 'reward'; H.phaseT = 0; H.touches++; if (frontal) H.frontal++; H.log.push(`episode ${H.episode}: ${frontal ? 'head-on' : 'glancing'} touch at ${H.t.toFixed(1)} s`); }
+      else if (H.t >= HUNT.episode_s) { H.phase = 'punish'; H.phaseT = 0; H.misses++; H.log.push(`episode ${H.episode}: timeout, closest ${d.toFixed(2)} m`); }
+    }
+    S.selfMotion = Math.min(1, Math.abs(speed) / HUNT.speed_max);
+    const T = targetPose(S.t, 0);
+    for (const k in S.pose) S.pose[k] = lerp(S.pose[k], T[k], .22);
+    fly.setPose(S.pose);
+    fly.root.position.copy(S.pos); fly.root.rotation.y = S.heading;
+    fly.root.rotation.z = -.15 * (turn / HUNT.turn_max);          // lean into the turn
+    fly.root.rotation.x = -.05 * (speed / HUNT.speed_max);
+    controls.target.lerp(new THREE.Vector3(S.pos.x, .3, S.pos.z), .08);
+    controls.update();
+    postSenses(performance.now());
+    renderer.render(scene, camera);
+  }
+  function setHuntConfig(cfg) { if (cfg) for (const k in cfg) if (k in HUNT) HUNT[k] = (k === 'arena') ? { ...HUNT.arena, ...cfg.arena } : cfg[k]; }
   function setWorld(name) {
-    clearWorld(); windowMesh.visible = true; assay.phase = 'idle';
-    if (name === 'arena') buildArena(); else buildTable();
+    clearWorld(); windowMesh.visible = true; assay.phase = 'idle'; H.phase = 'idle'; mixers = []; H.people = [];
+    fly.root.scale.setScalar(1); fly.root.rotation.z = 0; eyeCam.far = 80; eyeCam.fov = 95; eyeCam.updateProjectionMatrix(); setRetina(80, 60);
+    if (name === 'arena') buildArena(); else if (name === 'hunt') buildHunt(); else buildTable();
     S.flight = 0; S.flightT = 0; S.landingT = 0; S.airborne = 0; S.alt = 0; S.pos.y = 0; S.dust = 0;
     controls.target.set(S.pos.x, .8, S.pos.z); camera.position.set(S.pos.x + 7, 7, S.pos.z - 9);
   }
@@ -207,7 +334,7 @@ export function createFlyStage(host, retinaCanvas, opts = {}) {
     S.state = p.state; S.asleep = !!p.asleep; S.valence = p.valence || 0;
     if (p.motor) for (const k in M) if (k in p.motor) M[k] = p.motor[k];
     const s = p.sees; S.objSeen = s ? s.obj[2] : 0; S.objX = s ? s.obj[0] : 0;
-    if (M.jump > 0.5 && S.flight <= 0 && !S.jumpCooldown && S.t > S.restUntil) takeoff();
+    if (M.jump > 0.5 && S.flight <= 0 && !S.jumpCooldown && S.t > S.restUntil && world.name !== 'hunt') takeoff();
     if (M.jump < 0.2) S.jumpCooldown = false;
   }
   function takeoff() { S.flight = 1; S.flightT = 0; S.jumpCooldown = true; S.jumpDir = wrapAngle(S.heading + Math.PI + (S.objX || 0) * .9); }
@@ -215,6 +342,7 @@ export function createFlyStage(host, retinaCanvas, opts = {}) {
   // ---- senses computed by the world ---------------------------------------------------------
   const tmp = new THREE.Vector3();
   function senseWorld(dt) {
+    if (world.name === 'hunt') { senseHunt(); return; }
     const hunger = 1 - S.satiety;
     // antennae positions in world space (head is ~0.6 mm ahead of the root)
     const ant = side => { tmp.set(side * .12, 0, .75); tmp.applyAxisAngle(new THREE.Vector3(0, 1, 0), S.heading); return tmp.clone().add(S.pos); };
@@ -259,6 +387,8 @@ export function createFlyStage(host, retinaCanvas, opts = {}) {
         body: JSON.stringify({ odor: S.odor, odor_b: S.odorB, sugar: +S.sugar.toFixed(3), dust: +S.dust.toFixed(3), moist: +S.moist.toFixed(3),
                                satiety: +S.satiety.toFixed(3), airborne: S.airborne > 0, feeding: +S.feeding.toFixed(2),
                                self_motion: +S.selfMotion.toFixed(3), world: world.name,
+                               heat: [+H.heat[0].toFixed(3), +H.heat[1].toFixed(3)], bitter: H.bitter,
+                               hunt: { phase: H.phase, t: +H.t.toFixed(1), episode: H.episode, touches: H.touches, frontal: H.frontal, misses: H.misses, nearest: +H.nearest.toFixed(2), seed: H.seed },
                                assay: { phase: assay.phase, t: +assay.t.toFixed(1), sideA: +assay.sideA.toFixed(1), sideB: +assay.sideB.toFixed(1), fed: +assay.fed.toFixed(1), naive: assay.naive, trained: assay.trained } }) }).catch(() => {});
     }
   }
@@ -267,7 +397,7 @@ export function createFlyStage(host, retinaCanvas, opts = {}) {
   function targetPose(t, speed) {
     const P = S.target; for (const k in P) P[k] = 0;
     const spread = (l, r = l) => { P['L.wing.spread'] = -l; P['R.wing.spread'] = r; };
-    const sleep = S.asleep ? 1 : 0, air = S.airborne, landing = S.landingT > 0 ? 1 : 0;
+    const sleep = S.asleep ? 1 : 0, air = S.airborne, landing = S.landingT > 0 ? 1 : 0, veh = world.name === 'hunt' ? 1 : 0;
     const gait = Math.min(1, Math.abs(speed) / 3.0);
     spread(25 * Math.PI / 180);
     P['L.antenna'] = .06 * Math.sin(t * 2) * (1 - M.freeze); P['R.antenna'] = -P['L.antenna'];
@@ -283,12 +413,14 @@ export function createFlyStage(host, retinaCanvas, opts = {}) {
       femur = lerp(femur, side * .3, sleep); tibia = lerp(tibia, -side * .45, sleep);
       femur = lerp(femur, side * .12, M.freeze * .6); tibia = lerp(tibia, -side * .15, M.freeze * .6);
       femur = lerp(femur, -side * .5, air * (1 - landing)); tibia = lerp(tibia, side * .65, air * (1 - landing));
+      femur = lerp(femur, side * .45, veh); tibia = lerp(tibia, -side * .6, veh); tarsus = lerp(tarsus, .3, veh);   // the vehicle: legs tucked
       P[`${id}.coxa`] = coxa; P[`${id}.femur`] = femur; P[`${id}.tibia`] = tibia; P[`${id}.tarsus`] = tarsus;
     }
     let sp = 25 * Math.PI / 180, flapL = 0, flapR = 0;
     if (air > 0) { const f = Math.sin(t * 55); sp = lerp(sp, 1.05, air); flapL = .95 * f * air; flapR = -.95 * f * air; P['L.haltere'] = .35 * Math.sin(t * 55 + Math.PI) * air; P['R.haltere'] = -P['L.haltere']; }
     sp = lerp(sp, 1.35 + .08 * Math.sin(t * 40), M.threat * (1 - air)); flapL = lerp(flapL, .35, M.threat * (1 - air)); flapR = lerp(flapR, -.35, M.threat * (1 - air));
     sp = lerp(sp, .6, M.land * (1 - air));
+    sp = lerp(sp, .12, veh);
     spread(sp);
     if (M.song > 0.05 && air <= 0) { const ext = lerp(sp, 1.4, M.song), vib = .18 * Math.sin(t * 70) * M.song; if (S.songSide > 0) { P['L.wing.spread'] = -ext; flapL += vib; } else { P['R.wing.spread'] = ext; flapR -= vib; } }
     P['L.wing.flap'] = flapL; P['R.wing.flap'] = flapR;
@@ -305,6 +437,7 @@ export function createFlyStage(host, retinaCanvas, opts = {}) {
     if (other.root.visible) stepOther(dt);
     stepAssay(dt);
     senseWorld(dt);
+    if (world.name === 'hunt') { stepHunt(dt); return; }
     const still = Math.max(M.freeze, S.asleep ? 1 : 0, M.groom * .8, M.threat * .6, M.song * .5, S.feeding);
     let speed, turn;
     if (S.flight > 0) {
@@ -368,5 +501,5 @@ export function createFlyStage(host, retinaCanvas, opts = {}) {
   }
 
   setWorld(opts.world || 'table');
-  return { onPacket, step, fly, scene, motor: M, state: S, setWebcam, closeWindow, setWorld, startAssay, assay, world };
+  return { onPacket, step, fly, scene, motor: M, state: S, setWebcam, closeWindow, setWorld, startAssay, assay, world, hunt: H, setHuntConfig };
 }

@@ -34,6 +34,7 @@ static void readEye(JsonObjectConst o, EyeParams &e) {
   e.pr = o["pr"] | e.pr;
   e.ut = o["ut"] | e.ut;
   e.lt = o["lt"] | e.lt;
+  e.tilt = constrain(o["tilt"] | 0.0f, -0.6f, 0.6f);
   JsonArrayConst t = o["tint"];
   if (t.size() == 3) { e.r = t[0]; e.g = t[1]; e.b = t[2]; }
 }

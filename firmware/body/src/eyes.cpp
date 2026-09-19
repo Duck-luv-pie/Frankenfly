@@ -31,6 +31,7 @@ void Eye::tick() {
   cur_.pr = ease(cur_.pr, target_.pr);
   cur_.ut = ease(cur_.ut, target_.ut);
   cur_.lt = ease(cur_.lt, target_.lt);
+  cur_.tilt = ease(cur_.tilt, target_.tilt);
   cur_.r = (uint8_t)ease(cur_.r, target_.r);
   cur_.g = (uint8_t)ease(cur_.g, target_.g);
   cur_.b = (uint8_t)ease(cur_.b, target_.b);
@@ -55,7 +56,9 @@ void Eye::draw(bool full) {
                    rgb(drawn_.r, drawn_.g, drawn_.b) != iris;
   bool pupilChanged = irisMoved || pupR != (int)(irisR * (0.25f + 0.65f * drawn_.pr));
   int oldTop = c - (int)(R * drawn_.ut), oldBot = c + (int)(R * drawn_.lt);
-  bool lidsChanged = full || oldTop != topLid || oldBot != botLid;
+  const int slope = (int)(cur_.tilt * R * (1 - blink_));
+  bool lidsChanged = full || oldTop != topLid || oldBot != botLid ||
+                     slope != (int)(drawn_.tilt * R);
 
   if (full) {
     gfx_->fillScreen(BG);
@@ -77,7 +80,10 @@ void Eye::draw(bool full) {
   }
   // lids: fill the parts of the eye disc above topLid and below botLid
   if (lidsChanged || irisMoved || pupilChanged) {
-    if (topLid > c - R) gfx_->fillRect(0, 0, EYE_SIZE, topLid, LID);
+    const int leftTop = constrain(topLid - slope, 0, EYE_SIZE);
+    const int rightTop = constrain(topLid + slope, 0, EYE_SIZE);
+    gfx_->fillTriangle(0, 0, EYE_SIZE - 1, 0, 0, leftTop, LID);
+    gfx_->fillTriangle(EYE_SIZE - 1, 0, EYE_SIZE - 1, rightTop, 0, leftTop, LID);
     if (botLid < c + R) gfx_->fillRect(0, botLid, EYE_SIZE, EYE_SIZE - botLid, LID);
     // round the corners back to black outside the eye disc
     gfx_->drawCircle(c, c, R + 1, BG);
@@ -85,6 +91,7 @@ void Eye::draw(bool full) {
   drawn_ = cur_;
   drawn_.ut = ut;
   drawn_.lt = lt;
+  drawn_.tilt = cur_.tilt * (1 - blink_);
 }
 
 // ------------------------------------------------------------------------------------------

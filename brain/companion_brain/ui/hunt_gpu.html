@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Hunt GPU · live</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root { --bg: #0d1018; --panel: #141a26; --ink: #dfe6f0; --dim: #8a94a6; --warm: #ff8a3c; --cool: #5aa9ff; --ok: #7fd68a; --bad: #e0575b; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); font: 13px/1.4 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
+  #stage { position: fixed; inset: 0; }
+  #hud { position: fixed; left: 12px; top: 12px; width: 300px; background: rgba(20, 26, 38, .88); border: 1px solid #263044; border-radius: 10px; padding: 12px 14px; backdrop-filter: blur(6px); }
+  #hud h1 { font-size: 14px; margin: 0 0 6px; font-weight: 600; }
+  #hud .row { display: flex; justify-content: space-between; gap: 8px; margin: 2px 0; }
+  #hud .row span:last-child { font-variant-numeric: tabular-nums; }
+  .dim { color: var(--dim); }
+  .bar { height: 8px; background: #1f2736; border-radius: 4px; overflow: hidden; }
+  .bar i { display: block; height: 100%; background: var(--warm); width: 0; transition: width 60ms linear; }
+  .bar.cool i { background: var(--cool); }
+  .bar.ok i { background: var(--ok); }
+  .lr { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 4px 0 8px; }
+  #retina { display: grid; grid-template-columns: repeat(24, 1fr); gap: 1px; height: 22px; margin: 4px 0 8px; }
+  #retina i { display: block; background: #1f2736; border-radius: 2px; transition: background 60ms linear; }
+  #hist { margin: 8px 0 0; padding: 0; list-style: none; font-size: 12px; }
+  #hist li { display: flex; justify-content: space-between; color: var(--dim); }
+  #hist li.hit { color: var(--ink); }
+  button { background: #22304a; color: var(--ink); border: 1px solid #34456a; border-radius: 6px; padding: 4px 9px; cursor: pointer; font: inherit; }
+  button:hover { background: #2c3d5e; }
+  #ctl { display: flex; gap: 6px; align-items: center; margin-top: 10px; }
+  #ctl input { width: 90px; }
+  #phase { font-weight: 600; }
+  #phase.locked { color: var(--ok); }
+  #eye { position: fixed; right: 12px; bottom: 12px; width: 420px; height: 210px; border: 1px solid #263044; border-radius: 10px; overflow: hidden; pointer-events: none; }   /* the inset itself is drawn on the canvas underneath */
+  #eye span { position: absolute; left: 8px; top: 8px; color: var(--ink); font-size: 12px; background: rgba(20, 26, 38, .8); padding: 2px 7px; border-radius: 6px; }
+  #lobo { background: #4a2230; border-color: #7a3448; }
+  #lobo.on { background: #7a3448; border-color: #b04a66; }
+  #heat.off { background: #2a2a2a; border-color: #555; color: #888; }
+  #range.off { background: #223a4a; border-color: #34607a; }
+  #hud.lobotomized h1 { color: #ff8aa0; }
+  #brain { position: fixed; right: 12px; top: 12px; width: 420px; background: rgba(20, 26, 38, .88); border: 1px solid #263044; border-radius: 10px; padding: 10px 12px; display: none; }
+  #brain h2 { font-size: 13px; margin: 0 0 6px; font-weight: 600; }
+  #neurons { width: 396px; height: 260px; display: block; background: #0b0e15; border-radius: 6px; }
+  #brain .row { display: flex; justify-content: space-between; gap: 8px; margin: 2px 0; font-variant-numeric: tabular-nums; }
+  #types { font-size: 11.5px; color: var(--dim); min-height: 30px; margin-top: 4px; }
+  .lr3 { display: grid; grid-template-columns: 90px 1fr 1fr; gap: 6px; align-items: center; margin: 3px 0; font-size: 12px; }
+</style>
+</head>
+<body>
+<div id="stage"></div>
+<div id="hud">
+  <h1><span id="title">The GPU fly, hunting</span> <span class="dim" id="who"></span></h1>
+  <div class="row"><span>episode <b id="ep">–</b> <span class="dim" id="seed"></span></span><span id="t">0.0 s</span></div>
+  <div class="row"><span id="phase">searching</span><span id="touches"></span></div>
+  <div class="row dim"><span>reward this episode</span><span id="total">0</span></div>
+  <div class="dim" style="margin-top:8px">heat · left / right (the hot cells)</div>
+  <div class="lr"><div class="bar"><i id="hl"></i></div><div class="bar"><i id="hr"></i></div></div>
+  <div class="dim" id="runners"></div>
+  <div class="dim">retina · 24 columns across 150°, left → right (object, motion tint); dim glow = out of the fly's range</div>
+  <div id="retina"></div>
+  <div class="dim">drive · forward / turn (right +)</div>
+  <div class="lr"><div class="bar ok"><i id="fwd"></i></div><div class="bar cool"><i id="turn"></i></div></div>
+  <div class="row" style="margin-top:6px"><span>heading <b id="hdg">–</b></span><span>yaw <b id="yaw">–</b> °/s</span></div>
+  <div class="row dim" id="bodyrow" style="display:none"><span>rover told</span><span id="body">–</span></div>
+  <div class="row dim" style="margin-top:6px"><span>last 50 episodes</span><span id="stats">–</span></div>
+  <ul id="hist"></ul>
+  <div id="ctl"><button id="pause">pause</button><button id="next">next episode</button><label class="dim">speed <input id="speed" type="range" min="0.25" max="4" step="0.25" value="1"> <span id="spd">1×</span></label></div>
+  <div id="ctl"><button id="cam">camera: follow</button><button id="lobo">lobotomize</button><button id="heat">heat: on</button><button id="range">range: 6 m</button></div>
+</div>
+<div id="eye"><span id="eyelabel">what the fly sees · 150° eye, 6 m range</span></div>
+<div id="brain">
+  <h2>The fly's brain <span class="dim" id="brainmeta"></span></h2>
+  <canvas id="neurons" width="792" height="520"></canvas>
+  <div class="row dim"><span>spikes this tick · gold = visual inputs, orange = hot cells, green = descending, white = the rest</span><span id="nspk">–</span></div>
+  <div id="types"></div>
+  <div class="lr3"><span class="dim">DNa02 L / R</span><div class="bar cool"><i id="dna02l"></i></div><div class="bar cool"><i id="dna02r"></i></div></div>
+  <div class="lr3"><span class="dim">DNa01 L / R</span><div class="bar cool"><i id="dna01l"></i></div><div class="bar cool"><i id="dna01r"></i></div></div>
+  <div class="lr3"><span class="dim">DN_all L / R</span><div class="bar ok"><i id="dnalll"></i></div><div class="bar ok"><i id="dnallr"></i></div></div>
+  <div class="row dim"><span>decoded forward / turn</span><span id="bmotor">–</span></div>
+</div>
+<script type="importmap">{"imports":{"three":"/vendor/three.module.js","three/addons/":"/vendor/addons/"}}</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { createFly, demonstrationPose } from './fly.js';
+
+const $ = id => document.getElementById(id);
+const mat = (color, roughness = .7, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness, ...extra });
+const ARENA = { x: 7.4, z: 6.1 };
+const humanFiles = ['human-shorts.glb', 'human-jeans.glb', 'human-chinos.glb', 'human-joggers.glb'];
+
+// ---- scene ------------------------------------------------------------------------------------
+const host = $('stage');
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2)); renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputColorSpace = THREE.SRGBColorSpace; renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.15;
+host.appendChild(renderer.domElement);
+const scene = new THREE.Scene(); scene.background = new THREE.Color('#c9d3e0'); scene.fog = new THREE.Fog('#c9d3e0', 30, 70);
+const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, .05, 200); camera.position.set(0, 9, 12);
+const controls = new OrbitControls(camera, renderer.domElement); controls.enableDamping = true; controls.target.set(0, .3, 0);
+// the fly's eye: a camera on its head; its sensing range is drawn as fog for this camera only
+const eyeCam = new THREE.PerspectiveCamera(100, 2, .02, 60);
+const eyeFog = new THREE.Fog('#c9d3e0', 4.5, 6.5);
+const EYE = { w: 420, h: 210 };
+scene.add(new THREE.HemisphereLight('#ffffff', '#8c8478', 1.1));
+const sun = new THREE.DirectionalLight('#fff4e0', 2.2); sun.position.set(6, 12, 4); sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
+Object.assign(sun.shadow.camera, { left: -10, right: 10, top: 10, bottom: -10, near: 1, far: 40 }); scene.add(sun);
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(2 * ARENA.x + 2, 2 * ARENA.z + 2), mat('#d8d2c4', .95)); floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
+const grid = new THREE.GridHelper(16, 16, '#b9b2a4', '#c9c2b4'); grid.position.y = .003; grid.material.transparent = true; grid.material.opacity = .5; scene.add(grid);
+const railMat = mat('#8a8578', .9);
+for (const s of [-1, 1]) {
+  const rail = new THREE.Mesh(new THREE.BoxGeometry(.16, .22, 2 * ARENA.z + 2), railMat); rail.position.set(s * (ARENA.x + .6), .11, 0); rail.castShadow = true; scene.add(rail);
+  const back = new THREE.Mesh(new THREE.BoxGeometry(2 * ARENA.x + 2, .22, .16), railMat); back.position.set(0, .11, s * (ARENA.z + .6)); back.castShadow = true; scene.add(back);
+}
+// the fly: the Body Lab rig, scaled to a 32 cm vehicle, resting pose (legs tucked, wings folded: it is an RC car here)
+const fly = createFly(); fly.root.scale.setScalar(.135); scene.add(fly.root);
+const beam = new THREE.Mesh(new THREE.CircleGeometry(1, 32, -Math.PI / 2 - 75 * Math.PI / 180, 150 * Math.PI / 180), mat('#5aa9ff', 1, { transparent: true, opacity: .12, depthWrite: false, side: THREE.DoubleSide }));
+beam.rotation.x = -Math.PI / 2; beam.scale.setScalar(3); scene.add(beam);       // the field of view on the floor
+const roverBeam = new THREE.Mesh(new THREE.CircleGeometry(1, 16, -Math.PI / 2 - 6 * Math.PI / 180, 12 * Math.PI / 180), mat('#ff5a5a', 1, { transparent: true, opacity: .55, depthWrite: false, side: THREE.DoubleSide }));
+roverBeam.rotation.x = -Math.PI / 2; roverBeam.scale.setScalar(1.6); roverBeam.visible = false; scene.add(roverBeam);   // where the rover thinks it points
+const lockRing = new THREE.Mesh(new THREE.RingGeometry(.42, .5, 48), mat('#7fd68a', .5, { transparent: true, opacity: .85, side: THREE.DoubleSide, emissive: '#3c8a45', emissiveIntensity: .7 }));
+lockRing.rotation.x = -Math.PI / 2; lockRing.position.y = .012; lockRing.visible = false; scene.add(lockRing);
+const targetLine = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]), new THREE.LineBasicMaterial({ color: '#3c8a45', transparent: true, opacity: .8 }));
+scene.add(targetLine);
+const TRAIL = 400; const trailPos = new Float32Array(3 * TRAIL); let trailN = 0;      // the fly's path this episode, a ring of points
+const trailLine = new THREE.Line(new THREE.BufferGeometry().setAttribute('position', new THREE.BufferAttribute(trailPos, 3)), new THREE.LineBasicMaterial({ color: '#2a3350', transparent: true, opacity: .55 })); scene.add(trailLine);
+trailLine.geometry.setDrawRange(0, 0); trailLine.frustumCulled = false;
+// people: the same GLB humans as the dashboard, glow = their warmth
+const loader = new GLTFLoader(); const people = []; const mixers = [];
+function person(i) {
+  const p = { model: null, mixer: null, glow: null, x: 0, z: 0, yaw: 0, speed: 0 };
+  p.glow = new THREE.Mesh(new THREE.CircleGeometry(1, 40), mat('#ff9a4a', 1, { transparent: true, opacity: .22, emissive: '#ff6a00', emissiveIntensity: .5, depthWrite: false }));
+  p.glow.rotation.x = -Math.PI / 2; p.glow.position.y = .006; scene.add(p.glow);
+  loader.load('/models/humans/' + humanFiles[i % humanFiles.length], g => {
+    g.scene.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+    scene.add(g.scene); p.model = g.scene;
+    if (g.animations.length) { p.mixer = new THREE.AnimationMixer(g.scene); p.mixer.clipAction(g.animations[0]).play(); mixers.push(p.mixer); }
+  }, undefined, e => console.warn('human model failed to load', e));
+  return p;
+}
+for (let i = 0; i < 24; i++) { const c = document.createElement('i'); $('retina').appendChild(c); }
+const cells = [...$('retina').children];
+
+// ---- state from the server -----------------------------------------------------------------
+let S = null, lastSeed = null, follow = true;
+// ---- the brain panel: the subcircuit's neurons at their anatomical positions, lit by the tick's spikes ----
+let BRAIN = null, glow = null;
+const CLASS_COLOR = { visual_projection: '#5aa9ff', sensory: '#ff8a3c', central: '#9aa7bb', descending: '#7fd68a', ascending: '#c9a0ff', optic: '#5aa9ff', visual_centrifugal: '#5aa9ff' };
+const GROUP_COLOR = { LC10a: '#ffe36a', LC11: '#ffe36a', LC12: '#ffd23c', LC15: '#ffd23c', TRN_hot: '#ff8a3c', DNa01: '#7fd68a', DNa02: '#7fd68a', DNp09: '#7fd68a', MDN: '#7fd68a', DN: '#4fb36a' };
+fetch('/brain.json').then(r => r.json()).then(b => { if (!b) return; BRAIN = b; glow = new Float32Array(b.n); $('brain').style.display = 'block'; $('brainmeta').textContent = `· ${b.n.toLocaleString()} neurons of the hunter subcircuit, frontal view`; }).catch(() => {});
+function drawBrain() {
+  if (!BRAIN) return;
+  const cv = $('neurons'), ctx = cv.getContext('2d'), W = cv.width, H = cv.height;
+  ctx.fillStyle = '#0b0e15'; ctx.fillRect(0, 0, W, H);
+  const n = BRAIN.n;
+  for (let i = 0; i < n; i++) {
+    const x = BRAIN.x[i], y = BRAIN.y[i]; if (x < 0) continue;
+    const g = glow[i]; glow[i] *= .82;
+    const px = 12 + x * (W - 24), py = 12 + y * (H - 24);
+    if (g > .05) { ctx.fillStyle = GROUP_COLOR[BRAIN.group[i]] || '#ffffff'; ctx.globalAlpha = Math.min(1, g); ctx.beginPath(); ctx.arc(px, py, 1.2 + 2.8 * Math.min(1, g), 0, 6.283); ctx.fill(); }
+    else { ctx.fillStyle = CLASS_COLOR[BRAIN.cls[i]] || '#6b7385'; ctx.globalAlpha = .35; ctx.fillRect(px, py, 1.5, 1.5); }
+  }
+  ctx.globalAlpha = 1;
+}
+const es = new EventSource('/events');
+es.onmessage = ev => {
+  const st = JSON.parse(ev.data); if (!st.t && st.t !== 0) return;
+  S = st;
+  if (st.seed !== lastSeed) { lastSeed = st.seed; trailN = 0; }
+  while (people.length < st.people.length) people.push(person(people.length));
+  st.people.forEach((q, i) => { const p = people[i]; p.x = q[0]; p.z = q[1]; p.speed = q[2]; p.yaw = q[3]; p.stamina = q[4]; p.resting = !!q[5]; p.sensed = !!q[6]; p.alert = !!q[7]; });
+  people.forEach((p, i) => { const on = i < st.people.length; p.glow.visible = on; if (p.model) p.model.visible = on; });
+  if (trailN === TRAIL) { trailPos.copyWithin(0, 3); trailN--; }
+  trailPos.set([st.fly[0], .02, st.fly[1]], 3 * trailN++); trailLine.geometry.attributes.position.needsUpdate = true; trailLine.geometry.setDrawRange(0, trailN);
+  // HUD
+  $('ep').textContent = st.episode; $('seed').textContent = 'seed ' + st.seed; $('t').textContent = st.t.toFixed(1) + ' s';
+  if (st.lobotomized !== lobotomized) showLobotomy(!!st.lobotomized);
+  if (st.heat_on !== undefined && st.heat_on !== heatOn) showHeat(!!st.heat_on);
+  $('hdg').textContent = st.heading_deg !== undefined ? st.heading_deg.toFixed(0) + '°' : '–';
+  $('yaw').textContent = st.yaw_dps !== undefined ? (st.yaw_dps > 0 ? '+' : '') + st.yaw_dps.toFixed(0) : '–';
+  if (st.body) { $('bodyrow').style.display = ''; $('body').textContent = (st.body.heading_deg !== undefined ? `rover ≈ ${st.body.heading_deg.toFixed(0)}° (off by ${st.body.error_deg > 0 ? '+' : ''}${st.body.error_deg.toFixed(0)}°) · ` : '') + `yaw stick ${(st.body.sticks.yaw * 100).toFixed(0)}%${st.body.saturated ? ' (maxed)' : ''}${st.body.rotation_only ? ' · rotation only' : ''}`; }
+  $('eyelabel').textContent = `what the fly sees · ${st.fov_deg || 150}° eye, ${st.see_m ? st.see_m + ' m range' : 'unlimited range'}${st.lobotomized ? ' · lobotomized' : ''}`;
+  if (st.see_m !== undefined) { const u = !st.see_m; if (u !== unlimited) { unlimited = u; $('range').textContent = u ? 'range: unlimited' : `range: ${st.see_m} m`; $('range').classList.toggle('off', u); } }
+  if (st.brain && glow) {
+    // a lone spike of a background neuron (the 1 Hz floor) is a flicker; bursts and the hunter's own groups light up
+    for (const [i, c] of st.brain.lit) glow[i] = Math.max(glow[i], BRAIN.group[i] ? Math.min(1, .5 + c / 4) : Math.min(1, c / 3 - .05));
+    $('nspk').textContent = st.brain.n_spikes;
+    $('types').textContent = st.brain.top.map(([t, c]) => `${t} ${c}`).join(' · ') || '(quiet)';
+    const r = st.brain.rates, cap = (v, m) => Math.min(100, 100 * v / m) + '%';
+    $('dna02l').style.width = cap(r.DNa02[0], 120); $('dna02r').style.width = cap(r.DNa02[1], 120);
+    $('dna01l').style.width = cap(r.DNa01[0], 60); $('dna01r').style.width = cap(r.DNa01[1], 60);
+    $('dnalll').style.width = cap(r.DN_all[0], 4); $('dnallr').style.width = cap(r.DN_all[1], 4);
+    $('bmotor').textContent = `${(st.brain.motor.forward ?? 0).toFixed(2)} / ${(st.brain.motor.turn ?? 0).toFixed(2)}  (DNa02 ${r.DNa02[0]} / ${r.DNa02[1]} Hz)`;
+  }
+  const ph = $('phase'); ph.className = st.locked ? 'locked' : '';
+  ph.textContent = st.locked ? `locked on person ${st.target + 1} since ${st.t_first.toFixed(1)} s · tracking ${(100 * st.track).toFixed(0)}%` : `searching · target person ${st.target + 1}`;
+  $('touches').textContent = st.touches ? `${st.touches} contact${st.touches > 1 ? 's' : ''}` : '';
+  $('total').textContent = st.total.toFixed(1) + (st.reward > .5 ? `  (+${st.reward.toFixed(1)})` : '');
+  $('hl').style.width = (100 * st.heat[0]) + '%'; $('hr').style.width = (100 * st.heat[1]) + '%';
+  $('runners').textContent = st.humans + (st.people.length && st.people[0].length > 5 ? ' · ' + st.people.map((q, i) => `${i + 1}: ${q[7] ? 'evading' : 'strolling'}${q[5] ? ', resting' : q[2] > 1.7 ? ', sprinting' : ''}${q[6] ? '' : ' (out of range)'}`).join(' · ') : '');
+  st.vis.forEach((v, i) => { const m = st.motion[i]; cells[i].style.background = v > 0 ? `rgb(${Math.round(60 + 195 * v)}, ${Math.round(60 + 60 * v + 120 * m)}, ${Math.round(40 + 40 * v)})` : '#1f2736'; });
+  $('fwd').style.width = (100 * Math.max(0, st.drive[0])) + '%';
+  const tb = $('turn'); tb.style.width = (50 * Math.abs(st.drive[1])) + '%'; tb.style.marginLeft = st.drive[1] >= 0 ? '50%' : (50 - 50 * Math.abs(st.drive[1])) + '%';
+  const s = st.stats; $('stats').textContent = s.n ? `${(100 * s.touch_rate).toFixed(0)}% touch · ${s.t_touch ?? '–'} s · track ${s.track != null ? (100 * s.track).toFixed(0) + '%' : '–'}` : '–';
+  $('hist').innerHTML = st.history.slice().reverse().map(e => `<li class="${e.touched ? 'hit' : ''}"><span>seed ${e.seed}</span><span>${e.touched ? `touch ${e.t_touch.toFixed(1)} s · track ${(100 * e.track).toFixed(0)}% · ${e.touches}×` : 'no touch'} · ${e.total_reward.toFixed(0)}</span></li>`).join('');
+};
+const post = body => fetch('/control', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).catch(() => {});
+let paused = false;
+$('pause').onclick = () => { paused = !paused; $('pause').textContent = paused ? 'resume' : 'pause'; post({ paused }); };
+$('next').onclick = () => post({ next: true });
+$('speed').oninput = e => { $('spd').textContent = e.target.value + '×'; post({ speed: +e.target.value }); };
+// camera modes: follow (chase cam) -> bird (locked top-down: north stays up, so the fly is seen turning) -> free
+let camMode = 'follow';
+$('cam').onclick = () => {
+  camMode = camMode === 'follow' ? 'bird' : camMode === 'bird' ? 'free' : 'follow';
+  follow = camMode === 'follow';
+  controls.enabled = camMode !== 'bird';
+  if (camMode !== 'bird') camera.up.set(0, 1, 0);
+  $('cam').textContent = { follow: 'camera: follow', bird: "camera: bird's eye", free: 'camera: free' }[camMode];
+};
+let lobotomized = false;
+$('lobo').onclick = () => { post({ lobotomy: !lobotomized }); };          // the server's state stream flips the button
+let heatOn = true;
+$('heat').onclick = () => { post({ heat: !heatOn }); };                   // likewise: the state stream confirms it
+let unlimited = false;
+$('range').onclick = () => { post({ unlimited: !unlimited }); };
+function showHeat(on) { heatOn = on; $('heat').textContent = on ? 'heat: on' : 'heat: off (eyes only)'; $('heat').classList.toggle('off', !on); }
+function showLobotomy(on) { lobotomized = on; $('title').textContent = on ? 'The lobotomized fly, twitching' : 'The GPU fly, hunting'; $('lobo').textContent = on ? 'restore the smart fly' : 'lobotomize'; $('lobo').classList.toggle('on', on); $('hud').classList.toggle('lobotomized', on); }
+
+// ---- draw -----------------------------------------------------------------------------------
+const clock = new THREE.Clock(); const pos = new THREE.Vector3(); let heading = 0, t = 0;
+function frame() {
+  const dt = Math.min(.1, clock.getDelta()); t += dt; fit();
+  if (S) {
+    pos.lerp(new THREE.Vector3(S.fly[0], 0, S.fly[1]), .5);
+    heading += Math.atan2(Math.sin(S.fly[2] - heading), Math.cos(S.fly[2] - heading)) * .5;
+    fly.root.position.copy(pos); fly.root.rotation.y = heading; fly.root.rotation.z = -.15 * S.drive[1]; fly.root.rotation.x = -.05 * (S.fly[3] / 1.6);
+    fly.setPose(demonstrationPose(fly, 'rest', t, 25));
+    beam.position.set(pos.x, .008, pos.z); beam.rotation.z = heading;
+    if (S.body && S.body.heading_deg !== undefined) { roverBeam.visible = true; roverBeam.position.set(pos.x, .009, pos.z); roverBeam.rotation.z = -S.body.heading_deg * Math.PI / 180; } else roverBeam.visible = false;
+    for (const p of people) { if (p.model) { p.model.position.set(p.x, 0, p.z); p.model.rotation.y = p.yaw; } if (p.mixer) p.mixer.timeScale = Math.min(2.4, p.speed / .9); p.glow.position.set(p.x, .006, p.z); p.glow.material.color.set(p.resting ? '#5aa9ff' : '#ff9a4a'); p.glow.material.emissive.set(p.resting ? '#2a6ad0' : '#ff6a00'); p.glow.scale.setScalar(p.resting ? .7 : .6 + .4 * (p.stamina ?? 1)); p.glow.material.opacity = p.sensed ? .32 : .1; }
+    const tp = people[S.target];
+    if (tp) { targetLine.geometry.setFromPoints([new THREE.Vector3(pos.x, .05, pos.z), new THREE.Vector3(tp.x, .05, tp.z)]); targetLine.material.color.set(S.locked ? '#3c8a45' : '#8a94a6'); }
+    lockRing.visible = S.locked && !!tp; if (tp) lockRing.position.set(tp.x, .012, tp.z);
+    if (follow) { controls.target.lerp(new THREE.Vector3(pos.x, .3, pos.z), .08); const want = new THREE.Vector3(pos.x - 4.5 * Math.sin(heading), 3.2, pos.z - 4.5 * Math.cos(heading)); camera.position.lerp(want, .04); }
+    if (camMode === 'bird') {                                     // straight down over the fly, orientation locked (+z up the screen)
+      camera.up.set(0, 0, -1);
+      camera.position.lerp(new THREE.Vector3(pos.x, 7, pos.z + 1e-4), .2);
+      controls.target.copy(pos);
+      camera.lookAt(pos.x, 0, pos.z);
+    }
+  }
+  for (const m of mixers) m.update(dt);
+  drawBrain();
+  if (camMode !== 'bird') controls.update();
+  renderer.setScissorTest(false); renderer.setViewport(0, 0, host.clientWidth, host.clientHeight); renderer.render(scene, camera);
+  if (S) {                                                           // the inset from the fly's eye
+    const fwd = new THREE.Vector3(Math.sin(heading), 0, Math.cos(heading));
+    eyeCam.position.copy(pos).addScaledVector(fwd, .14).setY(.10); eyeCam.lookAt(pos.clone().addScaledVector(fwd, 5).setY(.25));
+    const hw = (S.fov_deg || 150) / 2 * Math.PI / 180, vfov = 2 * Math.atan(Math.tan(hw) / EYE.w * EYE.h) * 180 / Math.PI;
+    eyeCam.fov = Math.min(120, vfov); eyeCam.aspect = EYE.w / EYE.h; eyeCam.updateProjectionMatrix();
+    const range = S.see_m || 60; eyeFog.near = Math.max(1, range - 1.5); eyeFog.far = range + .5;     // 0 = unlimited: fog far away
+    const fog = scene.fog; scene.fog = eyeFog; fly.root.visible = false; beam.visible = false; roverBeam.visible = false; trailLine.visible = false;
+    const x = host.clientWidth - EYE.w - 12, y = 12;
+    renderer.setScissorTest(true); renderer.setScissor(x, y, EYE.w, EYE.h); renderer.setViewport(x, y, EYE.w, EYE.h);
+    renderer.render(scene, eyeCam);
+    scene.fog = fog; fly.root.visible = true; beam.visible = true; roverBeam.visible = !!(S.body && S.body.heading_deg !== undefined); trailLine.visible = true; renderer.setScissorTest(false);
+  }
+  requestAnimationFrame(frame);
+}
+function fit() { const w = host.clientWidth, h = host.clientHeight; if (renderer.domElement.width !== Math.round(w * renderer.getPixelRatio()) || renderer.domElement.height !== Math.round(h * renderer.getPixelRatio())) { camera.aspect = w / h; camera.updateProjectionMatrix(); renderer.setSize(w, h); } }
+addEventListener('resize', fit);
+window.__hunt = { camera, controls, fly, people, state: () => S, get follow() { return follow; } };
+fetch('/who').then(r => r.text()).then(s => { $('who').textContent = s; }).catch(() => {});
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

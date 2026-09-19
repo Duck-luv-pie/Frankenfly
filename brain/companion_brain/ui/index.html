@@ -87,7 +87,7 @@
   </div>
 
   <div class="panel">
-    <h2>The fly's world <span id="fly-note"><button class="mini" data-world="table">table</button><button class="mini" data-world="arena">two-odor arena</button><button class="mini" id="assay-run">▶ run assay</button></span></h2>
+    <h2>The fly's world <span id="fly-note"><button class="mini" data-world="table">table</button><button class="mini" data-world="arena">two-odor arena</button><button class="mini" data-world="hunt">hunt arena</button><button class="mini" id="assay-run">▶ run assay</button></span></h2>
     <div class="stage" id="arena3d"></div>
     <div id="assay-out" style="font-size:12px;color:var(--muted);margin-top:6px;display:none"></div>
     <div class="bars motor" id="motor"></div>
@@ -169,7 +169,8 @@ function onPacket(p) {
   $('cam-note').textContent = p.vision === 'retina' ? 'what the fly sees → optic lobe' : (p.vision === 'none' ? 'no vision right now (webcam closed; keep this page visible for the fly\'s own eyes)' : 'webcam fallback (keep this page visible to give the fly its own eyes)');
   // keep the checkbox in sync with the brain (e.g. --no-webcam), but not in the seconds right after a user toggle
   if (performance.now() - lastCamToggle > 3000 && typeof p.webcam === 'boolean' && p.webcam !== camOn) setCam(p.webcam, false);
-  if (p.world && p.world.odor) { const w = p.world; $('senses').textContent = `Smell L/R ${w.odor[0].toFixed(2)}/${w.odor[1].toFixed(2)} · sugar ${w.sugar.toFixed(2)} · dust ${w.dust.toFixed(2)} · humid ${w.moist.toFixed(2)} · satiety ${w.satiety.toFixed(2)}`; }
+  if (p.world && p.world.world === 'hunt' && p.world.heat) { const w = p.world; $('senses').textContent = `Heat L/R ${w.heat[0].toFixed(2)}/${w.heat[1].toFixed(2)} · sugar ${w.sugar.toFixed(2)} · bitter ${(w.bitter || 0).toFixed(2)} · nearest person ${w.hunt.nearest.toFixed(2)} m`; }
+  else if (p.world && p.world.odor) { const w = p.world; $('senses').textContent = `Smell L/R ${w.odor[0].toFixed(2)}/${w.odor[1].toFixed(2)} · sugar ${w.sugar.toFixed(2)} · dust ${w.dust.toFixed(2)} · humid ${w.moist.toFixed(2)} · satiety ${w.satiety.toFixed(2)}`; }
   renderTypes(p.top_types);
   flashSpikes(p.spikes);
   fly.onPacket(p);
@@ -318,6 +319,12 @@ document.querySelectorAll('[data-world]').forEach(b => b.onclick = () => { fly.s
 $('assay-run').onclick = () => { fly.startAssay(); document.querySelectorAll('[data-world]').forEach(x => x.style.color = x.dataset.world === 'arena' ? 'var(--text)' : ''); };
 function renderAssay() {
   const a = fly.assay, out = $('assay-out');
+  if (fly.world.name === 'hunt') {
+    const h = fly.hunt; out.style.display = 'block';
+    const phase = { idle: 'loading', hunt: `hunting ${h.t.toFixed(0)} s`, reward: 'TOUCH → sugar + reward dopamine', punish: 'timeout → bitter + punishment dopamine' }[h.phase];
+    out.innerHTML = `<b style="color:var(--text)">episode ${h.episode} · ${phase}</b> · touched <b style="color:var(--text)">${h.touches}</b> (${h.frontal} head-on), missed <b style="color:var(--text)">${h.misses}</b> · nearest person ${h.nearest.toFixed(2)} m · seed ${h.seed} <span>(a 32 cm vehicle: forward / turn from descending neurons, heat + vision in; no walking, no flight)</span>`;
+    return;
+  }
   if (fly.world.name !== 'arena') { out.style.display = 'none'; return; }
   out.style.display = 'block';
   const pi = v => v == null ? '–' : (v >= 0 ? '+' : '') + v.toFixed(2);
@@ -328,7 +335,7 @@ function renderAssay() {
 // ---------------------------------------------------------------- main loop
 let lastFrame = performance.now();
 function loop(now) {
-  const dt = Math.min(0.05, (now - lastFrame) / 1000); lastFrame = now;
+  const dt = Math.min(fly.world.name === 'hunt' ? 0.1 : 0.05, (now - lastFrame) / 1000); lastFrame = now;   // the hunt's clock may step 100 ms when frames are slow
   atlas.step();
   fly.step(dt);
   if ((now | 0) % 4 === 0) renderAssay();
@@ -340,6 +347,7 @@ function loop(now) {
 }
 fetch('/circuit.json').then(r => r.json()).then(c => {
   circuit = c;
+  fly.setHuntConfig(c.hunt);
   $('c-n').textContent = c.n.toLocaleString(); $('c-m').textContent = c.connections.toLocaleString();
   connect(); requestAnimationFrame(loop);
 });

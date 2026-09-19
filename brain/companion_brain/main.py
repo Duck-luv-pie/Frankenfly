@@ -5,6 +5,7 @@
     companion bench               measure brain-time / wall-time
     companion test-gf             looming neurons -> Giant Fiber escape sanity check
     companion run [...]           live: camera + PIR -> brain -> body
+    companion hunt [...]          the hunt arena: train / evaluate the fly as a human-hunting vehicle
 """
 from __future__ import annotations
 
@@ -13,6 +14,7 @@ import json
 import os
 import sys
 import time
+from pathlib import Path
 
 import cv2
 import numpy as np
@@ -187,6 +189,231 @@ def cmd_batch(args, cfg):
     run_batch(args.config, _parse_overrides(args.set), runs=args.runs, workers=args.workers, control=args.control, save=save)
 
 
+def cmd_hunt(args, cfg):
+    """The hunt arena, headless. One fly through N episodes (default), CMA-ES training of many flies
+    (--train), or evaluation of a saved hunter (--load, usually with --no-learn)."""
+    from .sim.hunt import run_hunt, train, save_hunter, load_hunter, nested, default_gains
+    from .config import BRAIN_DIR, apply_dotted
+    out_dir = BRAIN_DIR / "data" / "cache"
+    workers = args.workers or (os.cpu_count() or 4)
+    if args.train:
+        start = json.loads(Path(args.gains).read_text())["gains"] if args.gains else None
+        train(args.config, _parse_overrides(args.set), generations=args.generations, popsize=args.pop, episodes=args.episodes,
+              workers=workers, out_dir=out_dir, seed=args.seed, final_episodes=args.final_episodes, start_gains=start)
+        return
+    weights = None
+    gains = {}                                   # no hunter loaded: the config's own defaults
+    brain = None
+    if args.load:
+        weights, gains, meta = load_hunter(args.load)
+        if meta.get("brain"):
+            from .hunt_gpu.connectome import load_brain
+            brain = load_brain(args.load)
+            print(f"[hunt] loaded the GPU-trained connectome brain {args.load}: {brain['meta']}", flush=True)
+        else:
+            print(f"[hunt] loaded {args.load}: trained touch rate {float(meta.get('touch_rate', 0)):.0%}, score {float(meta.get('score', 0)):.2f}", flush=True)
+    elif args.gains:
+        gains = json.loads(Path(args.gains).read_text())["gains"]
+    apply_dotted(cfg, gains)
+    learn = not args.no_learn
+    print(f"[hunt] one fly, {args.episodes} episodes of {cfg.hunt.episode_s:.0f} s, {int(cfg.hunt.people)} people, learning {'ON' if learn else 'OFF'}"
+          f"{', scripted controller (not the brain)' if args.scripted else ''}", flush=True)
+    res = run_hunt(cfg, seed=args.seed, episodes=args.episodes, learn=learn, weights=weights, scripted=args.scripted, verbose=True, brain=brain)
+    print(f"[hunt] touch rate {res['touch_rate']:.0%}, score {res['score']:.2f} (later half {res['score_late']:.2f}), {res['wall_s']:.0f} s wall", flush=True)
+    if args.save and "weights" in res:
+        path = save_hunter(out_dir / "hunter.npz", res, gains)
+        print(f"[hunt] saved the fly's synapses + gains to {path}", flush=True)
+
+
+def cmd_hunt_gpu(args, cfg):
+    """The hunt arena as a batch of tensors on a GPU: PPO training (--train), evaluation of a saved
+    hunter (--load) or of the scripted hunter (default), and the CPU-arena cross-check (--cpu-check)."""
+    try:
+        import torch  # noqa: F401
+    except ImportError:
+        raise SystemExit("hunt-gpu needs PyTorch: run `uv sync --extra gpu` in brain/")
+    from .config import BRAIN_DIR
+    from .sim.hunt import score
+    from .hunt_gpu.ppo import Trainer, evaluate, summarize
+    from .hunt_gpu.brain import HunterNet, EvaderNet
+    from .hunt_gpu.arena import pick_device
+    out_dir = Path(args.out) if args.out else BRAIN_DIR / "data" / "cache"
+    dev = pick_device(args.device)
+    humans = None                                     # the other player: patrol | flee | a trained EvaderNet
+    choice = args.humans
+    if choice is None and args.load and not args.train:
+        sibling = Path(args.load).with_name(Path(args.load).name.replace("hunter", "evaders"))
+        choice = str(sibling) if sibling.exists() and sibling != Path(args.load) else None
+    if choice in ("patrol", "flee", "learn", "wander"):
+        cfg.hunt_gpu.humans["mode"] = choice
+    elif choice:
+        humans, hmeta = EvaderNet.load(choice, dev)
+        cfg.hunt_gpu.humans["mode"] = "learn"
+        print(f"[hunt-gpu] loaded the runners {choice}: {hmeta}", flush=True)
+    if args.train:
+        tr = Trainer(cfg, n_envs=args.envs, device=args.device, seed=args.seed, out_dir=out_dir)
+        if args.load:
+            net, meta = HunterNet.load(args.load, dev)
+            tr.net.load_state_dict(net.state_dict())
+            print(f"[hunt-gpu] resumed the fly from {args.load} ({meta})", flush=True)
+        if humans is not None and tr.hnet is not None:
+            tr.hnet.load_state_dict(humans.state_dict())
+            print("[hunt-gpu] resumed the runners too", flush=True)
+        res = tr.train(updates=args.updates or int(cfg.hunt_gpu.get("updates", 300)), save_every=args.save_every)
+        print(f"[hunt-gpu] done: {res['steps'] / 1e6:.1f} M ticks in {res['wall_s'] / 60:.1f} min; best {res['best']} -> {out_dir / 'hunter_gpu.pt'} "
+              f"(evaluate it: companion hunt-gpu --load {out_dir / 'hunter_gpu.pt'})", flush=True)
+        return
+    net = None
+    if args.load:
+        net, meta = HunterNet.load(args.load, dev)
+        print(f"[hunt-gpu] loaded {args.load}: {meta}", flush=True)
+    if args.watch:
+        from .hunt_gpu.viewer import serve
+        serve(cfg, net, port=args.port, open_browser=args.open, seed=args.seed, speed=args.speed, net_label=Path(args.load).name if args.load else "", humans=humans, body=_s1_body(args, cfg))
+        return
+    what = "scripted hunter" if net is None else "trained fly"
+    mode = cfg.hunt_gpu.humans.get("mode", "learn")
+    opp = {"patrol": "patrol walkers", "wander": "people walking about", "flee": "scripted runners", "learn": "trained runners" if humans is not None else "scripted runners (no trained runners given: --humans PT)"}[mode]
+    print(f"[hunt-gpu] {what} vs {opp}, {args.episodes} seeded episodes of {cfg.hunt.episode_s:.0f} s as one batch on {dev}", flush=True)
+    t0 = time.time()
+    res = evaluate(cfg, net, args.episodes, device=args.device, seed=args.seed, deterministic=not args.sample, humans=humans)
+    sm = summarize(res, float(cfg.hunt.episode_s), float(cfg.hunt.side_reward))
+    trk = f", then tracked them {sm['track']:.0%} of the time, {sm['touches']:.1f} touches per episode" if sm.get("track") is not None else ""
+    print(f"[hunt-gpu] touch rate {sm['touch_rate']:.0%}, mean time to first touch {sm['t_touch']} s, head-on {sm['frontal']}, score {sm['score']:.2f}, "
+          f"target switches {sm['switches']}{trk}; the humans kept {sm['mean_dist']:.1f} m away on average; nobody in range {sm['blind']:.0%} of the time, of which standing still {sm['idle']:.0%} | {time.time() - t0:.1f} s wall", flush=True)
+    if args.cpu_check:
+        if net is None:
+            raise SystemExit("--cpu-check needs --load")
+        from .hunt_gpu.bridge import run_cpu
+        seeds = [e["seed"] for e in res]
+        print(f"[hunt-gpu] the same fly through the CPU arena (sim/hunt_arena.py, patrol walkers), same {len(seeds)} seeds ...", flush=True)
+        cpu = run_cpu(cfg, net, seeds, verbose=args.verbose)
+        print(f"[hunt-gpu] CPU arena: touch rate {np.mean([e['touched'] for e in cpu]):.0%}, score {score(cpu, float(cfg.hunt.episode_s), float(cfg.hunt.side_reward)):.2f} "
+              f"(GPU arena on the same seeds: {sm['touch_rate']:.0%}, {sm['score']:.2f})", flush=True)
+
+
+def cmd_hunt_brain(args, cfg):
+    """The real fly's brain in the hunt arena: the hunter subcircuit of the connectome as a batched rate model
+    trained by PPO (--train), evaluated as a rate model (default) or as spiking neurons (--spiking), checked
+    against the spiking brain's responses (--check), or watched live with its neurons (--watch)."""
+    try:
+        import torch  # noqa: F401
+    except ImportError:
+        raise SystemExit("hunt-brain needs PyTorch: run `uv sync --extra gpu` in brain/")
+    from .config import BRAIN_DIR, apply_dotted
+    from .hunt_gpu.brain import EvaderNet
+    from .hunt_gpu.arena import pick_device
+    from .hunt_gpu.ppo import summarize
+    from .hunt_gpu.brain_train import BrainTrainer, build_brain, evaluate_brain, evaluate_spiking, SpikingHunter
+    from .hunt_gpu.connectome import load_brain
+    out_dir = Path(args.out) if args.out else BRAIN_DIR / "data" / "cache"
+    dev = pick_device(args.device)
+    apply_dotted(cfg, dict(cfg.hunt.get("overrides", {})))          # the hunter's fixed settings (no looming -> no escape)
+    cfg.learning["enabled"] = False
+    if not args.no_brake:
+        cfg.hunt["freeze_brakes"] = True                             # DNp09 may brake the vehicle: the brain can learn to slow at contact
+    if bool(cfg.hunt_gpu.brain.get("turn_contrast", True)):            # the normalized turn readout (see RateBrain.decode)
+        cfg.decode.motor.channels.turn["contrast"] = True
+        if "z0" not in cfg.decode.motor.channels.turn:
+            cfg.decode.motor.channels.turn["z0"] = 0.05
+    if args.fresh_brake:                                             # a brain trained before the brake reached DNp09 had switched it off
+        cfg.hunt_gpu.brain["fresh_gains"] = ["hunt.near_gain", "hunt.near_deg", "decode.motor.channels.freeze.z_ref", "decode.motor.channels.turn.z0"]
+    hops = tuple(int(h) for h in (args.hops.split(",") if args.hops else cfg.hunt_gpu.brain.get("hops", [2, 1])))
+    gains = {}
+    if args.gains:
+        from .sim.hunt import load_hunter
+        _, gains, _ = load_hunter(args.gains)
+        print(f"[brain] starting from the connectome fly's tuned gains in {args.gains}", flush=True)
+    if args.load:
+        gains = {k: v for k, v in load_brain(args.load)["gains"].items() if k not in set(cfg.hunt_gpu.brain.get("fresh_gains", []))}
+    humans = None
+    choice = args.humans
+    if choice is None and args.load:
+        sibling = Path(args.load).with_name("evaders_gpu.pt")
+        choice = str(sibling) if sibling.exists() else None
+    if choice in ("patrol", "flee", "learn", "wander"):
+        cfg.hunt_gpu.humans["mode"] = choice
+    elif choice:
+        humans, hmeta = EvaderNet.load(choice, dev)
+        cfg.hunt_gpu.humans["mode"] = "learn"
+        cfg.hunt_gpu.humans["frozen"] = not args.adversarial            # the benchmark's runners, as they are, unless asked to co-train
+        print(f"[brain] loaded the runners {choice} ({'co-training' if args.adversarial else 'frozen'}): {hmeta}", flush=True)
+    if args.evolve_spiking:
+        from .hunt_gpu.brain_es import evolve_spiking
+        best = evolve_spiking(cfg, generations=args.generations, popsize=args.pop, episodes=args.episodes, out_dir=out_dir, seed=args.seed, start=args.load,
+                              humans=humans, hops=hops)
+        print(f"[brain-es] best (spiking): {best}", flush=True)
+        return
+    if args.evolve:
+        from .hunt_gpu.brain_es import evolve
+        best = evolve(cfg, generations=args.generations, popsize=args.pop, episodes=args.episodes, out_dir=out_dir, seed=args.seed, start=args.load,
+                      humans=humans, hops=hops, device="cpu" if args.device == "auto" else args.device)
+        print(f"[brain-es] best: {best}", flush=True)
+        return
+    if args.train:
+        tr = BrainTrainer(cfg, n_envs=args.envs, device=args.device, seed=args.seed, out_dir=out_dir, hops=hops, gains=gains, resume=args.load)
+        if humans is not None and tr.hnet is not None:
+            tr.hnet.load_state_dict(humans.state_dict())
+        res = tr.train(updates=args.updates or int(cfg.hunt_gpu.brain.get("updates", 150)), save_every=args.save_every)
+        print(f"[brain] done: {res['steps'] / 1e6:.1f} M ticks in {res['wall_s'] / 60:.1f} min -> {out_dir / 'hunter_brain.npz'}", flush=True)
+        return
+    hc, brain = build_brain(cfg, hops=hops, gains=gains, device=dev)
+    if args.load:
+        meta = brain.load_params(args.load)
+        print(f"[brain] loaded {args.load}: {meta}", flush=True)
+    if args.check:
+        from .sim.runner import BrainRunner
+        r = BrainRunner(hc.circuit, cfg, seed=0)
+        if args.load:
+            from .hunt_gpu.connectome import apply_to_runner
+            apply_to_runner(r, load_brain(args.load))
+        probes = {"rest": {}, "object left 150 Hz": {("LC10a", "left"): 150, ("LC11", "left"): 150}, "object left 75 Hz": {("LC10a", "left"): 75, ("LC11", "left"): 75},
+                  "object right 150 Hz": {("LC10a", "right"): 150, ("LC11", "right"): 150}, "bar left": {("LC12", "left"): 150, ("LC15", "left"): 150}, "heat left": {("TRN_hot", "left"): 150}}
+        print(f"[brain] spiking vs rate model, readout rates in Hz (left / right):")
+        for name, drives in probes.items():
+            r.net.clear_rates()
+            for _ in range(60):
+                r.step_chunk()
+            for _ in range(100):
+                r.net.clear_rates()
+                for (g, s), hz in drives.items():
+                    r.drive(g, hz, s)
+                r.step_chunk()
+            lif = r.rates(300)
+            rate = brain.probe(drives)
+            print(f"  {name:20s} " + " | ".join(f"{g}: spiking {lif[g]['left']:6.1f}/{lif[g]['right']:6.1f}  rate {rate[(g, 'left')]:6.1f}/{rate[(g, 'right')]:6.1f}" for g in ("DNa02", "DNa01", "DN_all")), flush=True)
+        return
+    if args.watch:
+        from .hunt_gpu.viewer import serve
+        hunter = SpikingHunter(cfg, hc, args.load)
+        serve(cfg, None, port=args.port, open_browser=args.open, seed=args.seed, speed=args.speed, net_label=Path(args.load).name if args.load else "the untrained connectome", humans=humans, spiking=hunter, body=_s1_body(args, cfg))
+        return
+    opp = {"patrol": "patrol walkers", "wander": "people walking about", "flee": "scripted runners", "learn": "trained runners" if humans is not None else "scripted runners (no trained runners given)"}[cfg.hunt_gpu.humans.get("mode", "learn")]
+    t0 = time.time()
+    if args.spiking:
+        print(f"[brain] the spiking fly ({hc.n:,} LIF neurons, {'trained' if args.load else 'untrained'}) vs {opp}, {args.episodes} seeded episodes one after another on the CPU", flush=True)
+        hunter = SpikingHunter(cfg, hc, args.load)
+        res = evaluate_spiking(cfg, hunter, args.episodes, seed=args.seed, humans=humans, verbose=True)
+    else:
+        print(f"[brain] the rate-model fly ({'trained' if args.load else 'untrained'}) vs {opp}, {args.episodes} seeded episodes as one batch on {dev}", flush=True)
+        res = evaluate_brain(cfg, brain, args.episodes, device=args.device, seed=args.seed, humans=humans)
+    sm = summarize(res, float(cfg.hunt.episode_s), float(cfg.hunt.side_reward))
+    trk = f", then tracked them {sm['track']:.0%} of the time, {sm['touches']:.1f} touches per episode" if sm.get("track") is not None else ""
+    print(f"[brain] touch rate {sm['touch_rate']:.0%}, mean time to first touch {sm['t_touch']} s, head-on {sm['frontal']}, score {sm['score']:.2f}{trk}; "
+          f"nobody in range {sm['blind']:.0%} of the time, of which standing still {sm['idle']:.0%} | {time.time() - t0:.0f} s wall", flush=True)
+
+
+def _s1_body(args, cfg):
+    """`--s1 [PORT]`: a RoboMaster S1 on S-Bus mirroring the fly (docs/wiring.md); None when not asked for."""
+    s1_cfg = dict(cfg.body.get("s1", {}))
+    if getattr(args, "s1", None) is None and not s1_cfg.get("enabled"):
+        return None
+    from .body.s1 import S1Body
+    s1 = S1Body(s1_cfg, port=(getattr(args, "s1", None) or None))
+    print(f"[body] RoboMaster S1 on {s1.cfg['port']} (S-Bus, free_mode={s1.cfg['free_mode']}, speed {s1.cfg['speed']}, sticks fwd {s1.cfg['stick_forward']} / yaw {s1.cfg['stick_yaw']})", flush=True)
+    return s1
+
+
 def cmd_run(args, cfg):
     from .data.prune import load_or_build
     from .sim.runner import BrainRunner
@@ -197,6 +424,17 @@ def cmd_run(args, cfg):
     from .body.link import BodyLink, DryBody
     from .data.prune import circuit_key
 
+    hunter_gains = {}
+    brain_file = None
+    if args.load_weights:
+        from .sim.hunt import load_hunter, is_brain_file
+        brain_file = args.load_weights if is_brain_file(args.load_weights) else None
+        from .config import apply_dotted
+        _, hunter_gains, _ = load_hunter(args.load_weights)
+        if hunter_gains:
+            apply_dotted(cfg, hunter_gains)              # a trained hunter carries its tuned gains
+            apply_dotted(cfg, dict(cfg.hunt.get("overrides", {})))   # ... and the hunter's fixed settings (no escape)
+            print(f"[hunt] applied {len(hunter_gains)} tuned gains from {args.load_weights}", flush=True)
     c = load_or_build(cfg, full=args.full)
     brain = BrainRunner(c, cfg, seed=None)
     if brain.plasticity is not None:
@@ -204,12 +442,17 @@ def cmd_run(args, cfg):
         pl = brain.plasticity
         print(f"[learning] mushroom body: {pl.n_kc} Kenyon cells, {pl.n_mbon} MBON compartments, {pl.n_syn:,} plastic synapses; "
               f"{'ON' if pl.enabled else 'OFF'} (toggle from the dashboard)", flush=True)
-    baseline = load_or_calibrate(brain, cfg, circuit_key(cfg, args.full), rebuild=args.recalibrate)
-    if args.load_weights and brain.plasticity is not None:
+    if brain_file:                                          # a GPU-trained connectome brain: synapse gains + thresholds, then a fresh baseline
+        from .hunt_gpu.connectome import load_brain, apply_to_runner
+        apply_to_runner(brain, load_brain(brain_file))
+        args.recalibrate = True
+    baseline = load_or_calibrate(brain, cfg, circuit_key(cfg, args.full) + ("-brain" if brain_file else ""), rebuild=args.recalibrate)
+    if args.load_weights and not brain_file and brain.plasticity is not None:
         z = np.load(args.load_weights)
         if len(z["weights"]) == brain.plasticity.n_syn:
             brain.plasticity.net.data[brain.plasticity.syn] = z["weights"].astype(np.float32)
-            print(f"[learning] loaded learned synapses from {args.load_weights} (seed {int(z['seed'])}, PI {float(z['naive_pi']):+.2f} -> {float(z['trained_pi']):+.2f})", flush=True)
+            what = f"hunt touch rate {float(z['touch_rate']):.0%}" if "touch_rate" in z.files else f"PI {float(z['naive_pi']):+.2f} -> {float(z['trained_pi']):+.2f}"
+            print(f"[learning] loaded learned synapses from {args.load_weights} (seed {int(z['seed'])}, {what})", flush=True)
         else:
             print(f"[learning] {args.load_weights} does not match this circuit; ignored", flush=True)
     cam_cfg = cfg.senses.camera
@@ -246,6 +489,12 @@ def cmd_run(args, cfg):
     lobe = OpticLobe(cam_cfg.width, cam_cfg.height, 10.0)                  # the fly's own eyes (retina from its world)
     decoder = Decoder(cfg, baseline)
     body = DryBody() if args.dry_body else BodyLink(cfg.body.host, cfg.body.port, cfg.body.listen_port)
+    s1_cfg = dict(cfg.body.get("s1", {}))
+    if args.s1 is not None or s1_cfg.get("enabled"):
+        from .body.s1 import S1Body, MultiBody
+        s1 = S1Body(s1_cfg, port=args.s1 or None)
+        print(f"[body] RoboMaster S1 on {s1.cfg['port']} (S-Bus, free_mode={s1.cfg['free_mode']}, speed {s1.cfg['speed']}, sticks fwd {s1.cfg['stick_forward']} / yaw {s1.cfg['stick_yaw']})", flush=True)
+        body = MultiBody(body, s1)
     period = 1.0 / float(cfg.body.rate_hz)
     pir_until = 0.0
     last_pir = 0
@@ -290,8 +539,8 @@ def cmd_run(args, cfg):
                 if dash.retina_seq != retina_seq:
                     retina_seq = dash.retina_seq
                     rf = dash.retina
-                    if rf.shape != (cam_cfg.height, cam_cfg.width):
-                        rf = cv2.resize(rf, (cam_cfg.width, cam_cfg.height), interpolation=cv2.INTER_AREA)
+                    if rf.shape != (lobe.h, lobe.w):          # the world chose another retina size (the hunt arena's wide eye is 160x120)
+                        lobe = OpticLobe(rf.shape[1], rf.shape[0], 10.0)
                     feats = lobe.process(rf)
                 vision = "retina"
             else:
@@ -430,9 +679,61 @@ def main(argv=None):
     p.add_argument("--runs", type=int, default=4, help="flies with learning on"); p.add_argument("--workers", type=int, default=os.cpu_count() or 4)
     p.add_argument("--control", action="store_true", help="also run the same number with learning off")
     p.add_argument("--save", action="store_true", help="save the best fly's learned synapses for `run --load-weights`"); p.set_defaults(fn=cmd_batch)
+    p = sub.add_parser("hunt", help="the hunt arena: one fly, CMA-ES training (--train) or evaluation (--load)")
+    p.add_argument("--episodes", type=int, default=6, help="episodes per fly"); p.add_argument("--seed", type=int, default=0)
+    p.add_argument("--no-learn", action="store_true", help="plasticity off (evaluate a saved hunter, or a control)")
+    p.add_argument("--scripted", action="store_true", help="drive with the hand-written hunter instead of the brain (arena check)")
+    p.add_argument("--load", default=None, metavar="NPZ", help="a saved hunter (synapses + gains) from --train or --save")
+    p.add_argument("--gains", default=None, metavar="JSON", help="tuned gains (hunter_gains.json) without synapses")
+    p.add_argument("--save", action="store_true", help="save this fly's synapses + gains as data/cache/hunter.npz")
+    p.add_argument("--train", action="store_true", help="CMA-ES over the gains with many flies in parallel")
+    p.add_argument("--generations", type=int, default=20); p.add_argument("--pop", type=int, default=None, help="population (default 4+3 ln n = 12)")
+    p.add_argument("--final-episodes", type=int, default=24, help="episodes for the final fly trained with the best gains")
+    p.add_argument("--workers", type=int, default=None); p.set_defaults(fn=cmd_hunt)
+    p = sub.add_parser("hunt-gpu", help="the hunt arena on a GPU: PPO training (--train) or evaluation of a saved hunter (--load)")
+    p.add_argument("--train", action="store_true", help="train with PPO; saves data/cache/hunter_gpu.pt (best) and hunter_gpu_last.pt")
+    p.add_argument("--updates", type=int, default=None, help="PPO updates (default hunt_gpu.updates)")
+    p.add_argument("--envs", type=int, default=None, help="rooms in parallel (default hunt_gpu.envs)")
+    p.add_argument("--device", default="auto", help="cuda, mps, cpu or auto")
+    p.add_argument("--seed", type=int, default=0)
+    p.add_argument("--load", default=None, metavar="PT", help="a saved hunter (evaluate it, or start training from it)")
+    p.add_argument("--episodes", type=int, default=256, help="seeded episodes to evaluate, all in one batch")
+    p.add_argument("--sample", action="store_true", help="evaluate with the stochastic policy instead of the mean action")
+    p.add_argument("--cpu-check", action="store_true", help="also run the loaded fly through the CPU arena on the same seeds")
+    p.add_argument("--humans", default=None, metavar="MODE|PT", help="the other player: patrol, flee, learn, or a trained runners file (default: the evaders_*.pt next to --load, else the config)")
+    p.add_argument("--watch", action="store_true", help="live 3-D view of the loaded fly (or the scripted hunter) hunting, at http://localhost:8601")
+    p.add_argument("--s1", nargs="?", const="", default=None, metavar="PORT", help="with --watch: a RoboMaster S1 on S-Bus mirrors the fly (default body.s1.port)")
+    p.add_argument("--port", type=int, default=8601); p.add_argument("--open", action="store_true", help="open the view in the browser")
+    p.add_argument("--speed", type=float, default=1.0, help="playback speed of the live view (1 = real time)")
+    p.add_argument("--save-every", type=int, default=10, help="updates between hunter_gpu_last.pt checkpoints")
+    p.add_argument("--out", default=None, help="output directory (default data/cache)")
+    p.add_argument("-v", "--verbose", action="store_true"); p.set_defaults(fn=cmd_hunt_gpu)
+    p = sub.add_parser("hunt-brain", help="the real fly's brain (hunter subcircuit of the connectome) in the GPU hunt arena: PPO on its synapse gains")
+    p.add_argument("--train", action="store_true", help="train; saves data/cache/hunter_brain.npz (synapse gains + thresholds + sensory / decoder gains)")
+    p.add_argument("--updates", type=int, default=None); p.add_argument("--envs", type=int, default=None)
+    p.add_argument("--hops", default=None, metavar="F,B", help="subcircuit depth, e.g. 2,1 (default hunt_gpu.brain.hops)")
+    p.add_argument("--gains", default=None, metavar="NPZ", help="start from a hunter.npz's tuned sensory / decoder gains")
+    p.add_argument("--load", default=None, metavar="NPZ", help="a saved hunter_brain.npz (evaluate, resume, watch)")
+    p.add_argument("--humans", default=None, metavar="MODE|PT", help="patrol, flee, learn, or a trained runners file")
+    p.add_argument("--episodes", type=int, default=256); p.add_argument("--seed", type=int, default=0)
+    p.add_argument("--spiking", action="store_true", help="evaluate as spiking LIF neurons (one room at a time, CPU) instead of the rate model")
+    p.add_argument("--adversarial", action="store_true", help="with --humans PT: keep training the runners too (default: frozen)")
+    p.add_argument("--no-brake", action="store_true", help="do not let the freeze channel (DNp09) brake the vehicle")
+    p.add_argument("--fresh-brake", action="store_true", help="with --load: the brake gains (near_gain, near_deg, freeze z_ref) restart from the config")
+    p.add_argument("--evolve", action="store_true", help="gradient-free: CMA-ES over the tunables and per-class synapse gains (forward passes only, fits a small machine)")
+    p.add_argument("--evolve-spiking", action="store_true", help="the polish: the same search scored on the spiking neurons themselves (slow; start from --load)")
+    p.add_argument("--generations", type=int, default=20); p.add_argument("--pop", type=int, default=None)
+    p.add_argument("--check", action="store_true", help="compare the rate model's responses with the spiking subcircuit's")
+    p.add_argument("--watch", action="store_true", help="live view of the spiking fly hunting, with its neurons, at http://localhost:8601")
+    p.add_argument("--s1", nargs="?", const="", default=None, metavar="PORT", help="with --watch: a RoboMaster S1 on S-Bus mirrors the fly (default body.s1.port)")
+    p.add_argument("--port", type=int, default=8601); p.add_argument("--open", action="store_true"); p.add_argument("--speed", type=float, default=1.0)
+    p.add_argument("--device", default="auto"); p.add_argument("--save-every", type=int, default=5); p.add_argument("--out", default=None)
+    p.set_defaults(fn=cmd_hunt_brain)
     p = sub.add_parser("run"); p.add_argument("--full", action="store_true")
     p.add_argument("--sim-camera", default=None, metavar="SRC", help="'synthetic' or a video file / URL instead of the ESP32-CAM")
     p.add_argument("--dry-body", action="store_true", help="print body packets instead of sending UDP")
+    p.add_argument("--s1", nargs="?", const="", default=None, metavar="PORT",
+                   help="also drive a RoboMaster S1 over S-Bus from this serial port (default body.s1.port)")
     p.add_argument("-v", "--verbose", action="store_true")
     p.add_argument("--recalibrate", action="store_true", help="re-measure the resting baseline")
     p.add_argument("--no-learn", action="store_true", help="start with mushroom-body plasticity switched off")

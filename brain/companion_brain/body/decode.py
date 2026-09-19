@@ -91,9 +91,16 @@ class Decoder:
         return float(np.clip((self.zgroup(rbw, spec["groups"], side, spec) - z0) / max(float(spec["z_ref"]) - z0, 1e-6), 0, 1))
 
     def lateral(self, rbw: dict, spec: dict) -> float:
-        """-1..1: right minus left z-score, with the same dead zone."""
+        """-1..1: right minus left z-score, with the same dead zone. With `contrast` the difference is normalized by
+        the two sides' activity (plus z_ref): a target straight ahead that drives both sides hard is a small turn, one
+        side alone a full one, whatever the absolute rates; z0 is then a dead zone in contrast units (0..1)."""
         z0 = float(spec.get("z0", self.z0))
-        d = self.zgroup(rbw, spec["groups"], "right", spec) - self.zgroup(rbw, spec["groups"], "left", spec)
+        r, l = self.zgroup(rbw, spec["groups"], "right", spec), self.zgroup(rbw, spec["groups"], "left", spec)
+        if spec.get("contrast"):
+            c = (r - l) / (max(r, 0.0) + max(l, 0.0) + max(float(spec["z_ref"]), 1e-6))
+            mag = max(0.0, abs(c) - z0) / max(1.0 - z0, 1e-6)
+            return float(np.clip(np.sign(c) * mag, -1, 1))
+        d = r - l
         mag = max(0.0, abs(d) - z0) / max(float(spec["z_ref"]) - z0, 1e-6)
         return float(np.clip(np.sign(d) * mag, -1, 1))
 

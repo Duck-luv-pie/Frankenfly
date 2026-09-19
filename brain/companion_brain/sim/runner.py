@@ -36,6 +36,21 @@ class BrainRunner:
             rx = re.compile(spec["regex"])
             mask = np.array([bool(rx.search(t)) for t in circuit.cell_type]) if circuit.cell_type is not None else np.zeros(circuit.n, bool)
             self.net.th_offset[mask] += float(spec["mv"])
+        # Synapse-class gains (config lif.synapse_gains): scale the synapses from cell types matching `pre`
+        # onto cell types matching `post`. Used where the LIF calibration under-drives a known pathway, e.g.
+        # the thermosensory (VP) projection neurons onto Kenyon cells (see docs/architecture.md, Hunting).
+        for spec in cfg.lif.get("synapse_gains", []):
+            if circuit.cell_type is None:
+                break
+            import re
+            rpre, rpost = re.compile(spec["pre"]), re.compile(spec["post"])
+            pre_ok = np.array([bool(rpre.search(t)) for t in circuit.cell_type])
+            post_ok = np.array([bool(rpost.search(t)) for t in circuit.cell_type])
+            rows = np.nonzero(pre_ok)[0]
+            for i in rows:
+                a, b = self.net.indptr[i], self.net.indptr[i + 1]
+                m = post_ok[self.net.indices[a:b]]
+                self.net.data[a:b][m] *= np.float32(spec["gain"])
         self.chunk_ms = chunk_ms
         self.window_ms = float(cfg.decode.window_ms)
         self.history: deque[np.ndarray] = deque(maxlen=max(1, int(round(1000.0 / chunk_ms))))   # last 1 s

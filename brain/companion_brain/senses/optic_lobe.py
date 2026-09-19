@@ -136,7 +136,15 @@ def features_to_rates(f: Features, cfg) -> dict[tuple[str, str], float]:
     out: dict[tuple[str, str], float] = {}
     for feat, spec in cfg.senses.features.items():
         for side in ("left", "right"):
-            val = getattr(f.side(side), feat, 0.0) * float(spec.get("gain", 1.0))
+            hf = f.side(side)
+            val = getattr(hf, feat, 0.0) * float(spec.get("gain", 1.0))
+            w = float(spec.get("azimuth_weight", 0.0))
+            if w > 0 and feat == "small_object" and val > 0:
+                # retinotopy: an object far out in the hemifield drives its side harder than one near the midline,
+                # so the steering it evokes is proportional to the error, not bang-bang. object_x is +1 at the
+                # hemifield's right edge, so the periphery is object_x=-1 on the left and +1 on the right.
+                ecc = (1.0 - hf.object_x) / 2 if side == "left" else (1.0 + hf.object_x) / 2
+                val *= (1.0 - w) + w * max(0.0, min(1.0, ecc))
             hz = float(np.clip(val, 0, 1)) * max_hz
             if hz > 0:
                 for g in spec["groups"]:

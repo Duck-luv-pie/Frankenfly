@@ -118,6 +118,37 @@ Brain → body:
 
 Body → brain: `{"t": 1234567, "pir": 1, "busy": 0, "rssi": -58}`
 
+## RoboMaster S1 (the legs)
+
+The S1 is driven through the **S-Bus port on its motion controller**: lift the lid on top of the
+chassis behind the gimbal (part 6, "chassis rear cover"); beside the micro USB port is a block of
+pins three wide and eight rows tall. The row at the rear-hinge end is S-Bus (Signal, 5 V, GND,
+Signal on the USB side), the six middle rows are PWM 1-6, the row at the gimbal end is the
+UART (RX, TX, GND). Only Signal and GND are connected; leave the 5 V pin alone. The stock S1
+has no SDK; the Pi is the "receiver". Channel map and the driver: `brain/companion_brain/body/s1.py`.
+
+S-Bus is an *inverted* serial signal, and the Pi's own UART cannot invert, so one of:
+
+**A. ESP32 as the inverter (jumper wires only).** Flash `firmware/sbus-bridge` onto a spare
+ESP32 DevKit (`pio run -t upload`). Pi USB -> ESP32 USB cable. ESP32 GPIO17 -> S1 S-Bus Signal,
+ESP32 GND -> S1 S-Bus GND. On the Pi the ESP32 is `/dev/ttyUSB0`; the brain runs
+`companion run --s1 /dev/ttyUSB0`. The ESP32's blue LED is on while frames flow; if they stop
+it centres the sticks itself.
+
+**B. A transistor on the Pi's header.** Pi GPIO14 (pin 8) -> 1 kOhm -> NPN base (2N2222 / BC547);
+emitter -> GND; collector -> S1 S-Bus Signal with 10 kOhm to 3.3 V. Pi GND (pin 6) -> S1 GND.
+Enable the UART with `dtparam=uart0=on` in `/boot/firmware/config.txt`; the port is
+`/dev/ttyAMA0` (the default in `body.s1.port`).
+
+**C. An FTDI FT232RL adapter** with TX inverted in its EEPROM (`ftx_prog --invert-txd`): adapter TX
+-> Signal, GND -> GND, port `/dev/ttyUSB0`.
+
+Bench test before the brain: `python3 tools/s1_sbus.py --port <PORT> --neutral` (does the chassis
+stiffen with the app disconnected?), then without `--neutral` for w/s/a/d/q/e driving. If an axis
+is mirrored, flip `sign_forward` / `sign_strafe` / `sign_yaw` under `body.s1` in the config. The S1 yaws
+slowly per stick: `--pulse yaw:1:2` at full stick, count the degrees turned, and set `stick_yaw` /
+`stick_forward` so the robot's turn-to-speed ratio matches the fly's (hunt.turn_max / hunt.speed_max).
+
 ## Bring-up order
 
 1. **Cam first, nothing wired.** Flash, open `http://companion-cam.local:81/stream` in a
