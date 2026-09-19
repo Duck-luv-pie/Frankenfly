@@ -8,6 +8,8 @@
 #include <ESPmDNS.h>
 #include <esp_camera.h>
 #include <esp_http_server.h>
+#include <esp_task_wdt.h>
+#include <esp_wifi.h>
 
 #ifndef WIFI_SSID
 #error "Create firmware/secrets.ini from secrets.example.ini with WIFI_SSID / WIFI_PASS"
@@ -61,7 +63,7 @@ static esp_err_t stream_handler(httpd_req_t *req) {
     size_t need = hlen + fb->len;
     if (need > packet_cap) {
       free(packet);
-      packet = (uint8_t *)(psramFound() ? ps_malloc(need + 4096) : malloc(need + 4096));
+      packet = (uint8_t *)malloc(need + 4096);   // internal RAM: small frames, no PSRAM cache surprises
       packet_cap = packet ? need + 4096 : 0;
     }
     if (packet) {
@@ -93,6 +95,9 @@ static esp_err_t status_handler(httpd_req_t *req) {
 static void start_servers() {
   httpd_config_t config = HTTPD_DEFAULT_CONFIG();
   config.server_port = 80;
+  config.lru_purge_enable = true;
+  config.recv_wait_timeout = 5;   // seconds; a client that stops reading is dropped, not waited on forever
+  config.send_wait_timeout = 5;
   httpd_uri_t status_uri = {.uri = "/status", .method = HTTP_GET, .handler = status_handler, .user_ctx = nullptr};
   if (httpd_start(&status_httpd, &config) == ESP_OK) httpd_register_uri_handler(status_httpd, &status_uri);
 
@@ -131,6 +136,8 @@ static bool init_camera() {
 void setup() {
   Serial.begin(115200);
   boot_ms = millis();
+  esp_task_wdt_init(15, true);        // if loop() stops being called for 15 s, reboot
+  esp_task_wdt_add(nullptr);
   pinMode(FLASH_LED_GPIO, OUTPUT);
   digitalWrite(FLASH_LED_GPIO, LOW);  // keep the bright flash LED off
 
@@ -143,6 +150,7 @@ void setup() {
   WiFi.setSleep(false);
   WiFi.setHostname(HOSTNAME);
   WiFi.begin(WIFI_SSID, WIFI_PASS);
+  WiFi.setSleep(false);
   Serial.printf("connecting to %s", WIFI_SSID);
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
@@ -157,7 +165,14 @@ void setup() {
 }
 
 void loop() {
-  static uint32_t last = 0;
+  static uint32_t last = 0, wifi_lost_since = 0;
+  esp_task_wdt_reset();
+  if (WiFi.status() != WL_CONNECTED) {
+    if (!wifi_lost_since) wifi_lost_since = millis();
+    else if (millis() - wifi_lost_since > 20000) { Serial.println("WiFi lost for 20 s, rebooting"); ESP.restart(); }
+  } else {
+    wifi_lost_since = 0;
+  }
   if (millis() - last > 10000) {
     last = millis();
     Serial.printf("up %lus frames %lu heap %u rssi %d\n", (unsigned long)(last / 1000),
