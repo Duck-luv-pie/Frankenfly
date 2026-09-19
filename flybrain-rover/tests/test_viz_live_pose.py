@@ -51,7 +51,7 @@ def test_turn_right_for_one_second_is_minus_half_pi_yaw():
     st = drive(ad, 0.0, 1.0, 1.0)
     assert ad.pose[2] == pytest.approx(0.0, abs=1e-6)                             # pi/2 - pi/2: clockwise
     assert wrap(st["fly"][2] - st0["fly"][2]) == pytest.approx(-math.pi / 2, abs=1e-4)  # his heading = yaw - pi/2: clockwise decreases it
-    assert math.sin(st["fly"][2]) == pytest.approx(1.0, abs=1e-4)                # his x = sin(heading): faces our +x
+    assert math.sin(st["fly"][2]) == pytest.approx(-1.0, abs=1e-4)                # his x = sin(heading): faces our +x
     assert st["fly"][:2] == [0.0, 0.0]
 
 
@@ -122,6 +122,6 @@ def test_replay_mode_keeps_the_true_pose_and_no_estimate_flag(tmp_path):
     for f in frames:
         st = ad.state(f)
         assert "pose_estimated" not in st
-        assert st["fly"][:3] == [f["rxy"][0], f["rxy"][1], round(math.pi / 2 - f["ryaw"], 4)]
-        assert st["people"][0][:2] == [2.0, 2.0]
+        assert st["fly"][:3] == [-f["rxy"][0], f["rxy"][1], round(wrap(f["ryaw"] - math.pi / 2), 4)]
+        assert st["people"][0][:2] == [-2.0, 2.0]
     assert ad.pose is None
