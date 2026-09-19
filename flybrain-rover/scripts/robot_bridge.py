@@ -505,6 +505,7 @@ def main(argv=None, hotkeys=None):
     ap.add_argument("--w-max", type=float, default=90.0, help="deg/s at turn = 1")
     ap.add_argument("--show", action="store_true")
     ap.add_argument("--bench", action="store_true", help="time the brain loop and exit")
+    ap.add_argument("--cmd-port", type=int, default=9600, help="UDP port that accepts hotkeys (0 disables)")
     ap.add_argument("--max-frames", type=int, default=0)
     a = ap.parse_args(argv)
 
@@ -582,6 +583,27 @@ def main(argv=None, hotkeys=None):
             print(f"[{k}] {label} FAILED: {e}", flush=True)
     if sys.stdin and not sys.stdin.closed:
         threading.Thread(target=_stdin_watch, daemon=True).start()
+
+    # The same hotkeys over UDP, so another process can press them: scripts/talk.py lets a judge say
+    # "remove its eye" and the voice agent sends "2" here. Loopback only; a datagram is one key.
+    def _udp_watch(port):
+        import socket as _socket
+        sk = _socket.socket(_socket.AF_INET, _socket.SOCK_DGRAM)
+        try:
+            sk.bind(("127.0.0.1", port))
+        except OSError as e:
+            print(f"hotkey port {port} unavailable ({e}); voice control off", flush=True)
+            return
+        print(f"hotkeys also on udp://127.0.0.1:{port}", flush=True)
+        while True:
+            data, _ = sk.recvfrom(16)
+            k = data.decode(errors="ignore").strip()
+            if k in hotkeys:
+                pending_keys.append(k)
+            elif k == " ":
+                estop.set()
+    if a.cmd_port:
+        threading.Thread(target=_udp_watch, args=(a.cmd_port,), daemon=True).start()
 
     os.makedirs(os.path.dirname(a.latency_log) or ".", exist_ok=True)
     lat_f = open(a.latency_log, "a", newline="")
