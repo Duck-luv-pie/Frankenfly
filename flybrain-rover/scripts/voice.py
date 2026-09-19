@@ -26,22 +26,22 @@ import time
 VOICE_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets", "voice")
 
 LINES = {
-    "baseline":     "Real wiring. Fifteen thousand neurons, nothing trained.",
-    "lesion_lc10a": "Tracking neurons removed. I cannot see you.",
-    "restore":      "Tracking restored.",
-    "lobotomy":     "Learning wiped. The connectome remains.",
-    "restore_plasticity": "Learned synapses back.",
-    "shuffle_on":  "Same neurons, same connections, random targets. Nothing reaches my legs.",
-    "shuffle_off": "Real wiring again.",
-    "quarter":     "A quarter of the tracking population gone.",
-    "searching":   "I have lost you. Searching.",
-    "contact":     "Found you.",
+    "baseline":     "[calm] Real wiring. Fifteen thousand neurons. Nothing trained.",
+    "lesion_lc10a": "[quietly] Tracking neurons removed... [pause] I cannot see you.",
+    "restore":      "[relieved] Tracking restored.",
+    "lobotomy":     "[flat] Learning wiped. [pause] The connectome remains.",
+    "restore_plasticity": "[warm] Learned synapses back.",
+    "shuffle_on":  "[slowly] Same neurons. Same connections. Random targets. [pause] Nothing reaches my legs.",
+    "shuffle_off": "[relieved] Real wiring again.",
+    "quarter":     "[matter-of-fact] A quarter of the tracking population, gone.",
+    "searching":   "[uncertain] I have lost you. [pause] Searching.",
+    "contact":     "[pleased] Found you.",
 }
 
-# ElevenLabs "River", relaxed and informative, which suits a fly reporting what was just done to it.
+# ElevenLabs "George", a warm storyteller: with eleven_v3 the lines are delivered, not read.
 # It must be a *premade* voice: free accounts are refused library voices over the API with HTTP 402.
 # `python scripts/voice.py --voices` lists what this account can actually use. The id is not a secret.
-DEFAULT_VOICE = "SAz9YHcvj6GT2YYXdXww"
+DEFAULT_VOICE = "JBFqnCBsd6RMkjVDRZzb"
 
 
 
@@ -81,7 +81,7 @@ def list_voices():
     return [v for v in r.json().get("voices", []) if v.get("category") == "premade"]
 
 
-def generate(keys=None, voice_id=DEFAULT_VOICE, model="eleven_turbo_v2_5"):
+def generate(keys=None, voice_id=DEFAULT_VOICE, model="eleven_v3"):
     key = os.environ.get("ELEVENLABS_API_KEY")
     if not key:
         sys.exit("set ELEVENLABS_API_KEY first (the audio is generated once and then played from disk)")
@@ -93,7 +93,7 @@ def generate(keys=None, voice_id=DEFAULT_VOICE, model="eleven_turbo_v2_5"):
         r = requests.post(f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}",
                           headers={"xi-api-key": key, "accept": "audio/mpeg"},
                           json={"text": text, "model_id": model,
-                                "voice_settings": {"stability": 0.4, "similarity_boost": 0.8}},
+                                "voice_settings": {"stability": 0.35, "similarity_boost": 0.8, "style": 0.4}},
                           timeout=30)
         if r.status_code == 402 and voice_id != FALLBACK.get("id"):
             # a library voice on a free plan; drop to the first premade voice this account has
