@@ -55,6 +55,8 @@ A path existing anatomically doesn't mean it carries drive: 739 of 795 neurons o
 
 Reward-gated plasticity is only as good as the reward signal behind it: an unbalanced dopamine channel saturates a circuit instead of tuning it, and the two look similar in a five-minute demo if you're not watching firing rates.
 
+We also rewrote the whole simulation in one file of numpy, no PyTorch, and checked it spike for spike against the original: identical over 300 steps, and five times faster, because at a batch size of one a tensor framework is mostly per-call overhead. The full 15,000-neuron brain runs at 2.5 ms per camera frame that way and the minimal circuit at 0.6 ms, so the thing needs no GPU, no framework, and would fit on a Raspberry Pi with room to spare.
+
 The whole tracking behaviour fits in 2,211 neurons and 10,387 synapses, 0.4% of the wiring we started with, and it still fails in exactly the same named ways: remove LC10a and it goes to 0%, shuffle the wiring and it goes to 2%, remove one steering neuron and it biases to the other side. That version runs at 3 ms per camera frame on one laptop core, which is the difference between "this needs a laptop" and "this could live on the robot".
 
 Most of a connectome is ballast, at least for one behaviour. We deleted synapses at random and re-ran the tracking test: it survives to 50% and is gone by 75%. Then we deleted the *weakest* synapses instead, same counts, and it survived the removal of 95% of all 2.3 million connections with tracking essentially unchanged. About a hundred thousand strong synapses carry this behaviour; the other 2.2 million do not contribute to it.

@@ -76,7 +76,14 @@ Taking that seriously: keep the strongest 5% of synapses (`scripts/minimal_circu
 
 **0.4% of the original wiring, and it behaves the same.** It also fails in the same named ways, which is what makes it the same circuit rather than a lucky one (64 arenas, seed 2000, 2 s): intact 73%, LC10a removed **0%**, wiring shuffled **2%**, DNa02 left removed 28% with a rightward bias of +0.048, looming cells removed 70% with the giant fibre going 74.9 Hz to 0.0 under a looming person.
 
-At 0.15 ms per millisecond of brain time, this runs at 335 Hz on one laptop core, which puts it comfortably in real time on a Raspberry Pi and makes the detector, not the brain, the only obstacle to putting the whole loop on the robot. The mushroom body does not survive this cut (Kenyon cells and MBONs are silent in this task and drop out), so the tiny circuit is a runtime artifact, not something to train on.
+The same circuit in **pure numpy**, no PyTorch at all (`edge/flybrain_mini.py`, one file, about 200 lines), is bit-identical to the reference implementation, spike for spike over 300 steps, and five times faster at batch one, where a tensor framework is mostly per-operation overhead:
+
+| runtime | full circuit (15,000 neurons) | minimal circuit (2,211 neurons) |
+|---|---|---|
+| PyTorch, event engine | 14 ms per camera frame | 3 ms |
+| numpy only | **2.5 ms** | **0.6 ms**, a 1,553 Hz loop |
+
+So the brain needs neither a GPU nor a deep-learning framework, and a Raspberry Pi would run even the full circuit in roughly 10 ms per frame. At 0.15 ms per millisecond of brain time, the PyTorch version runs at 335 Hz on one laptop core, which puts it comfortably in real time on a Raspberry Pi and makes the detector, not the brain, the only obstacle to putting the whole loop on the robot. The mushroom body does not survive this cut (Kenyon cells and MBONs are silent in this task and drop out), so the tiny circuit is a runtime artifact, not something to train on.
 
 ## 5. Learning, using the fly's own dopamine neurons
 
