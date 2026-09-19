@@ -75,6 +75,17 @@ each PIR edge. Field definitions are in [wiring.md](wiring.md#network-protocol).
 toward each target at 30 fps and falls back to a local idle animation after 2 s without packets,
 and widens the eyes on its own when the PIR fires (a fast local reflex, like the Giant Fiber).
 
+## Live dashboard
+
+`companion_brain/ui/server.py` is a stdlib HTTP server started by `run` (port 8600). It serves
+`ui/index.html`, `/circuit.json` once (normalized FAFB x/y position, role and cell type of every
+simulated neuron), `/frame.jpg` (latest camera preview) and `/events`, a server-sent-events
+stream at the body rate carrying the body packet plus behavior scores, modulators, sensory
+features, readout rates, the indices of neurons that spiked since the last event, and the cell
+types with the most spikes in the last 100 ms. The page is plain HTML/canvas with no
+dependencies; the brain map draws each spike as a flash at the neuron's real anatomical
+position (frontal view).
+
 ## Adding arms later
 
 `arms.l` / `arms.r` are already in every packet (currently the steering lateral bias and 0).

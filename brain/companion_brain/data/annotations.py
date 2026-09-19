@@ -16,11 +16,14 @@ import pandas as pd
 from ..config import Config
 
 COLUMNS = ["root_id", "super_class", "cell_class", "cell_type", "hemibrain_type", "top_nt", "side"]
+POS_COLUMNS = ["pos_x", "pos_y", "pos_z"]
 
 
 def load_annotations(path: Path) -> pd.DataFrame:
-    ann = pd.read_csv(path, sep="\t", usecols=COLUMNS, low_memory=False)
+    ann = pd.read_csv(path, sep="\t", usecols=COLUMNS + POS_COLUMNS, low_memory=False)
     ann["root_id"] = ann["root_id"].astype(np.int64)
+    for c in POS_COLUMNS:
+        ann[c] = ann[c].fillna(0).astype(np.float32)
     for c in COLUMNS[1:]:
         ann[c] = ann[c].fillna("")
     return ann

@@ -27,6 +27,7 @@ class BrainRunner:
         self.brain_ms = 0.0
         self.behind_ms = 0.0
         self.last_chunk_wall_ms = 0.0
+        self.since_take = np.zeros(circuit.n, dtype=np.int32)   # spike counts since take_recent()
 
     # ---- drive ---------------------------------------------------------------------------
     def clear_drive(self) -> None:
@@ -43,6 +44,7 @@ class BrainRunner:
         counts = self.net.run_ms(self.chunk_ms)
         self.last_chunk_wall_ms = (time.perf_counter() - t0) * 1e3
         self.history.append(counts)
+        self.since_take += counts
         self.brain_ms += self.chunk_ms
         return counts
 
@@ -75,6 +77,12 @@ class BrainRunner:
                 idx = self.c.idx(g, side)
                 d[side] = float(total[idx].sum() / (len(idx) * window_s)) if len(idx) else 0.0
             out[g] = d
+        return out
+
+    def take_recent(self) -> np.ndarray:
+        """Spike counts per neuron since the previous call (for live display)."""
+        out = self.since_take.copy()
+        self.since_take[:] = 0
         return out
 
     def window_counts(self) -> np.ndarray:

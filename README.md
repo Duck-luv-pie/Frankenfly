@@ -37,9 +37,14 @@ uv run companion download                 # ~135 MB of connectome + annotations
 uv run companion prune                    # builds the real-time circuit (cached)
 uv run companion bench                    # checks the circuit runs faster than real time
 uv run companion test-gf                  # looming neurons → Giant Fiber escape sanity test
-uv run companion run --dry-body           # run with the camera, print body packets
-uv run companion run                      # run against the real robot
+uv run companion run --sim-camera 0 --dry-body --open   # no robot yet: Mac webcam + live dashboard
+uv run companion run                                      # ESP32-CAM + real robot (dashboard too)
 ```
+
+Every `run` serves a live dashboard at <http://localhost:8600> (`--open` launches it, `--no-ui`
+disables it): the camera with what the fly's eye detects, an animated fly acting out the
+descending neurons, the two robot eyes, a map of all simulated neurons flashing as they spike,
+readout rates, behavior scores and the cell types firing right now.
 
 Firmware (needs [PlatformIO](https://platformio.org/) CLI, `uv tool install platformio`):
 

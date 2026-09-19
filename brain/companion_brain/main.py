@@ -96,8 +96,12 @@ def cmd_run(args, cfg):
     c = load_or_build(cfg, full=args.full)
     brain = BrainRunner(c, cfg, seed=None)
     cam_cfg = cfg.senses.camera
+    dash = None
+    if not args.no_ui:
+        from .ui.server import Dashboard
+        dash = Dashboard(c, cfg, port=args.ui_port, open_browser=args.open)
     if args.sim_camera == "synthetic":
-        source = SyntheticLooming(cam_cfg.width, cam_cfg.height, cam_cfg.fps)
+        source = SyntheticLooming(cam_cfg.width, cam_cfg.height, cam_cfg.fps, loop=dash is not None)
     else:
         source = CameraStream(args.sim_camera or cam_cfg.url, cam_cfg.width, cam_cfg.height)
     lobe = OpticLobe(cam_cfg.width, cam_cfg.height, cam_cfg.fps)
@@ -110,7 +114,7 @@ def cmd_run(args, cfg):
     last_sound = (0, 0.0)
     t_start = time.time()
     print(f"[run] {c.n:,} neurons; camera={'synthetic' if args.sim_camera == 'synthetic' else (args.sim_camera or cam_cfg.url)}; "
-          f"body={'dry' if args.dry_body else cfg.body.host}. Ctrl-C to stop.")
+          f"body={'dry' if args.dry_body else cfg.body.host}. Ctrl-C to stop.", flush=True)
     feats = None
     try:
         while True:
@@ -156,11 +160,29 @@ def cmd_run(args, cfg):
                 "arms": {"l": round(d.lateral.get("track", 0.0), 2), "r": 0.0},
             }
             body.send(packet)
+            if dash is not None:
+                recent = brain.take_recent()
+                spiking = np.nonzero(recent)[0]
+                dash.publish({
+                    **packet,
+                    "scores": {k: round(v, 3) for k, v in d.scores.items()},
+                    "lateral": {k: round(v, 3) for k, v in d.lateral.items()},
+                    "valence": round(d.valence, 3), "arousal": round(d.arousal, 3), "reward": round(d.reward, 3),
+                    "asleep": asleep, "pir": int(body.pir),
+                    "sees": feats.as_dict() if feats else None,
+                    "rates": {g: {s: round(v, 1) for s, v in r.items()} for g, r in brain.rates().items()},
+                    "spikes": spiking.tolist(),
+                    "n_spikes": int(recent.sum()),
+                    "top_types": dash.top_types(brain.window_counts()),
+                    "brain": {"behind_ms": round(brain.behind_ms), "chunk_ms": round(brain.last_chunk_wall_ms, 1),
+                              "brain_s": round(brain.brain_ms / 1000, 1), "n": c.n},
+                }, frame=source.preview)
             if args.verbose:
-                act = {k: round(v, 2) for k, v in d.scores.items() if v > 0.05}
-                print(f"[brain] t={packet['t']:>7} behind={brain.behind_ms:5.0f}ms chunk={brain.last_chunk_wall_ms:4.1f}ms "
-                      f"state={d.state:<8} scores={act} val={d.valence:+.2f} ar={d.arousal:.2f} "
-                      f"feat={feats.as_dict() if feats else None}")
+                act = " ".join(f"{k}={v:.2f}" for k, v in d.scores.items() if v > 0.05)
+                fl, fr = (feats.left, feats.right) if feats else (None, None)
+                see = (f"loom L/R={fl.loom_fast:.2f}/{fr.loom_fast:.2f} obj L/R={fl.small_object:.2f}/{fr.small_object:.2f} "
+                       f"motion={feats.motion_energy:.2f}") if feats else "no frame"
+                print(f"[brain] t={packet['t'] / 1000:6.1f}s  {d.state:<8} {act:<40} | sees: {see}", flush=True)
             # --- pace
             dt = time.time() - tick
             if dt < period:
@@ -186,7 +208,11 @@ def main(argv=None):
     p = sub.add_parser("run"); p.add_argument("--full", action="store_true")
     p.add_argument("--sim-camera", default=None, metavar="SRC", help="'synthetic' or a video file / URL instead of the ESP32-CAM")
     p.add_argument("--dry-body", action="store_true", help="print body packets instead of sending UDP")
-    p.add_argument("-v", "--verbose", action="store_true"); p.set_defaults(fn=cmd_run)
+    p.add_argument("-v", "--verbose", action="store_true")
+    p.add_argument("--no-ui", action="store_true", help="do not start the live dashboard")
+    p.add_argument("--ui-port", type=int, default=8600)
+    p.add_argument("--open", action="store_true", help="open the dashboard in the default browser")
+    p.set_defaults(fn=cmd_run)
     args = ap.parse_args(argv)
     cfg = load_config(args.config, overrides=_parse_overrides(args.set))
     args.fn(args, cfg)

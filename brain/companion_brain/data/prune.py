@@ -30,6 +30,8 @@ class Circuit:
     weight_mv: np.ndarray         # float32 [M] signed synaptic weight in mV (count * sign * w_syn)
     groups: dict[str, dict[str, np.ndarray]]   # name -> {left,right,all} -> indices into root_ids
     meta: dict
+    pos: np.ndarray | None = None            # float32 [N,3] anchor position (FAFB voxels), for display
+    cell_type: np.ndarray | None = None      # str [N] annotation cell type, for display
 
     @property
     def n(self) -> int:
@@ -45,8 +47,13 @@ class Circuit:
     def save(self, path: Path) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         flat = {f"g__{g}__{s}": v for g, d in self.groups.items() for s, v in d.items()}
+        extra = {}
+        if self.pos is not None:
+            extra["pos"] = self.pos
+        if self.cell_type is not None:
+            extra["cell_type"] = np.asarray(self.cell_type, dtype=str)
         np.savez_compressed(path, root_ids=self.root_ids, pre=self.pre, post=self.post,
-                            weight_mv=self.weight_mv, **flat)
+                            weight_mv=self.weight_mv, **flat, **extra)
         path.with_suffix(".json").write_text(json.dumps(self.meta, indent=1))
 
     @classmethod
@@ -58,13 +65,15 @@ class Circuit:
                 _, g, s = k.split("__")
                 groups.setdefault(g, {})[s] = z[k]
         meta = json.loads(path.with_suffix(".json").read_text()) if path.with_suffix(".json").exists() else {}
-        return cls(z["root_ids"], z["pre"], z["post"], z["weight_mv"], groups, meta)
+        return cls(z["root_ids"], z["pre"], z["post"], z["weight_mv"], groups, meta,
+                   pos=z["pos"] if "pos" in z.files else None,
+                   cell_type=z["cell_type"] if "cell_type" in z.files else None)
 
 
 def circuit_key(cfg: Config, full: bool) -> str:
     material = json.dumps({"groups": cfg.groups, "inputs": cfg.inputs, "readouts": cfg.readouts,
                            "prune": cfg.prune, "min_synapses": cfg.lif.min_synapses,
-                           "w_syn": cfg.lif.w_syn_mv, "full": full}, sort_keys=True, default=str)
+                           "w_syn": cfg.lif.w_syn_mv, "full": full, "schema": 2}, sort_keys=True, default=str)
     return hashlib.sha1(material.encode()).hexdigest()[:10]
 
 
@@ -129,12 +138,17 @@ def build(cfg: Config, full: bool = False, verbose: bool = True) -> Circuit:
     new_index = np.full(N, -1, dtype=np.int32)
     new_index[keep] = np.arange(keep.sum(), dtype=np.int32)
     emask = keep[pre] & keep[post]
+    kept_ids = all_ids[keep]
+    ann_idx = ann.set_index("root_id")
+    ann_kept = ann_idx.reindex(kept_ids)
+    pos = ann_kept[["pos_x", "pos_y", "pos_z"]].fillna(0).to_numpy(dtype=np.float32)
+    cell_type = ann_kept["cell_type"].fillna("").replace("", "unnamed").to_numpy(dtype=str)
     circuit_groups = {}
     for name, g in groups.items():
         circuit_groups[name] = {s: _to_new(id2i, new_index, g.side(s)) for s in ("left", "right", "all")}
 
     c = Circuit(
-        root_ids=all_ids[keep],
+        root_ids=kept_ids,
         pre=new_index[pre[emask]],
         post=new_index[post[emask]],
         weight_mv=(count[emask] * sign[emask] * cfg.lif.w_syn_mv).astype(np.float32),
@@ -144,6 +158,8 @@ def build(cfg: Config, full: bool = False, verbose: bool = True) -> Circuit:
             "group_sizes": {k: {s: int(len(v[s])) for s in v} for k, v in circuit_groups.items()},
             "group_types": {k: g.meta.get("types", []) for k, g in groups.items()},
         },
+        pos=pos,
+        cell_type=cell_type,
     )
     log(f"[prune] circuit: {c.n:,} neurons, {c.m:,} connections")
     for name in list(cfg.inputs) + list(cfg.readouts):

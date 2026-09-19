@@ -9,6 +9,8 @@ import numpy as np
 
 
 class FrameSource:
+    preview: np.ndarray | None = None     # last frame at display size (BGR or gray), for the dashboard
+
     def read(self) -> np.ndarray | None:  # grayscale uint8 (H, W) or None when exhausted
         raise NotImplementedError
 
@@ -24,12 +26,13 @@ class CameraStream(FrameSource):
         self.reconnect_s = reconnect_s
         self.cap: cv2.VideoCapture | None = None
         self.last_attempt = 0.0
-        self.is_file = not url.startswith(("http://", "https://", "rtsp://"))
+        self.is_device = url.isdigit()          # "0" = the computer's own webcam
+        self.is_file = not self.is_device and not url.startswith(("http://", "https://", "rtsp://"))
         self._open()
 
     def _open(self) -> None:
         self.last_attempt = time.time()
-        self.cap = cv2.VideoCapture(self.url)
+        self.cap = cv2.VideoCapture(int(self.url) if self.is_device else self.url)
         if not self.cap.isOpened():
             self.cap = None
 
@@ -45,6 +48,7 @@ class CameraStream(FrameSource):
             self.cap.release()
             self.cap = None
             return None
+        self.preview = cv2.resize(frame, (320, 240), interpolation=cv2.INTER_AREA)
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY) if frame.ndim == 3 else frame
         return cv2.resize(gray, (self.w, self.h), interpolation=cv2.INTER_AREA)
 
@@ -58,14 +62,17 @@ class SyntheticLooming(FrameSource):
     Timeline (seconds): 0-1 static, 1-2 small object drifts left->right (LC11/LC10a), 2-3 static,
     3-4 disc expands rapidly (LC4/LPLC2), 4-5 static."""
 
-    def __init__(self, width: int = 80, height: int = 60, fps: float = 15.0, duration_s: float = 5.0):
+    def __init__(self, width: int = 80, height: int = 60, fps: float = 15.0, duration_s: float = 5.0, loop: bool = False):
         self.w, self.h, self.fps = width, height, fps
         self.n_frames = int(duration_s * fps)
+        self.loop = loop
         self.i = 0
 
     def read(self) -> np.ndarray | None:
         if self.i >= self.n_frames:
-            return None
+            if not self.loop:
+                return None
+            self.i = 0
         t = self.i / self.fps
         self.i += 1
         img = np.full((self.h, self.w), 200, dtype=np.uint8)
@@ -76,4 +83,6 @@ class SyntheticLooming(FrameSource):
             r = int(2 + (self.h * 0.6) * ((t - 3.0) ** 2))  # accelerating expansion
             cv2.circle(img, (int(self.w * 0.6), self.h // 2), max(1, r), 30, -1)
         noise = np.random.default_rng(self.i).integers(-3, 4, img.shape)
-        return np.clip(img.astype(int) + noise, 0, 255).astype(np.uint8)
+        out = np.clip(img.astype(int) + noise, 0, 255).astype(np.uint8)
+        self.preview = cv2.resize(out, (320, 240), interpolation=cv2.INTER_NEAREST)
+        return out

@@ -1,0 +1,380 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Companion · fly brain live</title>
+<style>
+  :root { --bg:#0b0e14; --panel:#131826; --line:#1f2740; --text:#e6e9f0; --muted:#8a93a8; --accent:#4fd1ff; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:14px/1.4 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; padding:12px 16px 24px; }
+  header { display:flex; flex-wrap:wrap; align-items:center; gap:14px; margin-bottom:12px; }
+  header h1 { font-size:18px; margin:0; font-weight:600; letter-spacing:.2px; }
+  #state { font-size:22px; font-weight:700; padding:6px 16px; border-radius:999px; background:#2a3350; transition: background .2s; text-transform:uppercase; letter-spacing:1px; }
+  .chips { display:flex; flex-wrap:wrap; gap:8px; margin-left:auto; }
+  .chip { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:4px 10px; color:var(--muted); font-size:12px; }
+  .chip b { color:var(--text); font-weight:600; }
+  #conn { width:10px; height:10px; border-radius:50%; background:#c33; display:inline-block; margin-right:6px; }
+  .grid { display:grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap:12px; }
+  @media (max-width: 1100px) { .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (max-width: 720px) { .grid { grid-template-columns: 1fr; } }
+  .panel { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:10px 12px; min-width:0; }
+  .panel h2 { font-size:12px; text-transform:uppercase; letter-spacing:1px; color:var(--muted); margin:0 0 8px; font-weight:600; }
+  .panel h2 span { float:right; text-transform:none; letter-spacing:0; font-weight:400; }
+  .stage { position:relative; width:100%; aspect-ratio:4/3; background:#05070b; border-radius:8px; overflow:hidden; }
+  .stage img, .stage canvas { position:absolute; inset:0; width:100%; height:100%; }
+  .stage img { object-fit:fill; }
+  .wide { grid-column: span 2; }
+  @media (max-width: 720px) { .wide { grid-column: span 1; } }
+  .bars { display:grid; grid-template-columns: 110px 1fr 1fr 44px; gap:4px 8px; align-items:center; font-size:12px; }
+  .bars .lbl { color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .bars .lbl.hot { color:var(--text); font-weight:600; }
+  .bar { height:10px; background:#0a0d16; border-radius:3px; overflow:hidden; }
+  .bar i { display:block; height:100%; width:0; background:var(--accent); transition: width .12s linear; }
+  .bar.l i { background:#4fd1ff; } .bar.r i { background:#ffb347; }
+  .bars .val { text-align:right; color:var(--muted); font-variant-numeric: tabular-nums; }
+  .scores { display:grid; grid-template-columns: 90px 1fr 40px; gap:4px 8px; align-items:center; font-size:12px; }
+  .scores .bar i { background:#8fd3a5; }
+  .legend { font-size:11px; color:var(--muted); display:flex; gap:12px; flex-wrap:wrap; margin-top:6px; }
+  .legend i { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:4px; }
+  #types { list-style:none; padding:0; margin:0; display:grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap:3px 14px; font-size:12px; }
+  #types li { display:flex; justify-content:space-between; border-bottom:1px dashed var(--line); padding:2px 0; }
+  #types li b { font-weight:600; }
+  #types li span { color:var(--muted); font-variant-numeric: tabular-nums; }
+  .gauge { display:flex; align-items:center; gap:8px; font-size:12px; color:var(--muted); margin:4px 0; }
+  .gauge .track { flex:1; height:8px; background:#0a0d16; border-radius:4px; position:relative; }
+  .gauge .track i { position:absolute; top:-2px; width:4px; height:12px; background:var(--text); border-radius:2px; margin-left:-2px; transition:left .12s linear; }
+  .gauge .track.bipolar::after { content:""; position:absolute; left:50%; top:0; bottom:0; width:1px; background:var(--line); }
+  #tip { position:absolute; pointer-events:none; background:#000c; color:#fff; font-size:11px; padding:3px 6px; border-radius:4px; display:none; white-space:nowrap; }
+  .eyes { display:flex; gap:10px; justify-content:center; }
+  .eyes canvas { width:46%; aspect-ratio:1; background:#000; border-radius:50%; }
+  small.hint { color:var(--muted); display:block; margin-top:6px; font-size:11px; }
+</style>
+</head>
+<body>
+<header>
+  <h1><span id="conn"></span>Companion · fruit-fly brain, live</h1>
+  <div id="state">connecting</div>
+  <div class="chips">
+    <div class="chip">neurons <b id="c-n">–</b></div>
+    <div class="chip">connections <b id="c-m">–</b></div>
+    <div class="chip">brain time <b id="c-t">–</b></div>
+    <div class="chip">lag <b id="c-lag">–</b></div>
+    <div class="chip">spikes/s <b id="c-sps">–</b></div>
+    <div class="chip">PIR <b id="c-pir">–</b></div>
+  </div>
+</header>
+
+<div class="grid">
+  <div class="panel">
+    <h2>Fly's eye <span id="cam-note">camera → synthetic optic lobe</span></h2>
+    <div class="stage"><img id="cam" alt=""><canvas id="overlay"></canvas></div>
+    <small class="hint">Left/right hemifields feed the left/right brain. Red = looming (LC4/LPLC2), cyan = small object (LC11/LC10a), bar height = drive.</small>
+  </div>
+
+  <div class="panel">
+    <h2>The fly <span id="fly-note">acting out the descending neurons</span></h2>
+    <div class="stage"><canvas id="arena"></canvas></div>
+    <small class="hint">Tracks objects with DNa01/02, jumps on Giant Fiber, walks backward on MDN, freezes on DNp09, grooms on DNg11/12, raises wings on threat, sings on pC1.</small>
+  </div>
+
+  <div class="panel">
+    <h2>Robot eyes <span>what the GC9A01 displays show</span></h2>
+    <div class="eyes"><canvas id="eyeL" width="240" height="240"></canvas><canvas id="eyeR" width="240" height="240"></canvas></div>
+    <div class="gauge">valence <div class="track bipolar"><i id="g-val" style="left:50%"></i></div></div>
+    <div class="gauge">arousal <div class="track"><i id="g-ar" style="left:0"></i></div></div>
+    <div class="gauge">sound <b id="g-snd" style="color:var(--text)">–</b></div>
+  </div>
+
+  <div class="panel wide">
+    <h2>Brain <span>FlyWire neurons, frontal view · each flash is a spike</span></h2>
+    <div class="stage" style="aspect-ratio:2/1"><canvas id="brainBase"></canvas><canvas id="brainAct"></canvas><div id="tip"></div></div>
+    <div class="legend"><span><i style="background:#4fd1ff"></i>sensory inputs (LC4, LPLC2, LC11, JO…)</span><span><i style="background:#ffb347"></i>readouts (descending neurons, pC1, MBON…)</span><span><i style="background:#ffe66d"></i>everything in between</span></div>
+  </div>
+
+  <div class="panel">
+    <h2>Readout neurons <span>Hz per neuron · left | right</span></h2>
+    <div class="bars" id="rates"></div>
+  </div>
+
+  <div class="panel">
+    <h2>Behaviors <span>score 0–1</span></h2>
+    <div class="scores" id="scores"></div>
+  </div>
+
+  <div class="panel wide">
+    <h2>Firing now <span>spikes in last 100 ms, by cell type · hover the brain map to name a neuron</span></h2>
+    <ul id="types"></ul>
+    <canvas id="spark" height="40" style="width:100%; height:40px; margin-top:8px"></canvas>
+  </div>
+</div>
+
+<script>
+'use strict';
+const $ = id => document.getElementById(id);
+const STATE_COLORS = { idle:'#2a3350', sleep:'#2b2a5e', track:'#1f5fa8', escape:'#c0392b', freeze:'#6c3fb5', backward:'#d97a1a', threat:'#a8123a', groom:'#1f8a5a', land:'#158a8a', social:'#c23a8a' };
+
+// ---------------------------------------------------------------- state from the brain
+let circuit = null, last = null, lastAt = 0, sparkBuf = [], spikeAcc = 0, spikeAccAt = performance.now();
+let eyeAnim = { blink:0 };
+
+function connect() {
+  const es = new EventSource('/events');
+  es.onopen = () => { $('conn').style.background = '#2ecc71'; };
+  es.onerror = () => { $('conn').style.background = '#c33'; };
+  es.onmessage = ev => {
+    const p = JSON.parse(ev.data);
+    last = p; lastAt = performance.now();
+    onPacket(p);
+  };
+}
+
+function onPacket(p) {
+  $('state').textContent = p.state;
+  $('state').style.background = STATE_COLORS[p.state] || '#2a3350';
+  $('c-t').textContent = p.brain.brain_s.toFixed(1) + ' s';
+  $('c-lag').textContent = p.brain.behind_ms + ' ms';
+  $('c-pir').textContent = p.pir ? 'motion' : 'quiet';
+  spikeAcc += p.n_spikes;
+  const now = performance.now();
+  if (now - spikeAccAt > 500) { const sps = spikeAcc * 1000 / (now - spikeAccAt); $('c-sps').textContent = Math.round(sps).toLocaleString(); sparkBuf.push(sps); if (sparkBuf.length > 240) sparkBuf.shift(); spikeAcc = 0; spikeAccAt = now; drawSpark(); }
+  renderRates(p.rates);
+  renderScores(p.scores, p.state);
+  renderTypes(p.top_types);
+  $('g-val').style.left = (50 + 50 * p.valence) + '%';
+  $('g-ar').style.left = (100 * p.arousal) + '%';
+  $('g-snd').textContent = p.sound.track ? ('track ' + p.sound.track) : '–';
+  if (p.blink) eyeAnim.blink = 1;
+  flashSpikes(p.spikes);
+  fly.onPacket(p);
+}
+
+// ---------------------------------------------------------------- camera + overlay
+const cam = $('cam'), ov = $('overlay');
+setInterval(() => { cam.src = '/frame.jpg?' + Date.now(); }, 100);
+function drawOverlay() {
+  const w = ov.width = ov.clientWidth, h = ov.height = ov.clientHeight, c = ov.getContext('2d');
+  c.clearRect(0, 0, w, h);
+  if (!last || !last.sees) return;
+  const s = last.sees;
+  c.strokeStyle = '#ffffff33'; c.setLineDash([4, 4]); c.beginPath(); c.moveTo(w/2, 0); c.lineTo(w/2, h); c.stroke(); c.setLineDash([]);
+  [['L', 8], ['R', w/2 + 8]].forEach(([side, x0]) => {
+    const f = s[side];
+    const bar = (x, v, col, label) => { c.fillStyle = col + '55'; c.fillRect(x, 8, 14, 60); c.fillStyle = col; c.fillRect(x, 8 + 60 * (1 - v), 14, 60 * v); c.fillStyle = '#fff'; c.font = '10px sans-serif'; c.fillText(label, x - 1, 80); };
+    bar(x0, f.loom_fast, '#ff4d4d', 'loom'); bar(x0 + 22, f.small_object, '#4fd1ff', 'obj'); bar(x0 + 44, f.bar, '#ffe66d', 'bar');
+    if (f.small_object > 0) {
+      const cx = (side === 'L' ? 0 : w/2) + (f.object_x + 1) / 2 * (w/2), cy = (f.object_y + 1) / 2 * h;
+      c.strokeStyle = '#4fd1ff'; c.lineWidth = 2; c.beginPath(); c.arc(cx, cy, 10 + 10 * f.small_object, 0, Math.PI * 2); c.stroke();
+    }
+    if (f.loom_fast > 0.05) { c.strokeStyle = '#ff4d4d'; c.lineWidth = 3 * f.loom_fast + 1; c.strokeRect(side === 'L' ? 2 : w/2 + 2, 2, w/2 - 4, h - 4); }
+  });
+  c.fillStyle = '#ffffff99'; c.fillRect(w - 12, h - 8 - 60 * s.motion, 6, 60 * s.motion);
+}
+
+// ---------------------------------------------------------------- robot eyes
+function drawEye(cv, e, blink) {
+  const c = cv.getContext('2d'), S = cv.width, cx = S/2, cy = S/2, R = S/2 - 2;
+  c.clearRect(0, 0, S, S);
+  c.fillStyle = '#fff'; c.beginPath(); c.arc(cx, cy, R, 0, Math.PI*2); c.fill();
+  const irisR = R * 0.55, maxOff = R - irisR - 4, ix = cx + e.px * maxOff, iy = cy + e.py * maxOff;
+  const pupR = irisR * (0.25 + 0.65 * e.pr);
+  c.fillStyle = `rgb(${e.tint[0]},${e.tint[1]},${e.tint[2]})`; c.beginPath(); c.arc(ix, iy, irisR, 0, Math.PI*2); c.fill();
+  c.fillStyle = '#000'; c.beginPath(); c.arc(ix, iy, pupR, 0, Math.PI*2); c.fill();
+  c.fillStyle = '#fff'; c.beginPath(); c.arc(ix - irisR/3, iy - irisR/3, irisR/6, 0, Math.PI*2); c.fill();
+  const ut = e.ut * (1 - blink), lt = e.lt * (1 - blink);
+  c.save(); c.beginPath(); c.arc(cx, cy, R + 1, 0, Math.PI*2); c.clip();
+  c.fillStyle = '#1a1c22'; c.fillRect(0, 0, S, cy - R * ut); c.fillRect(0, cy + R * lt, S, S);
+  c.restore();
+}
+
+// ---------------------------------------------------------------- brain map
+const base = $('brainBase'), act = $('brainAct'), tip = $('tip');
+let bw = 0, bh = 0, pts = null;
+function layoutBrain() {
+  const w = base.clientWidth, h = base.clientHeight;
+  if (!circuit || (w === bw && h === bh)) return;
+  bw = base.width = act.width = w; bh = base.height = act.height = h;
+  const c = base.getContext('2d'); c.fillStyle = '#05070b'; c.fillRect(0, 0, w, h);
+  pts = new Float32Array(circuit.n * 2);
+  const pad = 10;
+  for (let i = 0; i < circuit.n; i++) {
+    const x = circuit.x[i], y = circuit.y[i];
+    if (x < 0) { pts[2*i] = -100; pts[2*i+1] = -100; continue; }
+    pts[2*i] = pad + x * (w - 2*pad); pts[2*i+1] = pad + y * (h - 2*pad);
+    const r = circuit.role[i];
+    c.fillStyle = r === 1 ? '#4fd1ff44' : r === 2 ? '#ffb34766' : '#ffffff18';
+    c.fillRect(pts[2*i], pts[2*i+1], r ? 2 : 1, r ? 2 : 1);
+  }
+}
+function flashSpikes(idx) {
+  if (!pts) return;
+  const c = act.getContext('2d');
+  for (const i of idx) {
+    const x = pts[2*i], y = pts[2*i+1]; if (x < 0) continue;
+    const r = circuit.role[i];
+    c.fillStyle = r === 1 ? '#4fd1ff' : r === 2 ? '#ffb347' : '#ffe66d';
+    if (r === 2) { c.beginPath(); c.arc(x, y, 3.5, 0, Math.PI*2); c.fill(); }
+    else c.fillRect(x - 1, y - 1, r ? 3 : 2, r ? 3 : 2);
+  }
+}
+function fadeBrain() { if (!bw) return; const c = act.getContext('2d'); c.fillStyle = 'rgba(5,7,11,0.16)'; c.fillRect(0, 0, bw, bh); }
+act.addEventListener('mousemove', ev => {
+  if (!pts) return;
+  const rect = act.getBoundingClientRect(), mx = ev.clientX - rect.left, my = ev.clientY - rect.top;
+  let best = -1, bd = 64;
+  for (let i = 0; i < circuit.n; i++) { const dx = pts[2*i] - mx, dy = pts[2*i+1] - my, d = dx*dx + dy*dy; if (d < bd) { bd = d; best = i; } }
+  if (best < 0) { tip.style.display = 'none'; return; }
+  tip.style.display = 'block'; tip.style.left = (mx + 12) + 'px'; tip.style.top = (my + 12) + 'px';
+  tip.textContent = circuit.type[best] + (circuit.group[best] ? ' · ' + circuit.group[best] : '');
+});
+act.addEventListener('mouseleave', () => tip.style.display = 'none');
+
+// ---------------------------------------------------------------- readouts, scores, types, sparkline
+const rateRows = {}, scoreRows = {};
+function renderRates(rates) {
+  const box = $('rates');
+  for (const g of Object.keys(rates)) {
+    if (!rateRows[g]) {
+      const lbl = document.createElement('div'); lbl.className = 'lbl'; lbl.textContent = g;
+      const l = document.createElement('div'); l.className = 'bar l'; l.innerHTML = '<i></i>';
+      const r = document.createElement('div'); r.className = 'bar r'; r.innerHTML = '<i></i>';
+      const v = document.createElement('div'); v.className = 'val';
+      box.append(lbl, l, r, v); rateRows[g] = { lbl, l: l.firstChild, r: r.firstChild, v };
+    }
+    const row = rateRows[g], x = rates[g];
+    row.l.style.width = Math.min(100, x.left / 1.5) + '%';
+    row.r.style.width = Math.min(100, x.right / 1.5) + '%';
+    row.v.textContent = x.all.toFixed(0);
+    row.lbl.className = 'lbl' + (x.all > 5 ? ' hot' : '');
+  }
+}
+function renderScores(scores, state) {
+  const box = $('scores');
+  for (const b of Object.keys(scores)) {
+    if (!scoreRows[b]) {
+      const lbl = document.createElement('div'); lbl.className = 'lbl'; lbl.textContent = b;
+      const bar = document.createElement('div'); bar.className = 'bar'; bar.innerHTML = '<i></i>';
+      const v = document.createElement('div'); v.className = 'val';
+      box.append(lbl, bar, v); scoreRows[b] = { lbl, i: bar.firstChild, v };
+    }
+    const row = scoreRows[b];
+    row.i.style.width = (100 * scores[b]) + '%';
+    row.i.style.background = b === state ? (STATE_COLORS[b] || '#8fd3a5') : '#3d5a4a';
+    row.v.textContent = scores[b].toFixed(2);
+    row.lbl.style.color = b === state ? 'var(--text)' : '';
+    row.lbl.style.fontWeight = b === state ? '600' : '';
+  }
+}
+function renderTypes(list) {
+  const ul = $('types'); ul.innerHTML = '';
+  for (const [name, n] of list) { const li = document.createElement('li'); li.innerHTML = `<b></b><span></span>`; li.firstChild.textContent = name; li.lastChild.textContent = n + ' spk'; ul.append(li); }
+}
+function drawSpark() {
+  const cv = $('spark'), w = cv.width = cv.clientWidth, h = cv.height, c = cv.getContext('2d');
+  c.clearRect(0, 0, w, h); if (!sparkBuf.length) return;
+  const mx = Math.max(1000, ...sparkBuf);
+  c.strokeStyle = '#8fd3a5'; c.lineWidth = 1.5; c.beginPath();
+  sparkBuf.forEach((v, i) => { const x = i / 239 * w, y = h - 2 - (h - 4) * v / mx; i ? c.lineTo(x, y) : c.moveTo(x, y); });
+  c.stroke(); c.fillStyle = '#8a93a8'; c.font = '10px sans-serif'; c.fillText('spikes/s, last 2 min · peak ' + Math.round(mx).toLocaleString(), 4, 10);
+}
+
+// ---------------------------------------------------------------- the animated fly
+const fly = {
+  x: 0.5, y: 0.6, heading: -Math.PI/2, speed: 0, legPhase: 0, t: 0, state: 'idle', objX: 0, objSeen: 0, lateral: 0,
+  jump: 0, jumpDir: 0, wingL: 0, wingR: 0, scale: 1, groomT: 0, wander: 0, songSide: 1, songT: 0,
+  onPacket(p) {
+    this.state = p.state; this.lateral = (p.lateral && p.lateral.track) || 0;
+    const s = p.sees; this.objSeen = s ? s.obj[2] : 0; this.objX = s ? s.obj[0] : 0;
+    if (p.state === 'escape' && this.jump <= 0 && this.prevState !== 'escape') { this.jump = 0.45; this.jumpDir = this.heading + Math.PI + (this.objX || 0) * 0.8; }
+    this.prevState = p.state;
+  },
+  step(dt) {
+    this.t += dt;
+    const st = this.state;
+    let target = this.heading, turn = 0, speed = 0;
+    if (st === 'track' || st === 'social') { turn = (this.objSeen ? this.objX : this.lateral) * 2.2; speed = st === 'track' ? 0.16 : 0.06; }
+    else if (st === 'backward') { speed = -0.10; turn = 0.4 * Math.sin(this.t * 3); }
+    else if (st === 'idle') { this.wander += (Math.random() - 0.5) * dt * 3; this.wander *= 0.98; turn = this.wander; speed = 0.035 + 0.02 * Math.sin(this.t * 0.7); }
+    else if (st === 'land') { speed = 0.02; }
+    // keep the fly in the arena by steering toward the middle near the edges
+    const dxm = 0.5 - this.x, dym = 0.55 - this.y, edge = Math.max(Math.abs(dxm) - 0.32, Math.abs(dym) - 0.3, 0);
+    if (edge > 0 && speed !== 0) { const want = Math.atan2(dym, dxm) - (speed < 0 ? Math.PI : 0); let d = want - this.heading; d = Math.atan2(Math.sin(d), Math.cos(d)); turn += d * 4 * edge * 10; }
+    this.heading += turn * dt;
+    if (this.jump > 0) { this.jump -= dt; const k = Math.sin(Math.PI * Math.max(0, this.jump) / 0.45); this.scale = 1 + 0.9 * k; this.x += Math.cos(this.jumpDir) * 0.5 * dt; this.y += Math.sin(this.jumpDir) * 0.5 * dt; this.wingL = this.wingR = 1.2 * k + 0.2; }
+    else { this.scale += (1 - this.scale) * 0.2; this.x += Math.cos(this.heading) * speed * dt; this.y += Math.sin(this.heading) * speed * dt; }
+    this.x = Math.min(0.94, Math.max(0.06, this.x)); this.y = Math.min(0.92, Math.max(0.1, this.y));
+    this.legPhase += (Math.abs(speed) > 0.01 ? speed * 60 : 0) * dt;
+    // wings
+    let wl = 0.12, wr = 0.12;
+    if (st === 'threat') { wl = wr = 0.8 + 0.1 * Math.sin(this.t * 20); }
+    else if (st === 'social') { this.songT += dt; if (this.songT > 2.5) { this.songT = 0; this.songSide = -this.songSide; } const ext = 1.3 + 0.08 * Math.sin(this.t * 40); if (this.songSide > 0) wl = ext; else wr = ext; }
+    else if (st === 'land') { wl = wr = 0.5; }
+    else if (st === 'escape' && this.jump <= 0) { wl = wr = 0.5; }
+    if (this.jump <= 0) { this.wingL += (wl - this.wingL) * 0.25; this.wingR += (wr - this.wingR) * 0.25; }
+    this.groomT = st === 'groom' ? this.groomT + dt : 0;
+  },
+  draw(cv) {
+    const w = cv.width = cv.clientWidth, h = cv.height = cv.clientHeight, c = cv.getContext('2d');
+    c.fillStyle = '#0d1018'; c.fillRect(0, 0, w, h);
+    c.strokeStyle = '#1f2740'; c.lineWidth = 1; for (let i = 1; i < 6; i++) { c.beginPath(); c.moveTo(w * i / 6, 0); c.lineTo(w * i / 6, h); c.stroke(); c.beginPath(); c.moveTo(0, h * i / 6); c.lineTo(w, h * i / 6); c.stroke(); }
+    c.fillStyle = '#8a93a8'; c.font = '11px sans-serif'; c.fillText('camera ▲', w / 2 - 26, 14);
+    if (this.objSeen > 0) { c.fillStyle = '#4fd1ff88'; c.beginPath(); c.arc(w / 2 + this.objX * w * 0.4, 26, 6 + 6 * this.objSeen, 0, Math.PI * 2); c.fill(); }
+    const S = Math.min(w, h) * 0.14 * this.scale;
+    c.save(); c.translate(this.x * w, this.y * h); c.rotate(this.heading + Math.PI / 2); c.scale(S / 40, S / 40);
+    if (this.jump > 0) { c.fillStyle = '#00000055'; c.beginPath(); c.ellipse(6, 10, 22, 30, 0, 0, Math.PI * 2); c.fill(); }
+    const st = this.state, still = (st === 'freeze' || st === 'sleep');
+    // legs: three per side, tripod gait
+    c.strokeStyle = '#c8a86b'; c.lineWidth = 2.2; c.lineCap = 'round';
+    for (let side = -1; side <= 1; side += 2) for (let i = 0; i < 3; i++) {
+      const phase = this.legPhase + ((i + (side > 0 ? 1 : 0)) % 2) * Math.PI;
+      let swing = still ? 0 : Math.sin(phase) * 0.35;
+      const baseY = -8 + i * 9, ang = side * (0.9 + i * 0.35) + swing * side;
+      let kx = side * 16 * Math.cos(ang - side * 0.4) , ky = baseY + 16 * Math.sin(ang - side * 0.4) * (i === 0 ? -1 : i === 1 ? 0.2 : 1);
+      let fx = kx + side * 14 * Math.cos(ang + side * 0.3), fy = ky + 14 * Math.sin(ang + side * 0.3) * (i === 0 ? -1 : i === 1 ? 0.2 : 1);
+      if (i === 0 && st === 'groom') { const g = Math.sin(this.groomT * 14) * 6; kx = side * 8; ky = -20 + g; fx = side * 2; fy = -30 + g * 0.5; }
+      if (st === 'sleep') { fy += 4; }
+      c.beginPath(); c.moveTo(side * 6, baseY); c.lineTo(kx, ky); c.lineTo(fx, fy); c.stroke();
+    }
+    // wings
+    const wing = (dir, a) => { c.save(); c.translate(dir * 3, -6); c.rotate(dir * a + dir * 0.05); c.fillStyle = 'rgba(200,220,255,0.35)'; c.strokeStyle = 'rgba(200,220,255,0.6)'; c.lineWidth = 0.8; c.beginPath(); c.ellipse(0, 20, 7, 22, 0, 0, Math.PI * 2); c.fill(); c.stroke(); c.restore(); };
+    if (this.wingL > 0.6 || this.wingR > 0.6) { wing(-1, this.wingL); wing(1, this.wingR); }
+    // body
+    c.fillStyle = '#3b2a1a'; c.beginPath(); c.ellipse(0, 12, 9, 16, 0, 0, Math.PI * 2); c.fill();
+    c.strokeStyle = '#1a110a'; c.lineWidth = 1.5; for (let i = 0; i < 4; i++) { c.beginPath(); c.moveTo(-8 + i, 6 + i * 5); c.lineTo(8 - i, 6 + i * 5); c.stroke(); }
+    c.fillStyle = '#6b4a2b'; c.beginPath(); c.ellipse(0, -4, 8, 10, 0, 0, Math.PI * 2); c.fill();
+    if (this.wingL <= 0.6 && this.wingR <= 0.6) { wing(-1, this.wingL); wing(1, this.wingR); }
+    c.fillStyle = '#7a5433'; c.beginPath(); c.arc(0, -17, 6.5, 0, Math.PI * 2); c.fill();
+    c.fillStyle = st === 'sleep' ? '#7a2b2b' : '#e04040'; c.beginPath(); c.arc(-4.5, -18, 3.2, 0, Math.PI * 2); c.fill(); c.beginPath(); c.arc(4.5, -18, 3.2, 0, Math.PI * 2); c.fill();
+    c.strokeStyle = '#c8a86b'; c.lineWidth = 1.2; const droop = st === 'sleep' ? 4 : 0;
+    c.beginPath(); c.moveTo(-2, -22); c.lineTo(-6, -28 + droop); c.stroke(); c.beginPath(); c.moveTo(2, -22); c.lineTo(6, -28 + droop); c.stroke();
+    c.restore();
+    if (st === 'sleep') { c.fillStyle = '#8a93a8'; c.font = '16px sans-serif'; c.fillText('z z z', this.x * w + 20, this.y * h - 30 - 6 * Math.sin(this.t * 2)); }
+    if (st === 'social') { c.fillStyle = '#c23a8a'; c.font = '12px sans-serif'; c.fillText('♪ pulse song', this.x * w + 22, this.y * h - 24); }
+    if (st === 'freeze') { c.fillStyle = '#6c3fb5'; c.font = '12px sans-serif'; c.fillText('freeze', this.x * w + 22, this.y * h - 24); }
+  }
+};
+
+// ---------------------------------------------------------------- main loop
+let lastFrame = performance.now();
+function loop(now) {
+  const dt = Math.min(0.05, (now - lastFrame) / 1000); lastFrame = now;
+  layoutBrain(); fadeBrain();
+  fly.step(dt); fly.draw($('arena'));
+  drawOverlay();
+  if (last) {
+    eyeAnim.blink = Math.max(0, eyeAnim.blink - dt * 4);
+    const b = eyeAnim.blink > 0.5 ? (1 - eyeAnim.blink) * 2 : eyeAnim.blink * 2;
+    drawEye($('eyeL'), last.eyes.l, b); drawEye($('eyeR'), last.eyes.r, b);
+    if (now - lastAt > 3000) { $('state').textContent = 'no signal'; $('state').style.background = '#444'; }
+  }
+  requestAnimationFrame(loop);
+}
+fetch('/circuit.json').then(r => r.json()).then(c => {
+  circuit = c;
+  $('c-n').textContent = c.n.toLocaleString(); $('c-m').textContent = c.connections.toLocaleString();
+  connect(); requestAnimationFrame(loop);
+});
+window.addEventListener('resize', () => { bw = 0; });
+</script>
+</body>
+</html>
