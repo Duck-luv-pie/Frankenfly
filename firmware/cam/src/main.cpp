@@ -138,6 +138,7 @@ void setup() {
   boot_ms = millis();
   esp_task_wdt_init(15, true);        // if loop() stops being called for 15 s, reboot
   esp_task_wdt_add(nullptr);
+  esp_task_wdt_reset();
   pinMode(FLASH_LED_GPIO, OUTPUT);
   digitalWrite(FLASH_LED_GPIO, LOW);  // keep the bright flash LED off
 
@@ -152,9 +153,12 @@ void setup() {
   WiFi.begin(WIFI_SSID, WIFI_PASS);
   WiFi.setSleep(false);
   Serial.printf("connecting to %s", WIFI_SSID);
+  uint32_t t0 = millis();
   while (WiFi.status() != WL_CONNECTED) {
+    esp_task_wdt_reset();                 // joining can take a while; don't let the watchdog reboot us mid-connect
     delay(500);
     Serial.print('.');
+    if (millis() - t0 > 60000) { Serial.println("\nno WiFi after 60 s, rebooting"); ESP.restart(); }
   }
   Serial.printf("\nIP %s\n", WiFi.localIP().toString().c_str());
   if (MDNS.begin(HOSTNAME)) {
