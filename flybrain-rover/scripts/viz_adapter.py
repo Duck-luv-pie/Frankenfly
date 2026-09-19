@@ -214,10 +214,19 @@ def serve(ad: Adapter, brain_json: bytes, ui_dir: Path, asset_dirs: list[Path], 
     print(f"[viz-adapter] serving Ducks's viewer with our brain at http://localhost:{port}  (ui {ui_dir})", flush=True)
 
 
-FLY_STUB = """// stand-in for fly.js until the real module is pushed: a simple fly-coloured body
+FLY_STUB = """// stand-in for fly.js until Ducks pushes the real module. Same interface: createFly() -> { root, setPose },
+// demonstrationPose(fly, name, t, fps) -> pose. Loads the Body Lab fly rig if the adapter serves it, else a simple body.
 import * as THREE from 'three';
-export function createFly() { const g = new THREE.Group(); const body = new THREE.Mesh(new THREE.CapsuleGeometry(.08, .22, 4, 8), new THREE.MeshStandardMaterial({ color: '#6b4a2b', roughness: .6 })); body.rotation.z = Math.PI / 2; body.position.y = .12; g.add(body); const head = new THREE.Mesh(new THREE.SphereGeometry(.07, 12, 12), new THREE.MeshStandardMaterial({ color: '#8a2b2b' })); head.position.set(.2, .14, 0); g.add(head); g.userData.fly = true; return { group: g, update() {}, pose() {} }; }
-export function demonstrationPose() {}
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+export function createFly() {
+  const root = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.CapsuleGeometry(.8, 2.2, 4, 12), new THREE.MeshStandardMaterial({ color: '#6b4a2b', roughness: .6 }));
+  body.rotation.z = Math.PI / 2; body.position.y = 1.2; body.castShadow = true; root.add(body);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(.7, 16, 16), new THREE.MeshStandardMaterial({ color: '#8a2b2b' })); head.position.set(2, 1.4, 0); root.add(head);
+  new GLTFLoader().load('/drosophila-male-rig.glb', g => { root.remove(body); root.remove(head); g.scene.traverse(o => { if (o.isMesh) o.castShadow = true; }); root.add(g.scene); }, undefined, () => {});
+  return { root, setPose() {} };
+}
+export function demonstrationPose() { return {}; }
 """
 
 
