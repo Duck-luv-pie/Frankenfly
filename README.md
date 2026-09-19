@@ -42,6 +42,10 @@ uv run companion run --sim-camera 0 --dry-body --open   # no robot yet: Mac webc
 uv run companion run                                      # ESP32-CAM + real robot (dashboard too)
 ```
 
+The live brain adds a spontaneous-activity floor, spike-frequency adaptation and an inhibitory
+closure to the reference model so the fly is never silent (see `docs/architecture.md`); the
+fly in the dashboard is moved only by continuous motor channels decoded from descending neurons.
+
 Every `run` serves a live dashboard at <http://localhost:8600> (`--open` launches it, `--no-ui`
 disables it): the camera with what the fly's eye detects, an animated fly acting out the
 descending neurons, the two robot eyes, a map of all simulated neurons flashing as they spike,

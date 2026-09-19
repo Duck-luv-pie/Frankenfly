@@ -31,11 +31,17 @@ lif:
   w_syn_mv: 0.275
   dt_ms: 0.1
   min_synapses: 5          # connections weaker than this are dropped (as in Shiu et al.)
+  adapt_mv: 5.0            # spike-frequency adaptation per spike (0 = reference model); tames runaway excitatory loops
+  tau_adapt_ms: 200
+  background_hz: 1.0       # spontaneous firing floor (0 = silent brain, as in the paper) ...
+  background_classes: [central, descending, ascending, visual_centrifugal, endocrine]   # ... for these neurons only;
+                           # sensory and visual projection neurons fire only when the senses drive them
 
 # Circuit pruning: keep neurons on paths from inputs to readouts.
 prune:
   hops_forward: 2
   hops_backward: 2
+  inhibitory_closure_min_synapses: 20   # also keep inhibitory neurons with >= this many synapses both from and into the circuit (0 = off)
 
 # --- Neuron groups -------------------------------------------------------------
 # Selector keys: cell_type (list), regex (matched against cell_type), hemibrain_type (list),
@@ -72,11 +78,12 @@ groups:
   DAN_reward:     {regex: '^PAM'}
   DAN_punish:     {regex: '^PPL1'}
   octopamine:     {top_nt: octopamine}
+  DN_all:         {super_class: descending}         # the whole descending population = general motor drive
 
 # Which groups are stimulated (inputs) and which are read out (outputs) for pruning.
 inputs:  [LC4, LPLC2, LC16, LC11, LC10a, LC12, LC15, JO_wind]
 readouts: [GF, DNp09, MDN, DNa01, DNa02, DNg11, DNg12, DNp02, DNp04, DNp11, DNp07, DNp10,
-           pC1_social, pC1_aggression, MBON_avoid, MBON_approach, DAN_reward, DAN_punish, octopamine]
+           pC1_social, pC1_aggression, MBON_avoid, MBON_approach, DAN_reward, DAN_punish, octopamine, DN_all]
 
 # --- Senses -> input drive (Poisson rate in Hz per neuron, per hemifield) ------------
 senses:
@@ -90,7 +97,7 @@ senses:
     loom_fast:   {groups: [LC4, LPLC2], gain: 1.0}
     loom_slow:   {groups: [LC16],       gain: 1.0}
     small_object: {groups: [LC11, LC10a], gain: 1.0}
-    bar:         {groups: [LC12, LC15], gain: 0.7}
+    bar:         {groups: [LC12, LC15], gain: 0.4}
   pir:
     groups: [JO_wind]
     rate_hz: 100
@@ -99,22 +106,42 @@ senses:
   wake_motion: 0.15
 
 # --- Readouts -> behaviors -------------------------------------------------------------
-# score = clip(mean_rate_hz(group) / ref_hz, 0, 1); window is the rate window.
+# The brain has spontaneous activity, so every readout has a resting rate. At startup the brain
+# runs with no sensory input for `calibrate_s` seconds and the mean/std of each group's rate is
+# recorded (cached). Everything below is measured as a z-score against that baseline:
+#   z = (rate - resting_mean) / resting_std,   score = clip(z / z_ref, 0, 1)
 decode:
-  window_ms: 100
-  behaviors:
-    escape:     {groups: [GF],                         ref_hz: 20,  priority: 100, min_score: 0.2, hold_ms: 800}
-    backward:   {groups: [MDN],                        ref_hz: 30,  priority: 80,  min_score: 0.3, hold_ms: 600}
-    freeze:     {groups: [DNp09],                      ref_hz: 30,  priority: 70,  min_score: 0.3, hold_ms: 600}
-    threat:     {groups: [DNp02, DNp04, DNp11, pC1_aggression], ref_hz: 30, priority: 60, min_score: 0.3, hold_ms: 600}
-    groom:      {groups: [DNg11, DNg12],               ref_hz: 20,  priority: 40,  min_score: 0.3, hold_ms: 1200}
-    land:       {groups: [DNp07, DNp10],               ref_hz: 30,  priority: 30,  min_score: 0.3, hold_ms: 600}
-    social:     {groups: [pC1_social],                 ref_hz: 20,  priority: 20,  min_score: 0.3, hold_ms: 1500}
-    track:      {groups: [DNa01, DNa02],               ref_hz: 20,  priority: 10,  min_score: 0.15, hold_ms: 300}
+  window_ms: 500                 # default rate window (each behavior/channel may set its own window_ms)
+  calibrate_s: 6.0               # resting baseline: run this long with no senses ...
+  warmup_s: 3.0                  # ... after this long of settling (adaptation builds up over seconds)
+  baseline_drift_s: 120          # slowly re-center the resting mean on the running brain (0 = fixed)
+  min_std_hz: 1.0                # floor on the resting std so tiny groups don't explode
+  z0: 1.0                        # dead zone: excursions below this many sigma count as nothing
+  behaviors:                     # discrete states (label, robot eyes, sounds); priority wins, hold keeps it on
+    escape:     {groups: [GF],  window_ms: 200,       z_ref: 8, priority: 100, min_score: 0.6, hold_ms: 800}
+    backward:   {groups: [MDN],                        z_ref: 5, priority: 80,  min_score: 0.6, hold_ms: 600}
+    freeze:     {groups: [DNp09],                      z_ref: 5, priority: 70,  min_score: 0.7, hold_ms: 600}
+    threat:     {groups: [DNp02, DNp04, DNp11, pC1_aggression], z_ref: 5, priority: 60, min_score: 0.6, hold_ms: 600}
+    groom:      {groups: [DNg11, DNg12],               z_ref: 4, priority: 40,  min_score: 0.6, hold_ms: 1200}
+    land:       {groups: [DNp07, DNp10],               z_ref: 5, priority: 30,  min_score: 0.6, hold_ms: 600}
+    social:     {groups: [pC1_social],                 z_ref: 4, priority: 20,  min_score: 0.6, hold_ms: 1500}
+    track:      {groups: [DNa01, DNa02], window_ms: 300, z_ref: 4, priority: 10, min_score: 0.5, hold_ms: 300}
+  motor:                         # continuous channels 0..1 (turn: -1..1), what actually moves the fly
+    smoothing_ms: 400
+    channels:
+      forward:  {groups: [DN_all], window_ms: 300, z_ref: 2.5, z0: 0.0}   # descending population = walking drive
+      backward: {groups: [MDN],                    z_ref: 5}
+      turn:     {groups: [DNa01, DNa02], window_ms: 300, z_ref: 4, lateral: true}   # right minus left
+      groom:    {groups: [DNg11, DNg12],           z_ref: 4}
+      threat:   {groups: [DNp02, DNp04, DNp11, pC1_aggression], z_ref: 5}
+      song:     {groups: [pC1_social],             z_ref: 4}
+      land:     {groups: [DNp07, DNp10],           z_ref: 5}
+      freeze:   {groups: [DNp09],                  z_ref: 5}
+      jump:     {groups: [GF], window_ms: 200,     z_ref: 8}
   modulators:
-    valence:  {plus: MBON_approach, minus: MBON_avoid, ref_hz: 20}   # -1..1, iris tint
-    arousal:  {plus: octopamine, ref_hz: 20}                          # 0..1, pupil dilation
-    reward:   {plus: DAN_reward, minus: DAN_punish, ref_hz: 20}
+    valence:  {plus: MBON_approach, minus: MBON_avoid, z_ref: 3}   # -1..1, iris tint
+    arousal:  {plus: octopamine, z_ref: 3}                          # 0..1, pupil dilation
+    reward:   {plus: DAN_reward, minus: DAN_punish, z_ref: 3}
   sounds:      # behavior -> DFPlayer track number (0 = silent)
     escape: 1
     backward: 2

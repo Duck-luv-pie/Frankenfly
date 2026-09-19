@@ -56,8 +56,11 @@ def cmd_bench(args, cfg):
 
 
 def cmd_test_gf(args, cfg):
+    """Reference-model check (Shiu et al.): no background, no adaptation -> silent brain, looming fires GF."""
     from .data.prune import load_or_build
     from .sim.runner import BrainRunner
+    cfg.lif["background_hz"] = 0.0
+    cfg.lif["adapt_mv"] = 0.0
     c = load_or_build(cfg, full=args.full)
     r = BrainRunner(c, cfg, seed=1)
     # 1) silence: nothing should fire without input
@@ -89,12 +92,14 @@ def cmd_run(args, cfg):
     from .sim.runner import BrainRunner
     from .senses.camera import CameraStream, SyntheticLooming
     from .senses.optic_lobe import OpticLobe, features_to_rates
-    from .body.decode import Decoder
+    from .body.decode import Decoder, load_or_calibrate
     from .body.eyes import eyes_for
     from .body.link import BodyLink, DryBody
+    from .data.prune import circuit_key
 
     c = load_or_build(cfg, full=args.full)
     brain = BrainRunner(c, cfg, seed=None)
+    baseline = load_or_calibrate(brain, cfg, circuit_key(cfg, args.full), rebuild=args.recalibrate)
     cam_cfg = cfg.senses.camera
     dash = None
     if not args.no_ui:
@@ -105,7 +110,7 @@ def cmd_run(args, cfg):
     else:
         source = CameraStream(args.sim_camera or cam_cfg.url, cam_cfg.width, cam_cfg.height)
     lobe = OpticLobe(cam_cfg.width, cam_cfg.height, cam_cfg.fps)
-    decoder = Decoder(cfg)
+    decoder = Decoder(cfg, baseline)
     body = DryBody() if args.dry_body else BodyLink(cfg.body.host, cfg.body.port, cfg.body.listen_port)
     period = 1.0 / float(cfg.body.rate_hz)
     pir_until = 0.0
@@ -144,7 +149,7 @@ def cmd_run(args, cfg):
             # --- think
             brain.advance_to_wall()
             asleep = (tick - last_motion) > float(cfg.senses.sleep_after_s)
-            d = decoder.decode(brain.rates(), asleep=asleep, now=tick)
+            d = decoder.decode({w: brain.rates(w) for w in decoder.windows}, asleep=asleep, now=tick)
             # --- act
             gx, gy = (feats.object_x, feats.object_y) if feats and feats.object_strength > 0 else (0.0, 0.0)
             track = cfg.decode.sounds.get(d.state, 0)
@@ -158,6 +163,7 @@ def cmd_run(args, cfg):
                 "blink": d.state == "escape",
                 "sound": {"track": int(track), "vol": int(cfg.decode.volume)},
                 "arms": {"l": round(d.lateral.get("track", 0.0), 2), "r": 0.0},
+                "motor": d.motor,
             }
             body.send(packet)
             if dash is not None:
@@ -167,6 +173,7 @@ def cmd_run(args, cfg):
                     **packet,
                     "scores": {k: round(v, 3) for k, v in d.scores.items()},
                     "lateral": {k: round(v, 3) for k, v in d.lateral.items()},
+                    "z": d.z,
                     "valence": round(d.valence, 3), "arousal": round(d.arousal, 3), "reward": round(d.reward, 3),
                     "asleep": asleep, "pir": int(body.pir),
                     "sees": feats.as_dict() if feats else None,
@@ -178,7 +185,7 @@ def cmd_run(args, cfg):
                               "brain_s": round(brain.brain_ms / 1000, 1), "n": c.n},
                 }, frame=source.preview)
             if args.verbose:
-                act = " ".join(f"{k}={v:.2f}" for k, v in d.scores.items() if v > 0.05)
+                act = " ".join(f"{k}={v:.2f}" for k, v in d.motor.items() if abs(v) > 0.05)
                 fl, fr = (feats.left, feats.right) if feats else (None, None)
                 see = (f"loom L/R={fl.loom_fast:.2f}/{fr.loom_fast:.2f} obj L/R={fl.small_object:.2f}/{fr.small_object:.2f} "
                        f"motion={feats.motion_energy:.2f}") if feats else "no frame"
@@ -209,6 +216,7 @@ def main(argv=None):
     p.add_argument("--sim-camera", default=None, metavar="SRC", help="'synthetic' or a video file / URL instead of the ESP32-CAM")
     p.add_argument("--dry-body", action="store_true", help="print body packets instead of sending UDP")
     p.add_argument("-v", "--verbose", action="store_true")
+    p.add_argument("--recalibrate", action="store_true", help="re-measure the resting baseline")
     p.add_argument("--no-ui", action="store_true", help="do not start the live dashboard")
     p.add_argument("--ui-port", type=int, default=8600)
     p.add_argument("--open", action="store_true", help="open the dashboard in the default browser")

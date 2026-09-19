@@ -31,7 +31,8 @@ hemifield where the feature was seen.
 | **groom** | `DNg11`, `DNg12*` | 3/3, 21/21 | front-leg grooming descending neurons (Guo et al. 2022) |
 | **land** | `DNp07`, `DNp10` | 1/1 | landing-associated DNs (Ache et al. 2019) |
 | **social** | `pC1_social` = `pC1a`, `pC1b`, `pC1c` | 3/3 | female receptivity / social cluster (the FlyWire brain is female, so P1 does not exist) |
-| **track** | `DNa01`, `DNa02` | 1/1 | steering descending neurons (Rayshubskiy et al. 2020); L−R difference gives gaze bias |
+| **track** | `DNa01`, `DNa02` | 1/1 | steering descending neurons (Rayshubskiy et al. 2020); right minus left drives turning |
+| *forward walking (motor channel only)* | `DN_all` = every `descending` neuron | 337/337 | descending population activity tracks walking (Aymanns et al. 2022); used as the continuous walking drive, not as a state |
 
 Modulators (continuous, not states):
 
@@ -40,6 +41,9 @@ Modulators (continuous, not states):
 | valence | `MBON_approach` = MBON07, 09, 11, 12, 14 | `MBON_avoid` = MBON01, 02, 03, 05 | iris tint green ↔ red (approach/avoid assignment approximates Aso et al. 2014) |
 | arousal | `octopamine` (top_nt) | | pupil dilation |
 | reward | `DAN_reward` = `PAM*` | `DAN_punish` = `PPL1*` | logged, free for future use |
+
+All readouts are z-scores against the brain's resting activity measured at startup; see
+[architecture.md](architecture.md#reading-a-noisy-brain-baselines-and-z-scores).
 
 ## What the circuit does on its own
 

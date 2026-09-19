@@ -32,6 +32,7 @@ class Circuit:
     meta: dict
     pos: np.ndarray | None = None            # float32 [N,3] anchor position (FAFB voxels), for display
     cell_type: np.ndarray | None = None      # str [N] annotation cell type, for display
+    super_class: np.ndarray | None = None    # str [N] annotation super class (sensory, central, descending, ...)
 
     @property
     def n(self) -> int:
@@ -52,6 +53,8 @@ class Circuit:
             extra["pos"] = self.pos
         if self.cell_type is not None:
             extra["cell_type"] = np.asarray(self.cell_type, dtype=str)
+        if self.super_class is not None:
+            extra["super_class"] = np.asarray(self.super_class, dtype=str)
         np.savez_compressed(path, root_ids=self.root_ids, pre=self.pre, post=self.post,
                             weight_mv=self.weight_mv, **flat, **extra)
         path.with_suffix(".json").write_text(json.dumps(self.meta, indent=1))
@@ -67,13 +70,14 @@ class Circuit:
         meta = json.loads(path.with_suffix(".json").read_text()) if path.with_suffix(".json").exists() else {}
         return cls(z["root_ids"], z["pre"], z["post"], z["weight_mv"], groups, meta,
                    pos=z["pos"] if "pos" in z.files else None,
-                   cell_type=z["cell_type"] if "cell_type" in z.files else None)
+                   cell_type=z["cell_type"] if "cell_type" in z.files else None,
+                   super_class=z["super_class"] if "super_class" in z.files else None)
 
 
 def circuit_key(cfg: Config, full: bool) -> str:
     material = json.dumps({"groups": cfg.groups, "inputs": cfg.inputs, "readouts": cfg.readouts,
                            "prune": cfg.prune, "min_synapses": cfg.lif.min_synapses,
-                           "w_syn": cfg.lif.w_syn_mv, "full": full, "schema": 2}, sort_keys=True, default=str)
+                           "w_syn": cfg.lif.w_syn_mv, "full": full, "schema": 4}, sort_keys=True, default=str)
     return hashlib.sha1(material.encode()).hexdigest()[:10]
 
 
@@ -134,6 +138,17 @@ def build(cfg: Config, full: bool = False, verbose: bool = True) -> Circuit:
         bwd = _bfs(adj.T.tocsr(), dst, cfg.prune.hops_backward)
         keep = (fwd & bwd) | src | dst
         log(f"[prune] forward reach {fwd.sum():,}, backward reach {bwd.sum():,}, kept {keep.sum():,}")
+        # Inhibitory closure: path pruning keeps the excitatory chains but drops the inhibitory
+        # interneurons hanging off them, which unbalances the circuit. Add back inhibitory neurons
+        # that both receive from and project into the kept set.
+        min_loop = int(cfg.prune.get("inhibitory_closure_min_synapses", 0))
+        if min_loop > 0:
+            inh_pre = sign < 0
+            from_kept = np.bincount(post[keep[pre] & inh_pre], weights=count[keep[pre] & inh_pre], minlength=N)
+            to_kept = np.bincount(pre[keep[post] & inh_pre], weights=count[keep[post] & inh_pre], minlength=N)
+            add = (~keep) & (from_kept >= min_loop) & (to_kept >= min_loop)
+            keep |= add
+            log(f"[prune] inhibitory closure added {add.sum():,} neurons -> {keep.sum():,}")
 
     new_index = np.full(N, -1, dtype=np.int32)
     new_index[keep] = np.arange(keep.sum(), dtype=np.int32)
@@ -143,6 +158,7 @@ def build(cfg: Config, full: bool = False, verbose: bool = True) -> Circuit:
     ann_kept = ann_idx.reindex(kept_ids)
     pos = ann_kept[["pos_x", "pos_y", "pos_z"]].fillna(0).to_numpy(dtype=np.float32)
     cell_type = ann_kept["cell_type"].fillna("").replace("", "unnamed").to_numpy(dtype=str)
+    super_class = ann_kept["super_class"].fillna("").to_numpy(dtype=str)
     circuit_groups = {}
     for name, g in groups.items():
         circuit_groups[name] = {s: _to_new(id2i, new_index, g.side(s)) for s in ("left", "right", "all")}
@@ -160,6 +176,7 @@ def build(cfg: Config, full: bool = False, verbose: bool = True) -> Circuit:
         },
         pos=pos,
         cell_type=cell_type,
+        super_class=super_class,
     )
     log(f"[prune] circuit: {c.n:,} neurons, {c.m:,} connections")
     for name in list(cfg.inputs) + list(cfg.readouts):

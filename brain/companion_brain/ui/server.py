@@ -79,7 +79,10 @@ class Dashboard:
                             dash.cond.wait_for(lambda: dash.version != seen, timeout=5.0)
                             seen = dash.version
                             payload = dash.latest
-                        self.wfile.write(b"data: " + payload + b"\n\n")
+                        if payload == b"{}":
+                            self.wfile.write(b": waiting for the brain\n\n")   # SSE comment = keep-alive
+                        else:
+                            self.wfile.write(b"data: " + payload + b"\n\n")
                         self.wfile.flush()
                 except (BrokenPipeError, ConnectionResetError, OSError):
                     return

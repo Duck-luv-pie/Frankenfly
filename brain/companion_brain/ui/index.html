@@ -35,6 +35,10 @@
   .bar.l i { background:#4fd1ff; } .bar.r i { background:#ffb347; }
   .bars .val { text-align:right; color:var(--muted); font-variant-numeric: tabular-nums; }
   .scores { display:grid; grid-template-columns: 90px 1fr 40px; gap:4px 8px; align-items:center; font-size:12px; }
+  .bars.motor { grid-template-columns: 64px 1fr 40px; margin-top:8px; }
+  .bars.motor .bar i { background:#8fd3a5; }
+  .bars.motor .bar.turn { position:relative; } .bars.motor .bar.turn i { position:absolute; top:0; height:100%; background:#4fd1ff; }
+  .bars.motor .bar.turn::after { content:""; position:absolute; left:50%; top:0; bottom:0; width:1px; background:#3a4360; }
   .scores .bar i { background:#8fd3a5; }
   .legend { font-size:11px; color:var(--muted); display:flex; gap:12px; flex-wrap:wrap; margin-top:6px; }
   .legend i { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:4px; }
@@ -76,7 +80,8 @@
   <div class="panel">
     <h2>The fly <span id="fly-note">acting out the descending neurons</span></h2>
     <div class="stage" id="arena3d"></div>
-    <small class="hint">Fly / Body Lab rig, 36 joints. Walks toward objects on DNa01/02, jumps and flies on the Giant Fiber, walks backward on MDN, freezes on DNp09, grooms on DNg11/12, wing-threat on DNp02/04/11 + pC1d/e, sings with one wing on pC1a-c. Drag to orbit, scroll to zoom.</small>
+    <div class="bars motor" id="motor"></div>
+    <small class="hint">Fly / Body Lab rig, 36 joints, moved only by the motor channels above (z-scores of descending-neuron rates against the brain's own resting activity): forward = whole descending population, turn = DNa01/02 right minus left, backward = MDN, groom = DNg11/12, threat = DNp02/04/11 + pC1d/e, song = pC1a-c, land = DNp07/10, freeze = DNp09, jump = Giant Fiber. Drag to orbit.</small>
   </div>
 
   <div class="panel">
@@ -99,7 +104,7 @@
   </div>
 
   <div class="panel">
-    <h2>Behaviors <span>score 0–1</span></h2>
+    <h2>Behaviors <span>state label · z-score / z_ref</span></h2>
     <div class="scores" id="scores"></div>
   </div>
 
@@ -126,6 +131,7 @@ function connect() {
   es.onerror = () => { $('conn').style.background = '#c33'; };
   es.onmessage = ev => {
     const p = JSON.parse(ev.data);
+    if (!p || !p.brain || !p.eyes) return;      // not a brain packet
     last = p; lastAt = performance.now();
     onPacket(p);
   };
@@ -142,6 +148,7 @@ function onPacket(p) {
   if (now - spikeAccAt > 500) { const sps = spikeAcc * 1000 / (now - spikeAccAt); $('c-sps').textContent = Math.round(sps).toLocaleString(); sparkBuf.push(sps); if (sparkBuf.length > 240) sparkBuf.shift(); spikeAcc = 0; spikeAccAt = now; drawSpark(); }
   renderRates(p.rates);
   renderScores(p.scores, p.state);
+  renderMotor(p.motor);
   renderTypes(p.top_types);
   $('g-val').style.left = (50 + 50 * p.valence) + '%';
   $('g-ar').style.left = (100 * p.arousal) + '%';
@@ -265,6 +272,23 @@ function renderScores(scores, state) {
     row.v.textContent = scores[b].toFixed(2);
     row.lbl.style.color = b === state ? 'var(--text)' : '';
     row.lbl.style.fontWeight = b === state ? '600' : '';
+  }
+}
+const motorRows = {};
+function renderMotor(motor) {
+  const box = $('motor'); if (!motor) return;
+  for (const k of Object.keys(motor)) {
+    if (!motorRows[k]) {
+      const lbl = document.createElement('div'); lbl.className = 'lbl'; lbl.textContent = k;
+      const bar = document.createElement('div'); bar.className = 'bar' + (k === 'turn' ? ' turn' : ''); bar.innerHTML = '<i></i>';
+      const v = document.createElement('div'); v.className = 'val';
+      box.append(lbl, bar, v); motorRows[k] = { lbl, i: bar.firstChild, v };
+    }
+    const row = motorRows[k], x = motor[k];
+    if (k === 'turn') { row.i.style.left = (x < 0 ? 50 + 50 * x : 50) + '%'; row.i.style.width = (50 * Math.abs(x)) + '%'; }
+    else row.i.style.width = (100 * x) + '%';
+    row.v.textContent = x.toFixed(2);
+    row.lbl.className = 'lbl' + (Math.abs(x) > 0.15 ? ' hot' : '');
   }
 }
 function renderTypes(list) {

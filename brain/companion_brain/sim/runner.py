@@ -19,9 +19,16 @@ class BrainRunner:
         self.cfg = cfg
         self.net = LIFNetwork(circuit.n, circuit.pre, circuit.post, circuit.weight_mv,
                               LIFParams.from_config(dict(cfg.lif)), seed=seed, use_numba=use_numba)
+        bg_classes = set(cfg.lif.get("background_classes", ["central", "descending", "ascending", "visual_centrifugal", "endocrine"]))
+        if circuit.super_class is not None:
+            bg_idx = np.nonzero(np.isin(circuit.super_class, list(bg_classes)))[0]
+        else:
+            bg_idx = np.arange(circuit.n)
+        self.background_idx = bg_idx
+        self.net.set_background(float(cfg.lif.get("background_hz", 0.0)), bg_idx)
         self.chunk_ms = chunk_ms
         self.window_ms = float(cfg.decode.window_ms)
-        self.history: deque[np.ndarray] = deque(maxlen=max(1, int(round(self.window_ms / chunk_ms))))
+        self.history: deque[np.ndarray] = deque(maxlen=max(1, int(round(1000.0 / chunk_ms))))   # last 1 s
         self.readouts = list(cfg.readouts)
         self.wall_start: float | None = None
         self.brain_ms = 0.0
@@ -64,12 +71,14 @@ class BrainRunner:
         return n
 
     # ---- readout -------------------------------------------------------------------------
-    def rates(self) -> dict[str, dict[str, float]]:
-        """Mean firing rate (Hz per neuron) for each readout group over the window, by side."""
+    def rates(self, window_ms: float | None = None) -> dict[str, dict[str, float]]:
+        """Mean firing rate (Hz per neuron) for each readout group over the last `window_ms`, by side."""
         if not self.history:
             return {g: {"left": 0.0, "right": 0.0, "all": 0.0} for g in self.readouts}
-        window_s = len(self.history) * self.chunk_ms * 1e-3
-        total = np.sum(self.history, axis=0)
+        k = max(1, min(len(self.history), int(round((window_ms or self.window_ms) / self.chunk_ms))))
+        chunks = list(self.history)[-k:]
+        window_s = k * self.chunk_ms * 1e-3
+        total = np.sum(chunks, axis=0)
         out = {}
         for g in self.readouts:
             d = {}
@@ -84,6 +93,36 @@ class BrainRunner:
         out = self.since_take.copy()
         self.since_take[:] = 0
         return out
+
+    def calibrate(self, seconds: float, windows_ms: list[float] | None = None, warmup_s: float = 0.0,
+                  verbose: bool = True) -> dict:
+        """Run with no sensory input and record each readout group's resting mean/std rate for each
+        rate window (per side). This is the fly's own baseline; behaviors are deviations from it.
+        Returns {str(window_ms): {group: {side: {mean, std}}}}."""
+        self.clear_drive()
+        windows = sorted(set(float(w) for w in (windows_ms or [self.window_ms])))
+        for _ in range(int(warmup_s * 1000 / self.chunk_ms)):   # let adaptation and activity settle
+            self.step_chunk()
+        samples = {w: {g: {"left": [], "right": [], "all": []} for g in self.readouts} for w in windows}
+        n_chunks = int(seconds * 1000 / self.chunk_ms)
+        for k in range(n_chunks):
+            self.step_chunk()
+            for w in windows:
+                per = max(1, int(round(w / self.chunk_ms)))
+                if k >= per and k % per == 0:
+                    for g, d in self.rates(w).items():
+                        for side, v in d.items():
+                            samples[w][g][side].append(v)
+        base = {str(int(w)): {g: {side: {"mean": float(np.mean(v)) if v else 0.0, "std": float(np.std(v)) if v else 0.0}
+                                  for side, v in d.items()} for g, d in samples[w].items()} for w in windows}
+        if verbose:
+            w0 = str(int(windows[-1]))
+            print(f"[calibrate] resting rates (Hz/neuron, {w0} ms windows): " + ", ".join(
+                f"{g}={base[w0][g]['all']['mean']:.1f}±{base[w0][g]['all']['std']:.1f}" for g in self.readouts))
+        self.history.clear()
+        self.brain_ms = 0.0          # calibration time does not count against the wall clock
+        self.wall_start = None
+        return base
 
     def window_counts(self) -> np.ndarray:
         return np.sum(self.history, axis=0) if self.history else np.zeros(self.c.n, dtype=np.int32)

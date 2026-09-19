@@ -36,15 +36,44 @@ ESP32 body ─UDP──▶│ link.poll  ─▶ PIR burst ───────�
 |---|---|
 | Neurons | FlyWire v783, 138,639 neurons in the Shiu et al. model tables |
 | Connections | 2.70 M with ≥ 5 synapses (weaker pairs dropped, as in the paper) |
-| Pruned circuit | neurons within 2 synaptic hops forward of the input groups **and** 2 hops backward of the readout groups: **29,115 neurons, 817,620 connections** |
+| Pruned circuit | neurons within 2 synaptic hops forward of the input groups **and** 2 hops backward of the readout groups, plus the inhibitory closure: **36,391 neurons, 1,020,376 connections** |
 | Model | LIF: rest −52 mV, threshold −45 mV, τ_m 20 ms, alpha synapse τ 5 ms, refractory 2.2 ms, delay 1.8 ms, 0.275 mV per synapse × count × sign (ACh +, GABA/Glu −), dt 0.1 ms |
 | Stimulation | driven neurons spike as a Poisson process at 0–150 Hz (the reference model's Poisson input is super-threshold, so this is equivalent) |
-| Speed | numba kernel, ~2.7× real time on an Apple Silicon laptop; 3 hops (95k neurons) runs at ~0.96× and `--full` (all neurons) slower still |
+| Speed | numba kernel, ~2.3× real time on an Apple Silicon laptop with the closure (2.7× without); `--full` (all neurons) ~0.55× |
 | Pacing | `runner.py` advances the brain in 10 ms chunks to match the wall clock; if it falls > 1 s behind it skips ahead rather than lagging forever |
 
-Why no spontaneous activity: the reference model has none, so with no sensory input the network
-is silent. Idle and sleep states are therefore decided host-side from the motion-energy timer,
-not from the brain.
+### Making it a living brain (deviations from the reference model)
+
+The reference model has **no spontaneous activity**: with no sensory input every neuron is
+silent, and a silent brain cannot walk, groom or explore. Three additions, all configurable in
+`lif` / `prune` / `decode` of `default.yaml`, turn it into a brain that is always doing something
+and that the senses *modulate* rather than *create*:
+
+| Addition | Config | Why |
+|---|---|---|
+| Spontaneous firing floor, 1 Hz Poisson on brain-intrinsic neurons only (central, descending, ascending, centrifugal, endocrine) | `lif.background_hz`, `lif.background_classes` | A real brain is never silent. Sensory and visual-projection neurons are excluded so they fire only when the camera or PIR drives them; hundreds of looming cells converge on the Giant Fiber and even 0.5 Hz of noise on them fires it. |
+| Spike-frequency adaptation, 5 mV per spike decaying with τ = 200 ms | `lif.adapt_mv`, `lif.tau_adapt_ms` | The plain LIF has no rate limit except the refractory period, so a few self-exciting hubs (antennal-lobe local neurons, the mushroom-body APL cell) run away to ~400 Hz and drag the rest along. Adaptation caps them; looming still fires the Giant Fiber within 10 ms. |
+| Inhibitory closure in pruning: also keep inhibitory neurons with ≥ 20 synapses both from and into the circuit | `prune.inhibitory_closure_min_synapses` | Path pruning keeps excitatory chains but drops the inhibitory interneurons hanging off them; the full brain keeps the Giant Fiber at 0 Hz at rest while the unclosed pruned circuit had it at 25 Hz. Adds ~7k neurons (36k total). |
+
+`companion test-gf` and the reference test in `tests/` switch these off and reproduce the
+paper's behavior (silent brain, Giant Fiber at ~170 Hz on looming).
+
+### Reading a noisy brain: baselines and z-scores
+
+Because every readout group now has a resting rate, behaviors are measured as deviations from
+the fly's own baseline. At startup the brain runs with no senses (3 s warm-up, then 6 s), and the
+mean and std of every readout group's rate is recorded per side and per rate window (cached in
+`data/cache/baseline_*.json`). Every readout is then a z-score, mapped through a dead zone of one
+sigma; a slow drift (τ = 120 s) re-centers the means on the running brain. Tiny groups (the Giant
+Fiber is 2 neurons) use longer windows so a couple of chance spikes cannot label a behavior.
+
+**Continuous motor channels are what move the fly.** `decode.motor.channels` maps descending
+activity to smoothed 0..1 channels every frame with no thresholds: forward walking from the
+whole descending population (674 neurons), turning from DNa01/DNa02 right minus left, backward
+from MDN, grooming from DNg11/12, wing threat, one-wing song, landing, freezing, and the Giant
+Fiber jump. The behavior state label (priority + hold) survives only as a caption and for the
+robot's eyes and sounds. Nothing in the fly display is scripted: idle is whatever the descending
+neurons happen to be doing.
 
 ## Senses
 
