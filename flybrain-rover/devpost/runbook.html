@@ -116,7 +116,7 @@
   sees, for each track we are entering. Final submissions close <strong>8:00 AM Sunday</strong>. The badge below is live: it runs the actual connectome in your browser.</p>
   <div class="strip">
     <div class="cell"><div class="t">Finalist</div><div class="s ready">READY</div></div>
-    <div class="cell"><div class="t">ElevenLabs</div><div class="s done">DONE</div></div>
+    <div class="cell"><div class="t">ElevenLabs</div><div class="s done">TALK TO THE FLY</div></div>
     <div class="cell"><div class="t">Tiger Data</div><div class="s done">DONE</div></div>
     <div class="cell"><div class="t">GoDaddy domain</div><div class="s todo">5 MIN</div></div>
     <div class="cell"><div class="t">Best Badge Hack · $2,500</div><div class="s ready">READY</div></div>
@@ -204,29 +204,32 @@
   </div>
 
   <div class="track on">
-    <h3>MLH: Best Use of ElevenLabs <span class="chip done">done</span></h3>
+    <h3>MLH: Best Use of ElevenLabs <span class="chip done">talk to the fly</span></h3>
     <dl>
       <dt>The move</dt>
-      <dd>Run the demo with <code>--voice</code>. The fly narrates what was just done to it, on the same hotkeys.</dd>
+      <dd>Hand the judge the microphone. They talk to the fly and it answers in voice from its own neurons.
+      An ElevenLabs conversational agent whose only knowledge is eight tools that read the live brain and press
+      the demo's hotkeys. Not narration: a conversation with a connectome.</dd>
       <dt>Judge sees</dt>
-      <dd>Press <b>2</b> and it says "Tracking neurons removed. I cannot see you." Press <b>6</b>: "Same neurons, same
-      connections, random targets. Nothing reaches my legs."</dd>
-      <dt>The line</dt>
-      <dd>"A demo table is loud and you are watching the robot, not my screen. So the useful thing for the fly to say
-      is what was just done to its brain."</dd>
+      <dd>"What do you see?" &rarr; "Someone about thirty degrees to my right, two and a half metres out." "Cut
+      your eye." &rarr; it lesions LC10a, reads its own rates, and says the steering neurons went from 251 hertz
+      to zero while the eye is still firing. "Put it back." &rarr; it does.</dd>
       <dt>Run it</dt>
       <dd><pre>cd ~/Downloads/filess/flybrain-rover
-<span class="c"># already done - all ten are cached in assets/voice/</span>
-.venv/bin/python scripts/voice.py --list
-.venv/bin/python scripts/voice.py --say lesion_lc10a
-
-<span class="c"># it speaks during the demo because of the --voice flag above</span>
-<span class="c"># to regenerate or change voice:</span>
-.venv/bin/python scripts/voice.py --voices
-.venv/bin/python scripts/voice.py --generate --voice-id &lt;id&gt;</pre></dd>
+<span class="c"># terminal 3, next to the demo (the demo must be running; it writes the frames the agent reads)</span>
+.venv/bin/python scripts/talk.py
+<span class="c"># first time only, already done: scripts/talk.py --create-agent</span>
+<span class="c"># no microphone? --check prints what every tool would answer right now</span></pre>
+      Say: <b>what do you see</b> &middot; <b>what is happening in your brain</b> &middot; <b>remove your eye</b>
+      &middot; <b>put it back</b> &middot; <b>shuffle your wiring</b> &middot; <b>reset</b>.</dd>
+      <dt>The line</dt>
+      <dd>"The language model is an interpreter with a microphone. It can read the neurons and press the same
+      buttons I can. It is not in the loop: close it and the robot runs identically. Everything it tells you is
+      a number it just read."</dd>
       <dt>Caveat</dt>
-      <dd class="caveat">Ten lines, generated once and cached to disk, so it needs no key and no network at the venue.
-      That is deliberate, not a limitation.</dd>
+      <dd class="caveat">Free plan, so conversation minutes are limited: rehearse once, not ten times. If there
+      is no microphone or the venue Wi-Fi drops, the cached narration lines still play on the hotkeys
+      (<code>--voice</code>), regenerated with eleven_v3 so they are delivered rather than read.</dd>
     </dl>
   </div>
 
