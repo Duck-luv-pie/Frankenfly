@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# Connectome data (download with: python -m companion_brain download)
+brain/data/raw/
+brain/data/cache/
+
+# PlatformIO
+firmware/*/.pio/
+firmware/*/.vscode/
+firmware/secrets.ini
+
+# Generated audio
+assets/sounds/*.mp3
+assets/sounds/*.wav
+
+# OS
+.DS_Store

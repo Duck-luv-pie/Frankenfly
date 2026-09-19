@@ -1,0 +1,131 @@
+# Companion brain configuration.
+# Everything the robot does is a mapping between real FlyWire neuron groups and sensors/actuators.
+# Neuron groups are selected from the FlyWire annotations (Schlegel et al. 2024) by cell_type,
+# regex, or neurotransmitter. Left/right are resolved automatically from the `side` column.
+
+data:
+  raw_dir: data/raw
+  cache_dir: data/cache
+  files:
+    connectivity:
+      url: https://raw.githubusercontent.com/philshiu/Drosophila_brain_model/main/Connectivity_783.parquet
+      name: Connectivity_783.parquet
+      size: 100804642
+    completeness:
+      url: https://raw.githubusercontent.com/philshiu/Drosophila_brain_model/main/Completeness_783.csv
+      name: Completeness_783.csv
+      size: 3327347
+    annotations:
+      url: https://raw.githubusercontent.com/flyconnectome/flywire_annotations/main/supplemental_files/Supplemental_file1_neuron_annotations.tsv
+      name: neuron_annotations.tsv
+
+# Leaky integrate-and-fire parameters (Shiu et al. 2024, model.py defaults).
+lif:
+  v_rest_mv: -52.0
+  v_reset_mv: -52.0
+  v_thresh_mv: -45.0
+  tau_mem_ms: 20.0
+  tau_syn_ms: 5.0
+  refractory_ms: 2.2
+  delay_ms: 1.8
+  w_syn_mv: 0.275
+  dt_ms: 0.1
+  min_synapses: 5          # connections weaker than this are dropped (as in Shiu et al.)
+
+# Circuit pruning: keep neurons on paths from inputs to readouts.
+prune:
+  hops_forward: 2
+  hops_backward: 2
+
+# --- Neuron groups -------------------------------------------------------------
+# Selector keys: cell_type (list), regex (matched against cell_type), hemibrain_type (list),
+# top_nt (neurotransmitter), super_class. Multiple keys are OR-ed within one group.
+groups:
+  # Visual projection neurons (the camera pretends to be the optic lobe feeding these)
+  LC4:    {cell_type: [LC4]}         # fast looming -> Giant Fiber
+  LPLC2:  {cell_type: [LPLC2]}       # looming, wide-field -> Giant Fiber
+  LC16:   {cell_type: [LC16]}        # looming -> backward walking
+  LC11:   {cell_type: [LC11]}        # small moving object
+  LC10a:  {cell_type: [LC10a]}       # small object tracking
+  LC12:   {cell_type: [LC12]}        # vertical bar
+  LC15:   {cell_type: [LC15]}        # vertical bar
+  # Johnston's organ (antenna). C/E groups respond to wind / static deflection.
+  JO_wind: {regex: '^JO-(C|E)'}
+  # Descending neurons (outputs to the ventral nerve cord)
+  GF:     {cell_type: [DNp01]}       # Giant Fiber: escape takeoff
+  DNp09:  {cell_type: [DNp09]}       # freezing / forward walking
+  MDN:    {cell_type: [MDN]}         # backward walking
+  DNa01:  {cell_type: [DNa01]}       # steering
+  DNa02:  {cell_type: [DNa02]}       # steering
+  DNg11:  {cell_type: [DNg11]}       # front-leg grooming
+  DNg12:  {regex: '^DNg12'}          # grooming
+  DNp02:  {cell_type: [DNp02]}       # wing / threat related
+  DNp04:  {cell_type: [DNp04]}
+  DNp11:  {cell_type: [DNp11]}
+  DNp07:  {cell_type: [DNp07]}       # landing
+  DNp10:  {cell_type: [DNp10]}       # landing
+  # Central-brain state readouts
+  pC1_social:     {cell_type: [pC1a, pC1b, pC1c]}   # female receptivity / social
+  pC1_aggression: {cell_type: [pC1d, pC1e]}         # aggression
+  MBON_avoid:     {cell_type: [MBON01, MBON02, MBON03, MBON05]}      # approx. Aso et al. 2014
+  MBON_approach:  {cell_type: [MBON07, MBON09, MBON11, MBON12, MBON14]}
+  DAN_reward:     {regex: '^PAM'}
+  DAN_punish:     {regex: '^PPL1'}
+  octopamine:     {top_nt: octopamine}
+
+# Which groups are stimulated (inputs) and which are read out (outputs) for pruning.
+inputs:  [LC4, LPLC2, LC16, LC11, LC10a, LC12, LC15, JO_wind]
+readouts: [GF, DNp09, MDN, DNa01, DNa02, DNg11, DNg12, DNp02, DNp04, DNp11, DNp07, DNp10,
+           pC1_social, pC1_aggression, MBON_avoid, MBON_approach, DAN_reward, DAN_punish, octopamine]
+
+# --- Senses -> input drive (Poisson rate in Hz per neuron, per hemifield) ------------
+senses:
+  max_rate_hz: 150
+  camera:
+    url: http://companion-cam.local:81/stream
+    width: 80
+    height: 60
+    fps: 15
+  features:                    # feature name -> {groups, gain}; rate = clip(feature*gain,0,1)*max_rate
+    loom_fast:   {groups: [LC4, LPLC2], gain: 1.0}
+    loom_slow:   {groups: [LC16],       gain: 1.0}
+    small_object: {groups: [LC11, LC10a], gain: 1.0}
+    bar:         {groups: [LC12, LC15], gain: 0.7}
+  pir:
+    groups: [JO_wind]
+    rate_hz: 100
+    burst_ms: 500
+  sleep_after_s: 90            # no motion energy for this long -> sleep state
+  wake_motion: 0.15
+
+# --- Readouts -> behaviors -------------------------------------------------------------
+# score = clip(mean_rate_hz(group) / ref_hz, 0, 1); window is the rate window.
+decode:
+  window_ms: 100
+  behaviors:
+    escape:     {groups: [GF],                         ref_hz: 20,  priority: 100, min_score: 0.2, hold_ms: 800}
+    backward:   {groups: [MDN],                        ref_hz: 30,  priority: 80,  min_score: 0.3, hold_ms: 600}
+    freeze:     {groups: [DNp09],                      ref_hz: 30,  priority: 70,  min_score: 0.3, hold_ms: 600}
+    threat:     {groups: [DNp02, DNp04, DNp11, pC1_aggression], ref_hz: 30, priority: 60, min_score: 0.3, hold_ms: 600}
+    groom:      {groups: [DNg11, DNg12],               ref_hz: 20,  priority: 40,  min_score: 0.3, hold_ms: 1200}
+    land:       {groups: [DNp07, DNp10],               ref_hz: 30,  priority: 30,  min_score: 0.3, hold_ms: 600}
+    social:     {groups: [pC1_social],                 ref_hz: 20,  priority: 20,  min_score: 0.3, hold_ms: 1500}
+    track:      {groups: [DNa01, DNa02],               ref_hz: 20,  priority: 10,  min_score: 0.15, hold_ms: 300}
+  modulators:
+    valence:  {plus: MBON_approach, minus: MBON_avoid, ref_hz: 20}   # -1..1, iris tint
+    arousal:  {plus: octopamine, ref_hz: 20}                          # 0..1, pupil dilation
+    reward:   {plus: DAN_reward, minus: DAN_punish, ref_hz: 20}
+  sounds:      # behavior -> DFPlayer track number (0 = silent)
+    escape: 1
+    backward: 2
+    groom: 3
+    threat: 4
+    social: 5
+  volume: 20
+
+# --- Body link -------------------------------------------------------------------------
+body:
+  host: companion-body.local
+  port: 4210
+  listen_port: 4211
+  rate_hz: 20
