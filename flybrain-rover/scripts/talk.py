@@ -33,13 +33,15 @@ import time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "scripts"))
-from voice import load_dotenv  # noqa: E402
+from voice import load_dotenv, current_voice_id, current_voice_speed  # noqa: E402
 
 FRAMES = os.path.join(ROOT, "logs", "demo_live.jsonl")
 HOTKEY_PORT = 9600
 HFOV_DEG = 98.43
 N_COLS = 24
-VOICE_ID = "JBFqnCBsd6RMkjVDRZzb"          # George, the same voice as the cached narration
+# The voice knob (ELEVENLABS_VOICE_ID / ELEVENLABS_VOICE_SPEED in .env) lives in voice.py so the cached
+# narration and this agent never disagree about which voice the fly has; current_voice_id() defaults to
+# George (JBFqnCBsd6RMkjVDRZzb), the same voice as the cached narration, until Taka picks one.
 
 # hotkeys are the demo's own; the agent presses them, it does not reimplement them
 KEYS = {"eye": ("2", "3"), "learning": ("4", "5")}
@@ -49,8 +51,11 @@ KEY_BASELINE, KEY_SHUFFLE, KEY_REWARD, KEY_PUNISH = "1", "6", "r", "p"
 # --------------------------------------------------------------------------------------------------
 # reading the brain
 
-def last_frame(path=FRAMES):
-    """The most recent frame the demo wrote, without reading the whole file."""
+def last_frame(path=None):
+    """The most recent frame the demo wrote, without reading the whole file. path defaults to the
+    module-level FRAMES, looked up fresh on every call (not snapshotted as a def-time default) so tests
+    can monkeypatch talk.FRAMES to a temp path instead of touching the real logs/ directory."""
+    path = FRAMES if path is None else path
     try:
         with open(path, "rb") as f:
             f.seek(0, os.SEEK_END)
@@ -236,7 +241,7 @@ def create_agent(key):
         "conversation_config": {
             "agent": {"first_message": FIRST, "language": "en",
                       "prompt": {"prompt": PROMPT, "tools": TOOLS, "temperature": 0.3}},
-            "tts": {"voice_id": VOICE_ID},
+            "tts": {"voice_id": current_voice_id()},
         },
     }
     r = requests.post("https://api.elevenlabs.io/v1/convai/agents/create",
@@ -250,6 +255,36 @@ def create_agent(key):
     os.chmod(env, 0o600)
     print(f"agent {agent_id} created with {len(TOOLS)} tools; id saved to .env")
     return agent_id
+
+
+def update_agent(key, agent_id, voice_id=None, speed=None):
+    """PATCH the already-registered agent's TTS voice/speed instead of --create-agent making a new one
+    (a new agent would mean a new id in .env and a second set of tools to keep in sync). Reads the same
+    ELEVENLABS_VOICE_ID / ELEVENLABS_VOICE_SPEED knob as voice.py. speed is sent because the ElevenLabs
+    conversational-agent API may honour it (it does for voice_settings on plain TTS); if a given account
+    or model rejects the field the PATCH still updates voice_id and the response says so.
+
+    No network reachable (offline dev box, sandboxed test run) -> prints the request body instead of
+    raising, so this is safe to call without a live connection."""
+    if not agent_id:
+        sys.exit("no ELEVENLABS_AGENT_ID in .env; run --create-agent once")
+    voice_id = voice_id or current_voice_id()
+    speed = speed if speed is not None else current_voice_speed()
+    body = {"conversation_config": {"tts": {"voice_id": voice_id, "speed": speed}}}
+    import requests
+    try:
+        r = requests.patch(f"https://api.elevenlabs.io/v1/convai/agents/{agent_id}",
+                           headers={"xi-api-key": key, "content-type": "application/json"},
+                           json=body, timeout=10)
+    except requests.exceptions.RequestException as e:
+        print(f"no network ({type(e).__name__}); dry run, the request that would have been sent:")
+        print(json.dumps(body, indent=2))
+        return {"dry_run": True, "body": body}
+    if r.status_code != 200:
+        print(f"agent update failed: HTTP {r.status_code} {r.text[:300]}")
+        return {"status": r.status_code, "body": body}
+    print(f"agent {agent_id} updated: HTTP 200, voice_id={voice_id} speed={speed}")
+    return {"status": 200, "body": body}
 
 
 def converse(key, agent_id, port):
@@ -287,6 +322,9 @@ def main():
     load_dotenv()
     ap = argparse.ArgumentParser()
     ap.add_argument("--create-agent", action="store_true")
+    ap.add_argument("--update-agent", action="store_true",
+                    help="PATCH the existing agent's TTS voice/speed from ELEVENLABS_VOICE_ID/SPEED "
+                         "instead of creating a new agent")
     ap.add_argument("--check", action="store_true", help="print what every read tool answers right now")
     ap.add_argument("--port", type=int, default=HOTKEY_PORT)
     a = ap.parse_args()
@@ -295,6 +333,9 @@ def main():
         sys.exit("set ELEVENLABS_API_KEY in .env")
     if a.create_agent:
         create_agent(key)
+        return
+    if a.update_agent:
+        update_agent(key, os.environ.get("ELEVENLABS_AGENT_ID"))
         return
     if a.check:
         b = Brain(a.port)

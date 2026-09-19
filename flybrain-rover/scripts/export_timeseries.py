@@ -222,38 +222,56 @@ def write_frames(store, run_id, frames, meta, note=""):
     return n
 
 
-def stream_live(store, ws_url, run_id, seconds):
+def stream_live(store, ws_url, run_id, seconds, reconnect_s=2.0):
     """Real-time ingest: a batch every second, for `seconds` seconds or until Ctrl-C when 0. The frames
     carry their own t relative to the demo's start; base is when this recording began, so the database
-    holds wall-clock instants and the continuous aggregate can be read for 'the last 30 seconds'."""
+    holds wall-clock instants and the continuous aggregate can be read for 'the last 30 seconds'.
+
+    The demo restarting drops this websocket. That must not end the run: a dropped connection is
+    retried every `reconnect_s` seconds under the same run_id (open_episode runs once, above, not on
+    every retry), with one notice printed for the outage rather than one per failed attempt."""
     import asyncio
     import websockets
     base = time.time()
     open_episode(store, run_id, {"brain": "live", "stage": "robot"}, 0, ws_url)
     total = frames_total = 0
     t_off = None
+    DROP_ERRORS = (OSError, asyncio.TimeoutError, websockets.WebSocketException)
 
     async def pump():
         nonlocal total, frames_total, t_off
-        async with websockets.connect(ws_url) as ws:
-            end = base + seconds if seconds > 0 else float("inf")
-            batch, last_flush = [], time.time()
-            while time.time() < end:
-                f = json.loads(await asyncio.wait_for(ws.recv(), timeout=10))
-                if t_off is None:
-                    t_off = float(f.get("t", 0.0))         # so frame 0 lands at base
-                f["t"] = float(f.get("t", 0.0)) - t_off
-                batch.append(f)
-                if time.time() - last_flush >= 1.0:
-                    total += write_batch(store, run_id, batch, base)
-                    frames_total += len(batch)
+        end = base + seconds if seconds > 0 else float("inf")
+        announced_drop = False
+        while time.time() < end:
+            try:
+                async with websockets.connect(ws_url) as ws:
+                    announced_drop = False              # this outage, if any, is over
                     batch, last_flush = [], time.time()
-                    if frames_total % 150 < 30:
-                        print(f"  {run_id}: {frames_total} frames, {total:,} rows, "
-                              f"{time.time() - base:.0f} s", flush=True)
-            if batch:
-                total += write_batch(store, run_id, batch, base)
-                frames_total += len(batch)
+                    while time.time() < end:
+                        f = json.loads(await asyncio.wait_for(ws.recv(), timeout=10))
+                        if t_off is None:
+                            t_off = float(f.get("t", 0.0))     # so frame 0 lands at base
+                        f["t"] = float(f.get("t", 0.0)) - t_off
+                        batch.append(f)
+                        if time.time() - last_flush >= 1.0:
+                            total += write_batch(store, run_id, batch, base)
+                            frames_total += len(batch)
+                            batch, last_flush = [], time.time()
+                            if frames_total % 150 < 30:
+                                print(f"  {run_id}: {frames_total} frames, {total:,} rows, "
+                                      f"{time.time() - base:.0f} s", flush=True)
+                    if batch:
+                        total += write_batch(store, run_id, batch, base)
+                        frames_total += len(batch)
+            except DROP_ERRORS as e:
+                if time.time() >= end:
+                    break
+                if not announced_drop:
+                    print(f"  {run_id}: connection lost ({type(e).__name__}); retrying {ws_url} every "
+                          f"{reconnect_s:.0f} s, {run_id} continues ({frames_total} frames so far)",
+                          flush=True)
+                    announced_drop = True
+                await asyncio.sleep(reconnect_s)
     print(f"streaming {ws_url} -> {store.where()} as {run_id}"
           + (f" for {seconds:.0f} s" if seconds > 0 else " until Ctrl-C"), flush=True)
     try:

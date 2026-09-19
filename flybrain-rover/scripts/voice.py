@@ -42,7 +42,24 @@ LINES = {
 # It must be a *premade* voice: free accounts are refused library voices over the API with HTTP 402.
 # `python scripts/voice.py --voices` lists what this account can actually use. The id is not a secret.
 DEFAULT_VOICE = "JBFqnCBsd6RMkjVDRZzb"
+DEFAULT_SPEED = 1.0
 
+
+def current_voice_id():
+    """ELEVENLABS_VOICE_ID from .env, or George if Taka has not picked one yet. Read fresh on every
+    call (not a module constant) so a test or a caller can monkeypatch os.environ after load_dotenv()."""
+    return os.environ.get("ELEVENLABS_VOICE_ID", "").strip() or DEFAULT_VOICE
+
+
+def current_voice_speed():
+    """ELEVENLABS_VOICE_SPEED from .env, or 1.0. Falls back to 1.0 on anything that does not parse."""
+    raw = os.environ.get("ELEVENLABS_VOICE_SPEED", "").strip()
+    if not raw:
+        return DEFAULT_SPEED
+    try:
+        return float(raw)
+    except ValueError:
+        return DEFAULT_SPEED
 
 
 def load_dotenv():
@@ -81,10 +98,15 @@ def list_voices():
     return [v for v in r.json().get("voices", []) if v.get("category") == "premade"]
 
 
-def generate(keys=None, voice_id=DEFAULT_VOICE, model="eleven_v3"):
+def generate(keys=None, voice_id=None, model="eleven_v3", speed=None):
+    """voice_id defaults to ELEVENLABS_VOICE_ID (current_voice_id()); speed to ELEVENLABS_VOICE_SPEED
+    (current_voice_speed()), clamped to the 0.7-1.2 range the API accepts for voice_settings.speed."""
     key = os.environ.get("ELEVENLABS_API_KEY")
     if not key:
         sys.exit("set ELEVENLABS_API_KEY first (the audio is generated once and then played from disk)")
+    voice_id = voice_id or current_voice_id()
+    speed = speed if speed is not None else current_voice_speed()
+    speed = max(0.7, min(1.2, speed))
     import requests
     os.makedirs(VOICE_DIR, exist_ok=True)
     made = 0
@@ -93,7 +115,8 @@ def generate(keys=None, voice_id=DEFAULT_VOICE, model="eleven_v3"):
         r = requests.post(f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}",
                           headers={"xi-api-key": key, "accept": "audio/mpeg"},
                           json={"text": text, "model_id": model,
-                                "voice_settings": {"stability": 0.35, "similarity_boost": 0.8, "style": 0.4}},
+                                "voice_settings": {"stability": 0.35, "similarity_boost": 0.8,
+                                                    "style": 0.4, "speed": speed}},
                           timeout=30)
         if r.status_code == 402 and voice_id != FALLBACK.get("id"):
             # a library voice on a free plan; drop to the first premade voice this account has
@@ -159,7 +182,8 @@ if __name__ == "__main__":
     ap.add_argument("--voices", action="store_true", help="list the voices this account can use")
     ap.add_argument("--list", action="store_true")
     ap.add_argument("--say", default=None, choices=sorted(LINES))
-    ap.add_argument("--voice-id", default=DEFAULT_VOICE)
+    ap.add_argument("--voice-id", default=None,
+                    help="override ELEVENLABS_VOICE_ID for this run (default: .env, then George)")
     a = ap.parse_args()
     if a.voices:
         for v in list_voices():

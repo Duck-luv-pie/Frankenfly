@@ -71,7 +71,7 @@ Taking that seriously: keep the strongest 5% of synapses (`scripts/minimal_circu
 | | neurons | synapses | turn-toward | advance | per camera frame |
 |---|---|---|---|---|---|
 | full circuit | 15,000 | 2,334,959 | 75% | 100% | 14 ms |
-| strongest 5% of synapses | 13,670 | 119,743 | 75% | 100% | — |
+| strongest 5% of synapses | 13,670 | 119,743 | 75% | 100% | n/a |
 | **+ only what lies between eye and motor** | **2,211** | **10,387** | **81%** | **100%** | **3 ms** |
 
 **0.4% of the original wiring, and it behaves the same.** It also fails in the same named ways, which is what makes it the same circuit rather than a lucky one (64 arenas, seed 2000, 2 s): intact 73%, LC10a removed **0%**, wiring shuffled **2%**, DNa02 left removed 28% with a rightward bias of +0.048, looming cells removed 70% with the giant fibre going 74.9 Hz to 0.0 under a looming person.

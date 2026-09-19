@@ -1,4 +1,4 @@
-# SWAT — badge game design spec
+# SWAT, badge game design spec
 
 **One line:** you race a real fruit fly's escape reflex, in milliseconds, and you lose until you start
 removing its neurons.
@@ -105,7 +105,7 @@ creation, then `fly:bring_to_front()` so the sprite sits on top.
 
 ---
 
-## 5. LEDs — the fly getting nervous
+## 5. LEDs, the fly getting nervous
 
 This is the second thing a judge notices and it costs almost nothing. Map the eye's population firing rate
 to how many of the 6 LEDs are lit, so the badge visibly tenses before it escapes.
@@ -175,7 +175,7 @@ spike, do not modify them):
 - the whole injected `--@CIRCUIT@` block,
 - the constants `V_REST, V_TH, SYN_DECAY, GAIN_Q, REFRAC, CUR_MAX`,
 - `reset_brain()`,
-- `step(cur, flirt)` — call it as `step(cur, false)`.
+- `step(cur, flirt)`, call it as `step(cur, false)`.
 
 **Write new:** the state machine, the UI, the LED mapping, scoring, persistence.
 
