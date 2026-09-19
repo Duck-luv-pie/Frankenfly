@@ -64,6 +64,20 @@ Synapses deleted, neurons left intact, then the turn-toward test re-run (32 aren
 
 **Throw away the weakest 95% of the connections, 2.2 million of them, and the behaviour is intact. Throw away the same number at random and it is gone by 75%.** The steering rides on roughly a hundred thousand strong synapses, and the rest of the graph is, for this task, ballast. Repeat runs of an identical condition differ by about 5 points (the retina noise is redrawn), which is far below the effect.
 
+### The smallest circuit that still finds a person
+
+Taking that seriously: keep the strongest 5% of synapses (`scripts/minimal_circuit.py`), then keep only the neurons that lie on a path from the eye to a descending neuron (`scripts/prune_brain.py`). What is left is a real brain file every script here accepts.
+
+| | neurons | synapses | turn-toward | advance | per camera frame |
+|---|---|---|---|---|---|
+| full circuit | 15,000 | 2,334,959 | 75% | 100% | 14 ms |
+| strongest 5% of synapses | 13,670 | 119,743 | 75% | 100% | — |
+| **+ only what lies between eye and motor** | **2,211** | **10,387** | **81%** | **100%** | **3 ms** |
+
+**0.4% of the original wiring, and it behaves the same.** It also fails in the same named ways, which is what makes it the same circuit rather than a lucky one (64 arenas, seed 2000, 2 s): intact 73%, LC10a removed **0%**, wiring shuffled **2%**, DNa02 left removed 28% with a rightward bias of +0.048, looming cells removed 70% with the giant fibre going 74.9 Hz to 0.0 under a looming person.
+
+At 0.15 ms per millisecond of brain time, this runs at 335 Hz on one laptop core, which puts it comfortably in real time on a Raspberry Pi and makes the detector, not the brain, the only obstacle to putting the whole loop on the robot. The mushroom body does not survive this cut (Kenyon cells and MBONs are silent in this task and drop out), so the tiny circuit is a runtime artifact, not something to train on.
+
 ## 5. Learning, using the fly's own dopamine neurons
 
 Reward and punishment are delivered as current onto PAM and PPL1; plasticity is confined to existing synapses under Dale's law with bounds of 3× the original magnitude, plus homeostatic scaling toward 150 Hz. No new network is trained at any point.
