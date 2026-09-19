@@ -5,6 +5,7 @@
 
 #include <Arduino.h>
 #include <WiFi.h>
+#include <WiFiMulti.h>
 #include <ESPmDNS.h>
 #include <esp_camera.h>
 #include <esp_http_server.h>
@@ -16,6 +17,7 @@
 #endif
 
 static const char *HOSTNAME = "companion-cam";
+static WiFiMulti wifiMulti;
 
 // AI-Thinker ESP32-CAM pin map
 #define PWDN_GPIO_NUM 32
@@ -119,14 +121,14 @@ static bool init_camera() {
   c.pin_pwdn = PWDN_GPIO_NUM; c.pin_reset = RESET_GPIO_NUM;
   c.xclk_freq_hz = 20000000;
   c.pixel_format = PIXFORMAT_JPEG;
-  c.frame_size = FRAMESIZE_QQVGA;  // 160x120: the optic lobe only needs 80x60, and small frames stream fastest
+  c.frame_size = FRAMESIZE_QVGA;   // 320x240: the person detector wants this much; the optic lobe resizes to 80x60
   c.jpeg_quality = 16;   // smaller frames stream faster; the brain only uses 80x60 of it
   c.fb_count = psramFound() ? 3 : 1;
   c.grab_mode = CAMERA_GRAB_LATEST;  // always serve the freshest frame (low latency)
   if (esp_camera_init(&c) != ESP_OK) return false;
   sensor_t *s = esp_camera_sensor_get();
   if (s) {
-    s->set_framesize(s, FRAMESIZE_QQVGA);
+    s->set_framesize(s, FRAMESIZE_QVGA);
     s->set_vflip(s, 0);
     s->set_hmirror(s, 0);
   }
@@ -150,17 +152,24 @@ void setup() {
   WiFi.mode(WIFI_STA);
   WiFi.setSleep(false);
   WiFi.setHostname(HOSTNAME);
-  WiFi.begin(WIFI_SSID, WIFI_PASS);
-  WiFi.setSleep(false);
-  Serial.printf("connecting to %s", WIFI_SSID);
+  // Every network the camera may meet (secrets.ini: WIFI_SSID / WIFI_PASS, then WIFI_SSID2 / 3 for a phone
+  // hotspot or the Pi's own hotspot); WiFiMulti joins whichever is in range, strongest first.
+  wifiMulti.addAP(WIFI_SSID, WIFI_PASS);
+#ifdef WIFI_SSID2
+  wifiMulti.addAP(WIFI_SSID2, WIFI_PASS2);
+#endif
+#ifdef WIFI_SSID3
+  wifiMulti.addAP(WIFI_SSID3, WIFI_PASS3);
+#endif
+  Serial.print("connecting to a known WiFi");
   uint32_t t0 = millis();
-  while (WiFi.status() != WL_CONNECTED) {
+  while (wifiMulti.run(8000) != WL_CONNECTED) {
     esp_task_wdt_reset();                 // joining can take a while; don't let the watchdog reboot us mid-connect
-    delay(500);
     Serial.print('.');
-    if (millis() - t0 > 60000) { Serial.println("\nno WiFi after 60 s, rebooting"); ESP.restart(); }
+    if (millis() - t0 > 90000) { Serial.println("\nno WiFi after 90 s, rebooting"); ESP.restart(); }
   }
-  Serial.printf("\nIP %s\n", WiFi.localIP().toString().c_str());
+  WiFi.setSleep(false);
+  Serial.printf("\njoined %s, IP %s\n", WiFi.SSID().c_str(), WiFi.localIP().toString().c_str());
   if (MDNS.begin(HOSTNAME)) {
     MDNS.addService("http", "tcp", 81);
     Serial.printf("stream: http://%s.local:81/stream\n", HOSTNAME);
@@ -181,7 +190,7 @@ void loop() {
     last = millis();
     Serial.printf("up %lus frames %lu heap %u rssi %d\n", (unsigned long)(last / 1000),
                   (unsigned long)frames_served, ESP.getFreeHeap(), WiFi.RSSI());
-    if (WiFi.status() != WL_CONNECTED) WiFi.reconnect();
+    if (WiFi.status() != WL_CONNECTED) wifiMulti.run(8000);
   }
   delay(100);
 }

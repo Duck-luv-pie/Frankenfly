@@ -28,7 +28,7 @@ HTML = UI_DIR / "hunt_real.html"
 
 
 class RealHunt:
-    def __init__(self, cfg, spiking, camera: str, cam_fov_deg: float = 62.0, body=None, pir=None):
+    def __init__(self, cfg, spiking, camera: str, cam_fov_deg: float = 62.0, body=None, pir=None, rover_on: bool = True):
         self.cfg, self.spiking, self.body, self.pir = cfg, spiking, body, pir
         g = {**dict(cfg.hunt_gpu), "obs_noise": 0.0}
         self.arena = BatchArena(cfg.hunt, g, 1, "cpu", seed=0)      # only for its sensor geometry and observation layout
@@ -43,7 +43,7 @@ class RealHunt:
         self.episode_s = float(self.arena.episode_s)
         self.cell_type = spiking.hc.circuit.cell_type
         self.paused = False
-        self.rover_on = body is not None
+        self.rover_on = body is not None and rover_on        # --rover-off: attached but not driving until the page enables it
         self.lock = threading.Lock()
         self.last: dict = {}
         self.frame_jpg = b""
@@ -102,8 +102,8 @@ class RealHunt:
             self.body.close()
 
 
-def serve(cfg, spiking, camera: str, cam_fov_deg: float = 62.0, body=None, pir=None, port: int = 8601, open_browser: bool = False) -> None:
-    hunt = RealHunt(cfg, spiking, camera, cam_fov_deg, body=body, pir=pir)
+def serve(cfg, spiking, camera: str, cam_fov_deg: float = 62.0, body=None, pir=None, port: int = 8601, open_browser: bool = False, rover_on: bool = True) -> None:
+    hunt = RealHunt(cfg, spiking, camera, cam_fov_deg, body=body, pir=pir, rover_on=rover_on)
     cond = threading.Condition()
     box = {"version": 0, "payload": b"{}"}
 
@@ -169,7 +169,7 @@ def serve(cfg, spiking, camera: str, cam_fov_deg: float = 62.0, body=None, pir=N
     server.daemon_threads = True
     threading.Thread(target=server.serve_forever, daemon=True).start()
     url = f"http://localhost:{port}"
-    print(f"[hunt-real] the spiking fly ({spiking.hc.n:,} neurons) hunting through {camera} at {url}; rover {'on' if hunt.rover_on else 'not attached'} (Ctrl-C to stop)", flush=True)
+    print(f"[hunt-real] the spiking fly ({spiking.hc.n:,} neurons) hunting through {camera} at {url}; rover {'on' if hunt.rover_on else ('attached, off until the page enables it' if body is not None else 'not attached')} (Ctrl-C to stop)", flush=True)
     if open_browser:
         webbrowser.open(url)
     dt = hunt.arena.dt
