@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import threading
+import time
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -24,6 +25,11 @@ class Dashboard:
         self.version = 0
         self.latest = b"{}"
         self.jpeg: bytes | None = None
+        self.retina: np.ndarray | None = None      # latest frame from the fly's own eyes (gray uint8 HxW)
+        self.retina_seq = 0
+        self.retina_at = 0.0
+        self.world: dict = {}                       # latest world senses posted by the page
+        self.world_at = 0.0
         self.circuit_json = self._circuit_json(circuit, cfg)
         self.type_ids = self.type_names = None
         if circuit.cell_type is not None:
@@ -56,6 +62,23 @@ class Dashboard:
                     self._send(404, "text/plain", b"not found")
                     return
                 self._send(200, STATIC_TYPES[target.suffix], target.read_bytes())
+
+            def do_POST(self):
+                n = int(self.headers.get("Content-Length", 0))
+                body = self.rfile.read(n) if n else b""
+                if self.path == "/retina" and n >= 4:
+                    w, h = int.from_bytes(body[0:2], "little"), int.from_bytes(body[2:4], "little")
+                    if w * h == n - 4 and 0 < w <= 512 and 0 < h <= 512:
+                        dash.retina = np.frombuffer(body[4:], dtype=np.uint8).reshape(h, w).copy()
+                        dash.retina_seq += 1
+                        dash.retina_at = time.time()
+                elif self.path == "/world":
+                    try:
+                        dash.world = json.loads(body.decode())
+                        dash.world_at = time.time()
+                    except ValueError:
+                        pass
+                self._send(204, "text/plain", b"")
 
             def _send(self, code, ctype, body, cache=True):
                 self.send_response(code)

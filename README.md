@@ -47,9 +47,12 @@ closure to the reference model so the fly is never silent (see `docs/architectur
 fly in the dashboard is moved only by continuous motor channels decoded from descending neurons.
 
 Every `run` serves a live dashboard at <http://localhost:8600> (`--open` launches it, `--no-ui`
-disables it): the camera with what the fly's eye detects, an animated fly acting out the
-descending neurons, the two robot eyes, a map of all simulated neurons flashing as they spike,
-readout rates, behavior scores and the cell types firing right now.
+disables it). The dashboard is the fly's world: a table with a grape (smell, sugar), a flower
+(pollen → grooming), a water drop (humidity), a neighbour fly, and a window on which your webcam
+plays. The fly sees this world through its own eyes (an 80×60 retina rendered from its head is
+what the brain's optic lobe gets), walks, flies, feeds and grooms on its descending neurons, and
+the page also shows the two robot eyes, a map of all simulated neurons flashing as they spike,
+motor channels, readout rates and the cell types firing right now.
 
 Firmware (needs [PlatformIO](https://platformio.org/) CLI, `uv tool install platformio`):
 

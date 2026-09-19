@@ -13,6 +13,7 @@ import json
 import sys
 import time
 
+import cv2
 import numpy as np
 
 from .config import load_config
@@ -109,7 +110,8 @@ def cmd_run(args, cfg):
         source = SyntheticLooming(cam_cfg.width, cam_cfg.height, cam_cfg.fps, loop=dash is not None)
     else:
         source = CameraStream(args.sim_camera or cam_cfg.url, cam_cfg.width, cam_cfg.height)
-    lobe = OpticLobe(cam_cfg.width, cam_cfg.height, cam_cfg.fps)
+    cam_lobe = OpticLobe(cam_cfg.width, cam_cfg.height, cam_cfg.fps)      # the webcam, as fallback vision
+    lobe = OpticLobe(cam_cfg.width, cam_cfg.height, 10.0)                  # the fly's own eyes (retina from its world)
     decoder = Decoder(cfg, baseline)
     body = DryBody() if args.dry_body else BodyLink(cfg.body.host, cfg.body.port, cfg.body.listen_port)
     period = 1.0 / float(cfg.body.rate_hz)
@@ -118,21 +120,41 @@ def cmd_run(args, cfg):
     last_motion = time.time()
     last_sound = (0, 0.0)
     t_start = time.time()
+    want_retina = cfg.senses.get("vision", "retina") == "retina" and dash is not None
+    retina_seq = -1
+    vision = "camera"
     print(f"[run] {c.n:,} neurons; camera={'synthetic' if args.sim_camera == 'synthetic' else (args.sim_camera or cam_cfg.url)}; "
-          f"body={'dry' if args.dry_body else cfg.body.host}. Ctrl-C to stop.", flush=True)
+          f"body={'dry' if args.dry_body else cfg.body.host}; vision={'retina (world) with camera fallback' if want_retina else 'camera'}. Ctrl-C to stop.", flush=True)
     feats = None
     try:
         while True:
             tick = time.time()
-            # --- senses
+            # --- senses: the webcam (the human world) ...
             frame = source.read()
+            cam_feats = None
             if frame is not None:
-                feats = lobe.process(frame)
-                if feats.motion_energy > float(cfg.senses.wake_motion):
+                cam_feats = cam_lobe.process(frame)
+                if cam_feats.motion_energy > float(cfg.senses.wake_motion):
                     last_motion = tick
-            elif args.sim_camera:
-                if isinstance(source, SyntheticLooming) or source.is_file:
-                    print("[run] video finished"); break
+            elif args.sim_camera and (isinstance(source, SyntheticLooming) or source.is_file):
+                print("[run] video finished"); break
+            # ... and the fly's own eyes in its world, whenever the dashboard is rendering them
+            use_retina = want_retina and dash.retina is not None and (tick - dash.retina_at) < 1.0
+            if use_retina:
+                if dash.retina_seq != retina_seq:
+                    retina_seq = dash.retina_seq
+                    rf = dash.retina
+                    if rf.shape != (cam_cfg.height, cam_cfg.width):
+                        rf = cv2.resize(rf, (cam_cfg.width, cam_cfg.height), interpolation=cv2.INTER_AREA)
+                    feats = lobe.process(rf)
+                vision = "retina"
+            else:
+                if cam_feats is not None:
+                    feats = cam_feats
+                vision = "camera"
+            world = dash.world if (dash is not None and tick - dash.world_at < 1.0) else {}
+            if any(_world_value(world.get(k)) > 0.3 for k in cfg.senses.world):
+                last_motion = tick
             body.poll()
             if body.pir and not last_pir:
                 pir_until = tick + float(cfg.senses.pir.burst_ms) * 1e-3
@@ -141,11 +163,24 @@ def cmd_run(args, cfg):
             # --- drive the input neurons
             brain.clear_drive()
             if feats is not None:
+                # efference copy: the fly's own motion moves the whole retina, which is not a threat
+                suppress = 1.0 - float(cfg.senses.get("efference_copy_gain", 0.8)) * float(world.get("self_motion", 0.0)) if vision == "retina" else 1.0
                 for (g, side), hz in features_to_rates(feats, cfg).items():
-                    brain.drive(g, hz, side)
+                    brain.drive(g, hz * max(0.0, suppress), side)
             if tick < pir_until:
                 for g in cfg.senses.pir.groups:
                     brain.drive(g, float(cfg.senses.pir.rate_hz))
+            for name, spec in cfg.senses.world.items():
+                v = world.get(name)
+                if v is None:
+                    continue
+                if spec.get("lateral") and isinstance(v, (list, tuple)) and len(v) == 2:
+                    for side, vv in zip(("left", "right"), v):
+                        for g in spec["groups"]:
+                            brain.drive(g, float(np.clip(vv, 0, 1)) * float(spec["max_hz"]), side)
+                else:
+                    for g in spec["groups"]:
+                        brain.drive(g, float(np.clip(_world_value(v), 0, 1)) * float(spec["max_hz"]))
             # --- think
             brain.advance_to_wall()
             asleep = (tick - last_motion) > float(cfg.senses.sleep_after_s)
@@ -177,6 +212,7 @@ def cmd_run(args, cfg):
                     "valence": round(d.valence, 3), "arousal": round(d.arousal, 3), "reward": round(d.reward, 3),
                     "asleep": asleep, "pir": int(body.pir),
                     "sees": feats.as_dict() if feats else None,
+                    "vision": vision, "world": world,
                     "rates": {g: {s: round(v, 1) for s, v in r.items()} for g, r in brain.rates().items()},
                     "spikes": spiking.tolist(),
                     "n_spikes": int(recent.sum()),
@@ -199,6 +235,14 @@ def cmd_run(args, cfg):
     finally:
         source.close()
         body.close()
+
+
+def _world_value(v) -> float:
+    if v is None:
+        return 0.0
+    if isinstance(v, (list, tuple)):
+        return max((float(x) for x in v), default=0.0)
+    return float(v)
 
 
 def main(argv=None):

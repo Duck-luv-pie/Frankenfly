@@ -1,7 +1,7 @@
 """Resolve named neuron groups from the FlyWire annotation table.
 
 A group selector is a dict with any of: cell_type (list), hemibrain_type (list), regex
-(against cell_type), top_nt, super_class. Matches are OR-ed. Every group is resolved to
+(against cell_type), top_nt, super_class, cell_class, cell_sub_class. Matches are OR-ed. Every group is resolved to
 root ids for 'left', 'right' and 'all' (side comes from the annotation `side` column;
 neurons with no or 'center' side end up only in 'all')."""
 from __future__ import annotations
@@ -15,7 +15,7 @@ import pandas as pd
 
 from ..config import Config
 
-COLUMNS = ["root_id", "super_class", "cell_class", "cell_type", "hemibrain_type", "top_nt", "side"]
+COLUMNS = ["root_id", "super_class", "cell_class", "cell_sub_class", "cell_type", "hemibrain_type", "top_nt", "side"]
 POS_COLUMNS = ["pos_x", "pos_y", "pos_z"]
 
 
@@ -57,6 +57,11 @@ def select(ann: pd.DataFrame, spec: dict) -> pd.DataFrame:
         mask |= (ann["top_nt"] == spec["top_nt"]).to_numpy()
     if "super_class" in spec:
         mask |= (ann["super_class"] == spec["super_class"]).to_numpy()
+    if "cell_class" in spec:
+        mask |= ann["cell_class"].isin([spec["cell_class"]] if isinstance(spec["cell_class"], str) else spec["cell_class"]).to_numpy()
+    if "cell_sub_class" in spec:
+        sub = spec["cell_sub_class"]
+        mask |= ann["cell_sub_class"].isin([sub] if isinstance(sub, str) else sub).to_numpy()
     return ann[mask]
 
 

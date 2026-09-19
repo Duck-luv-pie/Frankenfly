@@ -17,8 +17,14 @@ Edit `brain/configs/default.yaml` to change any of this.
 | Moving vertical edge | `LC12`, `LC15` | 198/182, 52/54 | bar / edge detectors |
 | PIR rising edge (warm body arrived) | `JO_wind` = `JO-C*`, `JO-E*` | 229/204 | Johnston's organ C/E neurons respond to wind and static antennal deflection (Yorozu et al. 2009); A/B are the sound channels |
 
-Each group is driven as a Poisson process at `feature × gain × 150 Hz`, on the side of the
-hemifield where the feature was seen.
+| Fruit odor at each antenna (the grape in the fly's world) | `ORN_fruit` = `ORN_DM1`, `ORN_DM4`, `ORN_VA2`, `ORN_DM2` | 118/111 | vinegar / fruit-ester glomeruli, attraction (Semmelhack & Wang 2009); hunger raises ORN sensitivity (Root et al. 2011) |
+| Sugar on contact with the grape | `GRN_sugar` = gustatory `sugar/water` sub-class | 67/62 | sugar GRN activation drives proboscis extension in the model (Shiu et al. 2024) |
+| Pollen dust from the flower | `BM_eye` = `BM_InOm`, `BM_head` = `BM_Ant`, `BM_Fr`, … | 555/558, 78/83 | bristle mechanosensory neurons trigger the grooming sequence (Seeds et al. 2014, Hampel et al. 2015) |
+| Humid air near the water drop | `HRN_moist` = `HRN_VP4` | 15/14 | moist-air hygrosensory neurons (Enjin et al. 2016) |
+
+Visual groups are driven as a Poisson process at `feature × gain × 150 Hz` on the side of the
+hemifield where the feature was seen, scaled down by the fly's own motion (efference copy).
+World senses are driven at `value × max_hz` (see `senses.world` in the config).
 
 ## Readouts → behavior
 
@@ -28,10 +34,11 @@ hemifield where the feature was seen.
 | **backward** | `MDN` | 2/2 | moonwalker descending neurons, backward walking (Bidaye et al. 2014) |
 | **freeze** | `DNp09` | 1/1 | freezing on looming (Zacarias et al. 2018) |
 | **threat** | `DNp02`, `DNp04`, `DNp11`, `pC1_aggression` = `pC1d`, `pC1e` | 1/1 each, 2/2 | looming-responsive DNs and the female aggression cluster (Schretter et al. 2020) |
-| **groom** | `DNg11`, `DNg12*` | 3/3, 21/21 | front-leg grooming descending neurons (Guo et al. 2022) |
+| **groom** | `DNg11`, `DNg12*`, `DN_groom` = `DNg35`, `DNg84`, `DNg15`, `DNge132`, `DNg87` | 3/3, 21/21, 5/5 | DNg11/12: front-leg grooming (Guo et al. 2022). DN_groom was found from the connectome itself: the descending neurons with the strongest direct excitatory input from head and eye bristle neurons, since bristle drive does not reach DNg11/12 in the model |
 | **land** | `DNp07`, `DNp10` | 1/1 | landing-associated DNs (Ache et al. 2019) |
 | **social** | `pC1_social` = `pC1a`, `pC1b`, `pC1c` | 3/3 | female receptivity / social cluster (the FlyWire brain is female, so P1 does not exist) |
 | **track** | `DNa01`, `DNa02` | 1/1 | steering descending neurons (Rayshubskiy et al. 2020); right minus left drives turning |
+| **feed** | `MN_proboscis` = proboscis + ingestion motor neurons | 25/27 | proboscis extension and ingestion; the readout Shiu et al. used to validate sugar → feeding |
 | *forward walking (motor channel only)* | `DN_all` = every `descending` neuron | 337/337 | descending population activity tracks walking (Aymanns et al. 2022); used as the continuous walking drive, not as a state |
 
 Modulators (continuous, not states):

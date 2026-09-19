@@ -24,6 +24,10 @@
   .stage { position:relative; width:100%; aspect-ratio:4/3; background:#05070b; border-radius:8px; overflow:hidden; }
   .stage img, .stage canvas { position:absolute; inset:0; width:100%; height:100%; }
   #arena3d canvas { position:absolute; inset:0; }
+  #retina { image-rendering: pixelated; }
+  .inset { position:absolute; right:6px; bottom:6px; width:28%; border:1px solid #ffffff44; border-radius:4px; overflow:hidden; background:#000; }
+  .inset img { position:static; display:block; width:100%; height:auto; }
+  .inset span { position:absolute; left:4px; bottom:2px; font-size:9px; color:#fff; text-shadow:0 0 3px #000; }
   .stage img { object-fit:fill; }
   .wide { grid-column: span 2; }
   @media (max-width: 720px) { .wide { grid-column: span 1; } }
@@ -72,13 +76,13 @@
 
 <div class="grid">
   <div class="panel">
-    <h2>Fly's eye <span id="cam-note">camera → synthetic optic lobe</span></h2>
-    <div class="stage"><img id="cam" alt=""><canvas id="overlay"></canvas></div>
-    <small class="hint">Left/right hemifields feed the left/right brain. Red = looming (LC4/LPLC2), cyan = small object (LC11/LC10a), bar height = drive.</small>
+    <h2>Fly's eyes <span id="cam-note">what the fly sees → optic lobe</span></h2>
+    <div class="stage"><canvas id="retina" width="80" height="60"></canvas><canvas id="overlay"></canvas><div class="inset"><img id="cam" alt=""><span>you, through the window</span></div></div>
+    <small class="hint">Rendered from the fly's own head in its world at 80×60, the same pixels the brain gets. Your webcam plays on a window in that world. Red = looming (LC4/LPLC2), cyan = small object (LC11/LC10a), bar height = drive. <span id="senses"></span></small>
   </div>
 
   <div class="panel">
-    <h2>The fly <span id="fly-note">acting out the descending neurons</span></h2>
+    <h2>The fly's world <span id="fly-note">moved by descending neurons · grape, flower, water, a neighbour, and you in the window</span></h2>
     <div class="stage" id="arena3d"></div>
     <div class="bars motor" id="motor"></div>
     <small class="hint">Fly / Body Lab rig, 36 joints, moved only by the motor channels above (z-scores of descending-neuron rates against the brain's own resting activity): forward = whole descending population, turn = DNa01/02 right minus left, backward = MDN, groom = DNg11/12, threat = DNp02/04/11 + pC1d/e, song = pC1a-c, land = DNp07/10, freeze = DNp09, jump = Giant Fiber. Drag to orbit.</small>
@@ -119,7 +123,7 @@
 <script type="module">
 import { createFlyStage } from './fly3d.js';
 const $ = id => document.getElementById(id);
-const STATE_COLORS = { idle:'#2a3350', sleep:'#2b2a5e', track:'#1f5fa8', escape:'#c0392b', freeze:'#6c3fb5', backward:'#d97a1a', threat:'#a8123a', groom:'#1f8a5a', land:'#158a8a', social:'#c23a8a' };
+const STATE_COLORS = { idle:'#2a3350', sleep:'#2b2a5e', track:'#1f5fa8', escape:'#c0392b', freeze:'#6c3fb5', backward:'#d97a1a', threat:'#a8123a', groom:'#1f8a5a', land:'#158a8a', social:'#c23a8a', feed:'#b7791f' };
 
 // ---------------------------------------------------------------- state from the brain
 let circuit = null, last = null, lastAt = 0, sparkBuf = [], spikeAcc = 0, spikeAccAt = performance.now();
@@ -149,6 +153,8 @@ function onPacket(p) {
   renderRates(p.rates);
   renderScores(p.scores, p.state);
   renderMotor(p.motor);
+  $('cam-note').textContent = p.vision === 'retina' ? 'what the fly sees → optic lobe' : 'webcam fallback (open this page to give the fly its own eyes)';
+  if (p.world && p.world.odor) { const w = p.world; $('senses').textContent = `Smell L/R ${w.odor[0].toFixed(2)}/${w.odor[1].toFixed(2)} · sugar ${w.sugar.toFixed(2)} · dust ${w.dust.toFixed(2)} · humid ${w.moist.toFixed(2)} · satiety ${w.satiety.toFixed(2)}`; }
   renderTypes(p.top_types);
   $('g-val').style.left = (50 + 50 * p.valence) + '%';
   $('g-ar').style.left = (100 * p.arousal) + '%';
@@ -161,6 +167,7 @@ function onPacket(p) {
 // ---------------------------------------------------------------- camera + overlay
 const cam = $('cam'), ov = $('overlay');
 setInterval(() => { cam.src = '/frame.jpg?' + Date.now(); }, 100);
+cam.addEventListener('load', () => { if (window.flyStage) window.flyStage.setWebcam(cam); });
 function drawOverlay() {
   const w = ov.width = ov.clientWidth, h = ov.height = ov.clientHeight, c = ov.getContext('2d');
   c.clearRect(0, 0, w, h);
@@ -305,7 +312,8 @@ function drawSpark() {
 }
 
 // ---------------------------------------------------------------- the 3D fly
-const fly = createFlyStage($('arena3d'));
+const fly = createFlyStage($('arena3d'), $('retina'));
+window.flyStage = fly;
 
 // ---------------------------------------------------------------- main loop
 let lastFrame = performance.now();

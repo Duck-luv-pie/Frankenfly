@@ -47,12 +47,15 @@ class Features:
 class OpticLobe:
     def __init__(self, width: int = 80, height: int = 60, fps: float = 15.0,
                  diff_thresh: int = 25, small_max_frac: float = 0.05, loom_gain: float = 6.0,
-                 loom_min_frac: float = 0.02, slow_tau_s: float = 0.6):
+                 loom_min_frac: float = 0.02, loom_min_rate: float = 0.25, slow_tau_s: float = 0.6):
         self.w, self.h, self.fps = width, height, fps
         self.diff_thresh = diff_thresh
         self.small_max_area = small_max_frac * (width // 2) * height
         self.loom_gain = loom_gain
         self.loom_min_frac = loom_min_frac
+        self.loom_min_rate = loom_min_rate          # hemifield fraction / s below which growth is not an approach
+        self.prev_cent = [(0.0, 0.0), (0.0, 0.0)]
+        self.prev_size = [0.0, 0.0]
         self.slow_alpha = 1.0 / (slow_tau_s * fps)
         self.prev: np.ndarray | None = None
         self.prev_area = [0.0, 0.0]
@@ -61,6 +64,7 @@ class OpticLobe:
     def reset(self) -> None:
         self.prev = None
         self.prev_area = [0.0, 0.0]
+        self.prev_size = [0.0, 0.0]
         self.slow = [0.0, 0.0]
 
     def process(self, frame: np.ndarray) -> Features:
@@ -83,13 +87,22 @@ class OpticLobe:
                 areas = stats[1:, cv2.CC_STAT_AREA]
                 k = int(np.argmax(areas)) + 1
                 area = float(areas[k - 1])
-                # --- looming: an already-visible moving region that keeps growing
-                # (a blob appearing from nothing is an object, not an approach)
+                # --- looming: radial expansion of an already-visible region whose centre stays put.
+                # Translation (an object crossing, or the world sliding past a moving fly) moves the
+                # centroid about as fast as the edges; a real approach grows the box around a fixed centre.
                 hemi_area = half * self.h
-                if self.prev_area[si] >= self.loom_min_frac * hemi_area and area > self.prev_area[si]:
-                    growth = (area - self.prev_area[si]) * self.fps / hemi_area
-                    hf.loom_fast = float(np.clip(growth * self.loom_gain, 0, 1))
+                cx, cy = cent[k]
+                bw, bh = stats[k, cv2.CC_STAT_WIDTH], stats[k, cv2.CC_STAT_HEIGHT]
+                pa, pc, ps = self.prev_area[si], self.prev_cent[si], self.prev_size[si]
+                if pa >= self.loom_min_frac * hemi_area and area > pa:
+                    growth = (area - pa) * self.fps / hemi_area                     # hemifield fraction per second
+                    d_size = (bw + bh) - ps                                          # px of edge expansion
+                    d_cent = abs(cx - pc[0]) + abs(cy - pc[1])                       # px of centre motion
+                    if d_size > 0 and d_cent < 0.6 * d_size:                          # expansion, not translation
+                        hf.loom_fast = float(np.clip((growth - self.loom_min_rate) * self.loom_gain, 0, 1))
                 self.prev_area[si] = area
+                self.prev_cent[si] = (float(cx), float(cy))
+                self.prev_size[si] = float(bw + bh)
                 # --- small object: smallest blob with a few pixels, prefer dark
                 small = [(i + 1, a) for i, a in enumerate(areas) if 3 <= a <= self.small_max_area]
                 if small:
@@ -105,6 +118,7 @@ class OpticLobe:
                         best_obj = (gx, hf.object_y, hf.small_object)
             else:
                 self.prev_area[si] = 0.0
+                self.prev_size[si] = 0.0
             # --- slow looming: low-pass of positive growth
             self.slow[si] += self.slow_alpha * (hf.loom_fast - self.slow[si])
             hf.loom_slow = float(np.clip(self.slow[si] * 2.0, 0, 1))

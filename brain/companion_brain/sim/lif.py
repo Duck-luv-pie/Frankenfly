@@ -39,6 +39,8 @@ class LIFParams:
     dt_ms: float = 0.1
     adapt_mv: float = 0.0        # spike-frequency adaptation: each spike adds this (mV) to a hyperpolarizing variable
     tau_adapt_ms: float = 200.0  # ... that decays with this time constant. 0 = reference model (none)
+    depress_u: float = 0.0       # short-term synaptic depression: each presynaptic spike uses this fraction of the
+    tau_depress_ms: float = 200.0  # ... neuron's transmitter resources, which recover with this time constant. 0 = none
 
     @classmethod
     def from_config(cls, lif_cfg: dict) -> "LIFParams":
@@ -60,12 +62,14 @@ class LIFNetwork:
         self.a_mem = math.exp(-p.dt_ms / p.tau_mem_ms)
         self.a_syn = math.exp(-p.dt_ms / p.tau_syn_ms)
         self.a_adapt = math.exp(-p.dt_ms / p.tau_adapt_ms) if p.tau_adapt_ms > 0 else 0.0
+        self.a_depress = math.exp(-p.dt_ms / p.tau_depress_ms) if p.tau_depress_ms > 0 else 0.0
         self.ref_steps = max(1, int(round(p.refractory_ms / p.dt_ms)))
         self.delay_steps = max(1, int(round(p.delay_ms / p.dt_ms)))
 
         self.v = np.full(n, p.v_rest_mv, dtype=np.float32)
         self.g = np.zeros(n, dtype=np.float32)
         self.adapt = np.zeros(n, dtype=np.float32)       # adaptation variable (mV, subtracted from drive)
+        self.resource = np.ones(n, dtype=np.float32)     # synaptic resources per presynaptic neuron (1 = full)
         self.ref_left = np.zeros(n, dtype=np.int32)
         # delay ring: spike flags per step for the last delay_steps steps
         self.ring = np.zeros((self.delay_steps, n), dtype=np.bool_)
@@ -109,12 +113,13 @@ class LIFNetwork:
             driven_idx = np.nonzero(self.rate > 0)[0].astype(np.int32)
             bg_lambda = float(self.background_hz * self.p.dt_ms * 1e-3 * len(self.background_idx))
             self.ring_pos = _run_numba(
-                steps, self.v, self.g, self.adapt, self.ref_left, self.ring, self.ring_pos, self.rate, driven_idx,
+                steps, self.v, self.g, self.adapt, self.resource, self.ref_left, self.ring, self.ring_pos, self.rate, driven_idx,
                 self.background_idx, bg_lambda,
                 self.indptr, self.indices, self.data, counts,
                 np.float32(self.a_mem), np.float32(self.a_syn), np.float32(self.p.v_rest_mv),
                 np.float32(self.p.v_reset_mv), np.float32(self.p.v_thresh_mv), self.ref_steps,
-                np.float32(self.p.dt_ms * 1e-3), self._seed_numba, np.float32(self.p.adapt_mv), np.float32(self.a_adapt))
+                np.float32(self.p.dt_ms * 1e-3), self._seed_numba, np.float32(self.p.adapt_mv), np.float32(self.a_adapt),
+                np.float32(self.p.depress_u), np.float32(self.a_depress))
         else:
             for _ in range(steps):
                 self._step_numpy(counts)
@@ -136,7 +141,12 @@ class LIFNetwork:
             if total:
                 offs = np.repeat(starts - (np.cumsum(lens) - lens), lens)
                 sel = np.arange(total) + offs
-                self.g += np.bincount(self.indices[sel], weights=self.data[sel], minlength=self.n).astype(np.float32)
+                wsel = self.data[sel] * np.repeat(self.resource[src], lens)
+                self.g += np.bincount(self.indices[sel], weights=wsel, minlength=self.n).astype(np.float32)
+            if p.depress_u > 0:
+                self.resource[src] *= (1.0 - p.depress_u)
+        if p.depress_u > 0:
+            self.resource += (1.0 - self.resource) * (1.0 - self.a_depress)
         # 2) integrate (skip refractory)
         active = self.ref_left <= 0
         self.g[active] *= self.a_syn
@@ -166,9 +176,9 @@ class LIFNetwork:
 if HAVE_NUMBA:
 
     @numba.njit(cache=True, fastmath=True)
-    def _run_numba(steps, v, g, adapt, ref_left, ring, ring_pos, rate, driven_idx, bg_idx, bg_lambda,
+    def _run_numba(steps, v, g, adapt, resource, ref_left, ring, ring_pos, rate, driven_idx, bg_idx, bg_lambda,
                    indptr, indices, data, counts,
-                   a_mem, a_syn, v_rest, v_reset, v_th, ref_steps, dt_s, seed, adapt_mv, a_adapt):
+                   a_mem, a_syn, v_rest, v_reset, v_th, ref_steps, dt_s, seed, adapt_mv, a_adapt, depress_u, a_depress):
         np.random.seed(seed)
         n = v.shape[0]
         delay_steps = ring.shape[0]
@@ -178,8 +188,14 @@ if HAVE_NUMBA:
             row = ring[ring_pos]
             for i in range(n):
                 if row[i]:
+                    x = resource[i]
                     for k in range(indptr[i], indptr[i + 1]):
-                        g[indices[k]] += data[k]
+                        g[indices[k]] += data[k] * x
+                    if depress_u > 0.0:
+                        resource[i] = x * (1.0 - depress_u)
+            if depress_u > 0.0:
+                for i in range(n):
+                    resource[i] += (1.0 - resource[i]) * (1.0 - a_depress)
             # 2) integrate + threshold
             for i in range(n):
                 adapt[i] *= a_adapt

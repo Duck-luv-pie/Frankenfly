@@ -36,10 +36,10 @@ ESP32 body ─UDP──▶│ link.poll  ─▶ PIR burst ───────�
 |---|---|
 | Neurons | FlyWire v783, 138,639 neurons in the Shiu et al. model tables |
 | Connections | 2.70 M with ≥ 5 synapses (weaker pairs dropped, as in the paper) |
-| Pruned circuit | neurons within 2 synaptic hops forward of the input groups **and** 2 hops backward of the readout groups, plus the inhibitory closure: **36,391 neurons, 1,020,376 connections** |
+| Pruned circuit | neurons within 2 synaptic hops forward of the input groups **and** 2 hops backward of the readout groups, plus the inhibitory closure: **46,072 neurons, 1,241,045 connections** (visual, wind, smell, taste, touch and humidity inputs) |
 | Model | LIF: rest −52 mV, threshold −45 mV, τ_m 20 ms, alpha synapse τ 5 ms, refractory 2.2 ms, delay 1.8 ms, 0.275 mV per synapse × count × sign (ACh +, GABA/Glu −), dt 0.1 ms |
 | Stimulation | driven neurons spike as a Poisson process at 0–150 Hz (the reference model's Poisson input is super-threshold, so this is equivalent) |
-| Speed | numba kernel, ~2.3× real time on an Apple Silicon laptop with the closure (2.7× without); `--full` (all neurons) ~0.55× |
+| Speed | numba kernel, ~1.7× real time on an Apple Silicon laptop; `--full` (all neurons) ~0.55× |
 | Pacing | `runner.py` advances the brain in 10 ms chunks to match the wall clock; if it falls > 1 s behind it skips ahead rather than lagging forever |
 
 ### Making it a living brain (deviations from the reference model)
@@ -52,7 +52,7 @@ and that the senses *modulate* rather than *create*:
 | Addition | Config | Why |
 |---|---|---|
 | Spontaneous firing floor, 1 Hz Poisson on brain-intrinsic neurons only (central, descending, ascending, centrifugal, endocrine) | `lif.background_hz`, `lif.background_classes` | A real brain is never silent. Sensory and visual-projection neurons are excluded so they fire only when the camera or PIR drives them; hundreds of looming cells converge on the Giant Fiber and even 0.5 Hz of noise on them fires it. |
-| Spike-frequency adaptation, 5 mV per spike decaying with τ = 200 ms | `lif.adapt_mv`, `lif.tau_adapt_ms` | The plain LIF has no rate limit except the refractory period, so a few self-exciting hubs (antennal-lobe local neurons, the mushroom-body APL cell) run away to ~400 Hz and drag the rest along. Adaptation caps them; looming still fires the Giant Fiber within 10 ms. |
+| Spike-frequency adaptation, 2 mV per spike decaying with τ = 200 ms | `lif.adapt_mv`, `lif.tau_adapt_ms` (also `lif.depress_u` for optional synaptic depression) | The plain LIF has no rate limit except the refractory period, so a self-exciting clique of antennal-lobe local neurons runs away to ~400 Hz and drags the rest along. 2 mV is the compromise found by sweeping: it keeps resting descending activity low and the looming → Giant Fiber, dust → grooming and sugar → proboscis pathways all working, while 5 mV or any synaptic depression silences the polysynaptic sugar pathway. The olfactory clique still saturates; it is documented, not hidden. |
 | Inhibitory closure in pruning: also keep inhibitory neurons with ≥ 20 synapses both from and into the circuit | `prune.inhibitory_closure_min_synapses` | Path pruning keeps excitatory chains but drops the inhibitory interneurons hanging off them; the full brain keeps the Giant Fiber at 0 Hz at rest while the unclosed pruned circuit had it at 25 Hz. Adds ~7k neurons (36k total). |
 
 `companion test-gf` and the reference test in `tests/` switch these off and reproduce the
@@ -104,20 +104,41 @@ each PIR edge. Field definitions are in [wiring.md](wiring.md#network-protocol).
 toward each target at 30 fps and falls back to a local idle animation after 2 s without packets,
 and widens the eyes on its own when the PIR fires (a fast local reflex, like the Giant Fiber).
 
+## The fly's world (closed loop)
+
+The dashboard is not just a display: it is the world the fly lives in, and the fly perceives it
+through its own senses. `ui/fly3d.js` builds a table with a grape, a flower with pollen, a water
+drop, pebbles, a leaf, a second (scripted) fly, and a window onto the human world on which the
+webcam plays. So you are in the fly's world too, seen through the window.
+
+| Sense | How the world computes it | Neurons driven | What the brain does with it |
+|---|---|---|---|
+| Vision | a 95° camera on the fly's head renders an 80×60 **retina** at 10 Hz, posted to `/retina`; the optic lobe processes exactly these pixels (the webcam is only a fallback when no page is open) | LC4/LPLC2 looming, LC16, LC11/LC10a small objects, LC12/15 bars | escape, tracking, freezing, landing |
+| Efference copy | the world reports `self_motion` (walking speed, turning, flight); visual drive is scaled by 1 − 0.8·self_motion | | the fly's own movement moves the whole retina and must not read as looming (Kim et al. 2015) |
+| Smell | fruit-ester concentration at each antenna, 1/(1+(d/4 mm)²), scaled by hunger (Root et al. 2011) | `ORN_fruit` = ORN_DM1, DM4, VA2, DM2, per side | antennal lobe → lateral horn / mushroom body → whatever it does |
+| Taste | standing at the split in the grape's skin, scaled by hunger | `GRN_sugar` = sugar/water gustatory neurons | proboscis + ingestion motor neurons (`MN_proboscis`) → **feed** channel → proboscis extends, satiety rises |
+| Touch | walking into the flower dusts the fly; dust decays only by grooming (`groom` channel) | `BM_eye` (interommatidial bristles), `BM_head` | `DN_groom` = DNg35, DNg84, DNg15, DNge132, DNg87, the descending neurons the connectome shows receiving the strongest direct bristle input (DNg11/12 are not reached), plus DNg11/12 |
+| Humidity | 1/(1+(d/2.5 mm)²) from the water drop | `HRN_moist` = HRN_VP4 | logged; no behavior mapped yet |
+| Wind / presence | PIR on the robot body | `JO_wind` | startle, grooming |
+
+Body state that lives in the world, not the brain: satiety (rises while feeding, decays over
+~4 min and scales smell and taste), dust (pollen on the body), flight (a Giant Fiber takeoff
+starts a flight that lasts until the landing neurons DNp07/DNp10 fire or ~9 s pass; the retina
+sees optic flow the whole time, so landing is closed-loop too).
+
+Everything else the fly does is decoded from descending neurons as described above; the only
+scripted animal on the table is the neighbour fly, which is scenery.
+
 ## Live dashboard
 
 `companion_brain/ui/server.py` is a stdlib HTTP server started by `run` (port 8600). It serves
 `ui/index.html`, `/circuit.json` once (normalized FAFB x/y position, role and cell type of every
-simulated neuron), `/frame.jpg` (latest camera preview) and `/events`, a server-sent-events
-stream at the body rate carrying the body packet plus behavior scores, modulators, sensory
-features, readout rates, the indices of neurons that spiked since the last event, and the cell
-types with the most spikes in the last 100 ms. The page is plain HTML/canvas with no
-dependencies except Three.js (vendored); the brain map draws each spike as a flash at the neuron's real
-anatomical position (frontal view). The fly panel (`ui/fly3d.js`) drives the Fly / Body Lab
-procedural rig (`ui/fly.js`, 36 joint axes: legs, wings, halteres, head, abdomen, antennae,
-proboscis) from the behavior state: tripod-gait walking toward objects, a jump and wingbeats on
-escape, backward walking, wing-threat display, one-wing courtship song, grooming, landing and a
-lowered sleep posture, on a table with the webcam modelled in front of the fly.
+simulated neuron), `/frame.jpg` (latest webcam frame, which the world paints on its window),
+`/events`, a server-sent-events stream at the body rate carrying the body packet plus behavior
+scores, motor channels, modulators, sensory features, world senses, readout rates, the indices of
+neurons that spiked since the last event, and the cell types with the most spikes; and it accepts
+`POST /retina` (raw 80×60 gray frame from the fly's eyes) and `POST /world` (odor per antenna,
+sugar, dust, moist, satiety, self-motion). The page is plain HTML/canvas plus vendored Three.js.
 
 ## Adding arms later
 
