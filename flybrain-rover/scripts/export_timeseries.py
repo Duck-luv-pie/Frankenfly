@@ -297,9 +297,9 @@ def report(store):
         except Exception as e:  # noqa: BLE001
             store.conn.rollback(); print(f"\ncontinuous aggregate: not available ({type(e).__name__})")
         try:
-            rows = store.query("""SELECT hypertable_name, before_compression_total_bytes, after_compression_total_bytes
+            rows = store.query("""SELECT 'spikes', before_compression_total_bytes, after_compression_total_bytes
                                   FROM hypertable_compression_stats('spikes')
-                                  UNION ALL SELECT hypertable_name, before_compression_total_bytes, after_compression_total_bytes
+                                  UNION ALL SELECT 'neuron_rates', before_compression_total_bytes, after_compression_total_bytes
                                   FROM hypertable_compression_stats('neuron_rates')""")
             for name, before, after in rows:
                 if before and after:
