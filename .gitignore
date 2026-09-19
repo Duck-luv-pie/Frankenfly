@@ -1,0 +1,5 @@
+
+# never let a secret into this repo, whatever directory a shell happens to be in
+.env
+.env.*
+!.env.example
