@@ -99,7 +99,7 @@ class SerialBodyLink:
     on its serial port). No Wi-Fi involved: on the robot the ESP32 hangs off the Pi's USB anyway.
     `port` = a serial device, or None to pick the first CP210x under /dev/serial/by-id (the ESP32 DevKit)."""
 
-    def __init__(self, port: str | None = None, baud: int = 115200, ser=None, verbose: bool = False):
+    def __init__(self, port: str | None = None, baud: int = 460800, ser=None, verbose: bool = False):
         self.pir = 0
         self.busy = 0
         self.last_rx = 0.0
@@ -110,7 +110,7 @@ class SerialBodyLink:
             self.ser = ser
         elif self.port:
             import serial
-            self.ser = serial.Serial(self.port, baud, timeout=0, write_timeout=0.05)
+            self.ser = serial.Serial(self.port, baud, timeout=0, write_timeout=0.2)
             print(f"[body] ESP32 over USB serial at {self.port}", flush=True)
         else:
             self.ser = None

@@ -33,7 +33,7 @@ def main() -> None:
     unknown = [n for n in names if n not in POSES]
     if unknown:
         sys.exit(f"unknown expression(s) {unknown}; known: {', '.join(POSES)}")
-    ser = serial.Serial(a.port, 115200, timeout=0)
+    ser = serial.Serial(a.port, 460800, timeout=0)
     time.sleep(0.3)
     t0 = time.monotonic()
     i = -1

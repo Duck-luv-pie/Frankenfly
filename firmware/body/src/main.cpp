@@ -18,7 +18,8 @@ static uint32_t lastHeartbeat = 0;
 static uint32_t startleUntil = 0;
 
 void setup() {
-  Serial.begin(115200);
+  Serial.setRxBufferSize(8192);       // brain packets over USB are ~450 bytes at 20 Hz; the default 256 would chop them
+  Serial.begin(BODY_SERIAL_BAUD);
   Serial.println("\ncompanion body");
   eyes.begin();
   eyes.testPattern();

@@ -28,6 +28,7 @@
 
 // --- Network --------------------------------------------------------------------------------
 #define HOSTNAME        "companion-body"
+#define BODY_SERIAL_BAUD 460800   // USB serial: logs out, brain packets in (tools/eyes_demo.py, the Pi with S1_MODE=usb)
 #define UDP_LISTEN_PORT 4210   // brain -> body
 #define UDP_REPLY_PORT  4211   // body  -> brain
 #define HEARTBEAT_MS    500
