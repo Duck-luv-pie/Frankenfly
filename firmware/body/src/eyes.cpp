@@ -25,7 +25,15 @@ void Eye::testPattern() {
   gfx_->fillCircle(EYE_SIZE / 2, EYE_SIZE / 2, 30, PUPIL);
 }
 
+void Eye::setEnabled(bool on) {
+  if (on == enabled_) return;
+  enabled_ = on;
+  if (!on) gfx_->fillScreen(BG);
+  else first_ = true;                      // coming back: repaint everything
+}
+
 void Eye::tick() {
+  if (!enabled_) return;
   cur_.px = ease(cur_.px, target_.px);
   cur_.py = ease(cur_.py, target_.py);
   cur_.pr = ease(cur_.pr, target_.pr);

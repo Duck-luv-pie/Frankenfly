@@ -53,6 +53,7 @@ void loop() {
   }
 
   if (!brainLink.hostAlive() && now > startleUntil) eyes.idle(now);
+  eyes.setLeftEnabled(!brainLink.hostAlive());   // DEBUG: left eye off while the brain's packets are arriving, on when idling
   eyes.tick();
 
   if (now - lastHeartbeat > HEARTBEAT_MS) {

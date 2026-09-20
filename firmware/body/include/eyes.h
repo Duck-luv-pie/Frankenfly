@@ -21,6 +21,7 @@ class Eye {
   void tick();            // ease toward target and redraw what changed
   EyeParams current() const { return cur_; }
   void testPattern();
+  void setEnabled(bool on);   // off = display black and left alone (debug: the left eye is off while brain packets arrive)
 
  private:
   void draw(bool full);
@@ -28,6 +29,7 @@ class Eye {
   Arduino_GFX *gfx_;
   EyeParams cur_, target_, drawn_;
   bool first_ = true;
+  bool enabled_ = true;
   int blink_phase_ = 0;   // 0 none, 1 closing, 2 opening
   float blink_ = 0;       // 1 = fully closed
 };
@@ -41,6 +43,7 @@ class Eyes {
   void idle(uint32_t now_ms);       // built-in wander + random blinks when the brain is away
   void startle();                    // local PIR reflex: eyes wide
   void testPattern();
+  void setLeftEnabled(bool on) { left_->setEnabled(on); }
 
  private:
   Eye *left_ = nullptr, *right_ = nullptr;
