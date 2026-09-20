@@ -128,3 +128,14 @@ def test_udp_mode_puts_the_channels_in_the_packet():
     assert sent[1]["s1"]["ch"][6] == LOW                   # asleep: chassis released
     assert b.status()["frames"] == 2
     m.close()
+
+
+def test_serial_body_link_writes_packets_as_lines():
+    from companion_brain.body.link import SerialBodyLink
+    ser = FakeSerial(); ser.in_waiting = 0
+    link = SerialBodyLink(port="fake", ser=ser)
+    b = S1Body({"rotation_only": False}, udp=True)
+    m = MultiBody(b, link)
+    m.send({"state": "hunt", "motor": {"forward": 1.0, "turn": 0.0}})
+    line = ser.frames[0]
+    assert line.endswith(b"\n") and b'"s1":{"ch":[' in line

@@ -422,11 +422,15 @@ def _s1_body(args, cfg, with_link: bool = True):
     if mode is None and not s1_cfg.get("enabled"):
         return None
     from .body.s1 import S1Body, MultiBody
-    if mode == "udp" or s1_cfg.get("port") == "udp":
+    if mode in ("udp", "usb") or s1_cfg.get("port") in ("udp", "usb"):
+        mode = mode if mode in ("udp", "usb") else s1_cfg.get("port")
         s1 = S1Body(s1_cfg, udp=True)
-        print(f"[body] RoboMaster S1 via the body ESP32 ({cfg.body.host}: S-Bus channels in the packet, free_mode={s1.cfg['free_mode']}, speed {s1.cfg['speed']})", flush=True)
+        print(f"[body] RoboMaster S1 via the body ESP32 ({'USB serial' if mode == 'usb' else cfg.body.host}: S-Bus channels in the packet, free_mode={s1.cfg['free_mode']}, speed {s1.cfg['speed']})", flush=True)
         if not with_link:
             return s1
+        if mode == "usb":
+            from .body.link import SerialBodyLink
+            return MultiBody(s1, SerialBodyLink())
         from .body.link import BodyLink
         return MultiBody(s1, BodyLink(cfg.body.host, cfg.body.port, cfg.body.listen_port))
     s1 = S1Body(s1_cfg, port=(mode or None))
@@ -743,7 +747,7 @@ def main(argv=None):
     p.add_argument("--generations", type=int, default=20); p.add_argument("--pop", type=int, default=None)
     p.add_argument("--check", action="store_true", help="compare the rate model's responses with the spiking subcircuit's")
     p.add_argument("--watch", action="store_true", help="live view of the spiking fly hunting, with its neurons, at http://localhost:8601")
-    p.add_argument("--s1", nargs="?", const="", default=None, metavar="PORT", help="with --watch / --real: a RoboMaster S1 on S-Bus is the fly's legs (default body.s1.port)")
+    p.add_argument("--s1", nargs="?", const="", default=None, metavar="PORT", help="with --watch / --real: a RoboMaster S1 on S-Bus is the fly's legs: a serial port, 'udp' or 'usb' (via the body ESP32; default body.s1.port)")
     p.add_argument("--real", action="store_true", help="the real world: a camera (and --pir) instead of the arena, the spiking fly hunting people, page at :8601")
     p.add_argument("--camera", default=None, metavar="SRC", help="with --real: the ESP32-CAM URL (default senses.camera.url), a device index like 0, or a file")
     p.add_argument("--cam-fov", type=float, default=62.0, help="with --real: the camera's horizontal field of view in degrees (ESP32-CAM OV2640 ~62)")
@@ -756,7 +760,7 @@ def main(argv=None):
     p.add_argument("--sim-camera", default=None, metavar="SRC", help="'synthetic' or a video file / URL instead of the ESP32-CAM")
     p.add_argument("--dry-body", action="store_true", help="print body packets instead of sending UDP")
     p.add_argument("--s1", nargs="?", const="", default=None, metavar="PORT",
-                   help="also drive a RoboMaster S1 over S-Bus from this serial port, or 'udp' = via the body ESP32 (default body.s1.port)")
+                   help="also drive a RoboMaster S1 over S-Bus from this serial port, or 'udp' / 'usb' = via the body ESP32 over Wi-Fi / its USB cable (default body.s1.port)")
     p.add_argument("-v", "--verbose", action="store_true")
     p.add_argument("--recalibrate", action="store_true", help="re-measure the resting baseline")
     p.add_argument("--no-learn", action="store_true", help="start with mushroom-body plasticity switched off")

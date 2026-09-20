@@ -4,7 +4,8 @@
 export PATH="$HOME/.local/bin:$PATH"
 cd "$HOME/companion/brain" || exit 1
 BRIDGE=$(ls /dev/serial/by-id/*CP210* 2>/dev/null | head -1)         # the S-Bus bridge ESP32 (CP2102), whatever ttyUSB number it got
-[ "${S1_MODE:-}" = "udp" ] && BRIDGE=udp                             # S1_MODE=udp in companion-hunt.env: the body ESP32 does the S-Bus over Wi-Fi
+[ "${S1_MODE:-}" = "udp" ] && BRIDGE=udp                             # S1_MODE=udp in companion-hunt.env: the body ESP32 does the S-Bus, packets over Wi-Fi
+[ "${S1_MODE:-}" = "usb" ] && BRIDGE=usb                             # S1_MODE=usb: the body ESP32 does the S-Bus, packets down its USB cable (no Wi-Fi needed)
 CAM="${CAM_URL:-http://companion-cam.local:81/stream}"
 echo "[companion-hunt] camera $CAM, bridge ${BRIDGE:-none}"
 ROVER_FLAG="--rover-off"; [ "${ROVER:-off}" = "on" ] && ROVER_FLAG=""      # ROVER=on in companion-hunt.env: drive from the start
