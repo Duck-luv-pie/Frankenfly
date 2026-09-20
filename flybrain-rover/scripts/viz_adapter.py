@@ -81,6 +81,8 @@ class Source:
     """Yields our frames (dicts with the replay/FORMAT.md fields) at their own rate."""
     def __init__(self, replay: str | None, live: str | None, loop: bool = True):
         self.replay, self.live, self.loop = replay, live, loop
+        self.speed = 1.0          # the viewer's slider; replay only, live is real time
+        self.paused = False       # the viewer's pause; replay only, live pauses the brain instead
         self.meta = {}
         if replay:
             d = json.load(open(replay)); self.frames = d["frames"]; self.meta = d.get("meta", {})
@@ -92,8 +94,11 @@ class Source:
             while True:
                 nxt = time.perf_counter()
                 for f in self.frames:
+                    while self.paused:                       # hold on the current frame, do not drop it
+                        time.sleep(0.05); nxt = time.perf_counter()
                     on_frame(f)
-                    nxt += dt; time.sleep(max(0.0, nxt - time.perf_counter()))
+                    nxt += dt / max(0.05, self.speed)        # the slider is 0.25x to 4x
+                    time.sleep(max(0.0, nxt - time.perf_counter()))
                 if not self.loop:
                     return
         else:
@@ -141,6 +146,8 @@ class Adapter:
         self.lobotomized = False; self.silenced = False; self.heat_on = True; self.episode = 0; self.seed = int(src.meta.get("seed", 0)); self.last_t = -1.0
         self.live = not src.replay                                     # live: no world pose in the frames, dead-reckon one
         self.v_max, self.w_max = float(v_max), math.radians(w_max_deg)
+        self.fly_speed = 1.0      # the viewer's slider, live only: scales the fly and nothing else
+        self.fly_frozen = False   # the viewer's pause, live only: holds the fly still, brain untouched
         self.arena_half = float(src.meta.get("arena_L", LIVE_ARENA_L)) / 2
         self.pose = None                                               # [x, y, yaw] in our frame, live mode only
 
@@ -154,8 +161,10 @@ class Adapter:
             dt = min(max(t - self.last_t, 0.0), 0.1)
         fwd, turn = max(-1.0, min(1.0, fwd)), max(-1.0, min(1.0, turn))
         x, y, yaw = self.pose
-        yaw = _wrap(yaw - turn * self.w_max * dt)                      # turn > 0 = clockwise, yaw is CCW-positive
-        v, h = fwd * self.v_max, self.arena_half
+        if self.fly_frozen:                                            # paused: the body holds, the brain does not
+            return (x, y), yaw
+        yaw = _wrap(yaw - turn * self.w_max * self.fly_speed * dt)                      # turn > 0 = clockwise, yaw is CCW-positive
+        v, h = fwd * self.v_max * self.fly_speed, self.arena_half
         x = min(max(x + v * math.cos(yaw) * dt, -h), h); y = min(max(y + v * math.sin(yaw) * dt, -h), h)
         self.pose = [x, y, yaw]
         return [x, y], yaw
@@ -171,7 +180,7 @@ class Adapter:
         else:
             rxy = f.get("rxy", [0.0, 0.0]); yaw = float(f.get("ryaw", 0.0))
         self.last_t = t
-        speed = abs(fwd) * 1.2
+        speed = 0.0 if (self.live and self.fly_frozen) else abs(fwd) * 1.2   # frozen: stop the model animating too
         fly = [round(-rxy[0], 3), round(rxy[1], 3), round(_wrap(yaw - math.pi / 2), 4), round(speed, 3)]
         people = []
         if "hxy" in f:                                                  # replay: true poses
@@ -250,6 +259,14 @@ def serve(ad: Adapter, brain_json: bytes, ui_dir: Path, asset_dirs: list[Path], 
                         self.wfile.write(b"data: " + payload + b"\n\n"); self.wfile.flush()
                 except (BrokenPipeError, ConnectionResetError, OSError):
                     return
+            elif path == "/config":
+                # Senthil's viewer (branch sim-mirror-webapp) asks for this on load and, if it 404s, falls
+                # back to the local feed AND calls applyReadOnly(), which greys out pause, speed, next and
+                # lobotomize. Served locally beside our own brain, the operator is the presenter, so this
+                # says read_only false; a public build overrides it with window.__RELAY_CONFIG__ anyway.
+                self._send(200, "application/json", json.dumps({
+                    "read_only": False, "feed": "local", "relay_url": None, "s1_rejections": 0,
+                }, separators=(",", ":")).encode())
             elif path == "/who":
                 self._send(200, "text/plain; charset=utf-8", who.encode())
             elif path == "/brain.json":
@@ -277,14 +294,26 @@ def serve(ad: Adapter, brain_json: bytes, ui_dir: Path, asset_dirs: list[Path], 
                         pass
             if "heat" in body:
                 ad.heat_on = bool(body["heat"])
-            if ad.live and ("paused" in body or body.get("next")):
+            if "speed" in body:
+                try:
+                    v = max(0.05, min(8.0, float(body["speed"])))
+                except (TypeError, ValueError):
+                    v = None
+                if v is not None:
+                    if ad.live:
+                        ad.fly_speed = v          # only the fly: the people come from the camera, not a clock
+                    else:
+                        ad.src.speed = v          # a recording's fly and people share one clock, so it is playback
+            if not ad.live and "paused" in body:
+                ad.src.paused = bool(body["paused"])          # replay: one clock, so it holds everything
+            if ad.live and "paused" in body:
+                ad.fly_frozen = bool(body["paused"])          # live: hold the fly, leave the brain running
+            if ad.live and body.get("next"):
                 # the page's pause silences the brain (hotkey l, a toggle); next episode is a fresh fly: baseline
                 # brain (hotkey 1) and the dead-reckoned pose back at the origin
                 try:
                     import socket as _s
                     sk = _s.socket(_s.AF_INET, _s.SOCK_DGRAM)
-                    if "paused" in body and bool(body["paused"]) != ad.silenced:
-                        sk.sendto(b"l", ("127.0.0.1", 9600)); ad.silenced = bool(body["paused"])
                     if body.get("next"):
                         sk.sendto(b"1", ("127.0.0.1", 9600)); ad.pose = None; ad.episode += 1; ad.lobotomized = False; ad.silenced = False
                 except OSError:
@@ -314,7 +343,10 @@ export function demonstrationPose() { return {}; }
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--ui", default="../hunting-fly/brain/companion_brain/ui", help="directory holding hunt_gpu.html (+ fly.js, glb)")
+    ap.add_argument("--ui", default="../hunting-fly-mirror/brain/companion_brain/ui",
+                    help="directory holding hunt_gpu.html (+ fly.js, vendor/, models/). The copy on the team's main "
+                         "branch is only the HTML and renders black; use a worktree of sim-mirror-webapp (newest, has "
+                         "camera modes and the spectator config) or s1-fly-brain.")
     ap.add_argument("--assets", default="replay/assets", help="extra static dir for .glb models")
     ap.add_argument("--replay", default=None); ap.add_argument("--live", default=None)
     ap.add_argument("--brain", default="data/brain.npz"); ap.add_argument("--positions", default="data/neuron_positions.json")
