@@ -48,6 +48,8 @@
 <div id="stage"></div>
 <div id="hud">
   <h1><span id="title">The GPU fly, hunting</span> <span class="dim" id="who"></span></h1>
+  <div id="notice" class="dim" style="display:none;color:var(--warm);margin:0 0 6px"></div>
+  <div id="feedstatus" class="dim" style="display:none;color:var(--bad);margin:0 0 6px"></div>
   <div class="row"><span>episode <b id="ep">–</b> <span class="dim" id="seed"></span></span><span id="t">0.0 s</span></div>
   <div class="row"><span id="phase">searching</span><span id="touches"></span></div>
   <div class="row dim"><span>reward this episode</span><span id="total">0</span></div>
@@ -58,9 +60,11 @@
   <div id="retina"></div>
   <div class="dim">drive · forward / turn (right +)</div>
   <div class="lr"><div class="bar ok"><i id="fwd"></i></div><div class="bar cool"><i id="turn"></i></div></div>
+  <div class="row" style="margin-top:6px"><span>heading <b id="hdg">–</b></span><span>yaw <b id="yaw">–</b> °/s</span></div>
+  <div class="row dim" id="bodyrow" style="display:none"><span>rover told</span><span id="body">–</span></div>
   <div class="row dim" style="margin-top:6px"><span>last 50 episodes</span><span id="stats">–</span></div>
   <ul id="hist"></ul>
-  <div id="ctl"><button id="pause">pause</button><button id="next">next episode</button><label class="dim">speed <input id="speed" type="range" min="0.25" max="4" step="0.25" value="1"> <span id="spd">1×</span></label></div>
+  <div id="ctl"><button id="pause">pause</button><button id="next">next episode</button><label class="dim" id="speedlabel">speed <input id="speed" type="range" min="0.25" max="4" step="0.25" value="1"> <span id="spd">1×</span></label></div>
   <div id="ctl"><button id="cam">camera: follow</button><button id="lobo">lobotomize</button><button id="heat">heat: on</button><button id="range">range: 6 m</button></div>
 </div>
 <div id="eye"><span id="eyelabel">what the fly sees · 150° eye, 6 m range</span></div>
@@ -114,6 +118,8 @@ for (const s of [-1, 1]) {
 const fly = createFly(); fly.root.scale.setScalar(.135); scene.add(fly.root);
 const beam = new THREE.Mesh(new THREE.CircleGeometry(1, 32, -Math.PI / 2 - 75 * Math.PI / 180, 150 * Math.PI / 180), mat('#5aa9ff', 1, { transparent: true, opacity: .12, depthWrite: false, side: THREE.DoubleSide }));
 beam.rotation.x = -Math.PI / 2; beam.scale.setScalar(3); scene.add(beam);       // the field of view on the floor
+const roverBeam = new THREE.Mesh(new THREE.CircleGeometry(1, 16, -Math.PI / 2 - 6 * Math.PI / 180, 12 * Math.PI / 180), mat('#ff5a5a', 1, { transparent: true, opacity: .55, depthWrite: false, side: THREE.DoubleSide }));
+roverBeam.rotation.x = -Math.PI / 2; roverBeam.scale.setScalar(1.6); roverBeam.visible = false; scene.add(roverBeam);   // where the rover thinks it points
 const lockRing = new THREE.Mesh(new THREE.RingGeometry(.42, .5, 48), mat('#7fd68a', .5, { transparent: true, opacity: .85, side: THREE.DoubleSide, emissive: '#3c8a45', emissiveIntensity: .7 }));
 lockRing.rotation.x = -Math.PI / 2; lockRing.position.y = .012; lockRing.visible = false; scene.add(lockRing);
 const targetLine = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]), new THREE.LineBasicMaterial({ color: '#3c8a45', transparent: true, opacity: .8 }));
@@ -158,10 +164,37 @@ function drawBrain() {
   }
   ctx.globalAlpha = 1;
 }
-const es = new EventSource('/events');
-es.onmessage = ev => {
-  const st = JSON.parse(ev.data); if (!st.t && st.t !== 0) return;
-  S = st;
+// A payload is usable only if it carries the required fly pose and human poses (R2.6, R3.3).
+// `fly` is [x, z, heading, speed]; `people` is an array of pose arrays (px, pz, ...).
+function validState(st) {
+  if (!st || typeof st !== 'object') return false;
+  if (typeof st.t !== 'number') return false;
+  if (!Array.isArray(st.fly) || st.fly.length < 4) return false;
+  if (!st.fly.every(v => typeof v === 'number')) return false;
+  if (!Array.isArray(st.people)) return false;
+  for (const q of st.people) { if (!Array.isArray(q) || q.length < 4) return false; }
+  return true;
+}
+// Entry point for every payload off the feed. Parse + validate first; on anything unparseable or
+// missing required fields, keep the last rendered scene and flag an invalid update (R2.6). A good
+// payload marks the feed healthy: it clears indicators and resets the reconnect counter (R10.2).
+function onState(raw) {
+  let st;
+  try {
+    st = JSON.parse(raw);
+    if (!validState(st)) throw new Error('missing required fly/people fields');
+    applyState(st);
+  } catch (e) {
+    showStatus('invalid update · showing last good scene');   // last good S is left untouched (R2.6)
+    return;
+  }
+  lastStateAt = performance.now();   // R2.7: freshness stamp
+  reconnectAttempts = 0;             // R10: a delivered message resets the retry budget
+  gaveUp = false;
+  clearConnectWatchdog();            // R13.3: state is flowing, the relay link is established
+  clearStatus();
+}
+function applyState(st) {
   if (st.seed !== lastSeed) { lastSeed = st.seed; trailN = 0; }
   while (people.length < st.people.length) people.push(person(people.length));
   st.people.forEach((q, i) => { const p = people[i]; p.x = q[0]; p.z = q[1]; p.speed = q[2]; p.yaw = q[3]; p.stamina = q[4]; p.resting = !!q[5]; p.sensed = !!q[6]; p.alert = !!q[7]; });
@@ -172,6 +205,9 @@ es.onmessage = ev => {
   $('ep').textContent = st.episode; $('seed').textContent = 'seed ' + st.seed; $('t').textContent = st.t.toFixed(1) + ' s';
   if (st.lobotomized !== lobotomized) showLobotomy(!!st.lobotomized);
   if (st.heat_on !== undefined && st.heat_on !== heatOn) showHeat(!!st.heat_on);
+  $('hdg').textContent = st.heading_deg !== undefined ? st.heading_deg.toFixed(0) + '°' : '–';
+  $('yaw').textContent = st.yaw_dps !== undefined ? (st.yaw_dps > 0 ? '+' : '') + st.yaw_dps.toFixed(0) : '–';
+  if (st.body) { $('bodyrow').style.display = ''; $('body').textContent = (st.body.heading_deg !== undefined ? `rover ≈ ${st.body.heading_deg.toFixed(0)}° (off by ${st.body.error_deg > 0 ? '+' : ''}${st.body.error_deg.toFixed(0)}°) · ` : '') + `yaw stick ${(st.body.sticks.yaw * 100).toFixed(0)}%${st.body.saturated ? ' (maxed)' : ''}${st.body.rotation_only ? ' · rotation only' : ''}`; }
   $('eyelabel').textContent = `what the fly sees · ${st.fov_deg || 150}° eye, ${st.see_m ? st.see_m + ' m range' : 'unlimited range'}${st.lobotomized ? ' · lobotomized' : ''}`;
   if (st.see_m !== undefined) { const u = !st.see_m; if (u !== unlimited) { unlimited = u; $('range').textContent = u ? 'range: unlimited' : `range: ${st.see_m} m`; $('range').classList.toggle('off', u); } }
   if (st.brain && glow) {
@@ -196,13 +232,148 @@ es.onmessage = ev => {
   const tb = $('turn'); tb.style.width = (50 * Math.abs(st.drive[1])) + '%'; tb.style.marginLeft = st.drive[1] >= 0 ? '50%' : (50 - 50 * Math.abs(st.drive[1])) + '%';
   const s = st.stats; $('stats').textContent = s.n ? `${(100 * s.touch_rate).toFixed(0)}% touch · ${s.t_touch ?? '–'} s · track ${s.track != null ? (100 * s.track).toFixed(0) + '%' : '–'}` : '–';
   $('hist').innerHTML = st.history.slice().reverse().map(e => `<li class="${e.touched ? 'hit' : ''}"><span>seed ${e.seed}</span><span>${e.touched ? `touch ${e.t_touch.toFixed(1)} s · track ${(100 * e.track).toFixed(0)}% · ${e.touches}×` : 'no touch'} · ${e.total_reward.toFixed(0)}</span></li>`).join('');
-};
+  S = st;   // commit the new scene only after every field access has succeeded (R2.6)
+}
+
+// ---- config, control gating, feed source (R1.1, R11.1–11.4) ---------------------------------
+function showNotice(msg) { const n = $('notice'); if (n) { n.textContent = msg; n.style.display = ''; } }
+// The feed-health indicator (invalid / stale / reconnecting / gave-up), separate from the config
+// notice so a source note and a live-feed warning can show at the same time (R2.6, R2.7, R10.3).
+function showStatus(msg) { const n = $('feedstatus'); if (n) { n.textContent = msg; n.style.display = ''; } }
+function clearStatus() { const n = $('feedstatus'); if (n) { n.style.display = 'none'; n.textContent = ''; } }
+
+// ---- feed health + reconnection (R2.6, R2.7, R10) -------------------------------------------
+let lastStateAt = 0;              // performance.now() of the last good state (R2.7 staleness)
+let feedConn = null;              // the live EventSource | WebSocket
+let feedArgs = null;              // { feed, relayUrl } remembered for reconnection
+let reconnectAttempts = 0;        // consecutive reconnects since the last delivered message
+let reconnectTimer = null;        // pending retry timer, or null
+let gaveUp = false;               // true once the 10-attempt budget is spent (local only, R10.3)
+let connectTimer = null;          // remote connect-watchdog: fires if the relay is not reached in time
+const MAX_RECONNECT = 10;         // R10.1 / R10.3 (local feed only)
+const RETRY_FIRST_MS = 800;       // R10.1: first retry within 1 s of the loss
+const RETRY_STEP_MS = 3000;       // R10.1: later retries at no more than 5 s
+const RETRY_REMOTE_MS = 5000;     // R13.4: public/remote retries at 5 s intervals, indefinitely
+const CONNECT_TIMEOUT_MS = 10000; // R13.4: surface "State_Feed unavailable" within 10 s of initiating
+
+// A remote (relay-backed) feed follows the public-hosting policy (R13.4) rather than the local
+// give-up-after-10 policy (R10.3): it retries every 5 s forever and flags "State_Feed unavailable".
+function isRemote() { return !!(feedArgs && feedArgs.feed === 'remote' && feedArgs.relayUrl); }
+// R13.4: if the relay is not reached within 10 s of initiating, tell the viewer the feed is unavailable.
+function armConnectWatchdog() {
+  clearConnectWatchdog();
+  connectTimer = setTimeout(() => { connectTimer = null; showStatus('State_Feed unavailable'); }, CONNECT_TIMEOUT_MS);
+}
+function clearConnectWatchdog() { if (connectTimer) { clearTimeout(connectTimer); connectTimer = null; } }
+
+// Open a single connection to the feed and wire message + drop handlers. local -> same-origin SSE;
+// remote -> the relay, chosen by url scheme (ws(s):// -> WebSocket, else an http(s) SSE endpoint).
+function openConn(feed, relayUrl) {
+  let conn;
+  const remote = (feed === 'remote' && !!relayUrl);
+  if (remote) armConnectWatchdog();          // R13.2/13.4: bound the time to establish the relay link
+  if (remote && /^wss?:\/\//i.test(relayUrl)) {
+    conn = new WebSocket(relayUrl);
+    conn.onopen = () => clearConnectWatchdog();   // relay reached; render follows on first state (R13.3)
+    conn.onmessage = ev => onState(ev.data);
+    conn.onclose = () => onDrop();          // R10.1: WebSocket loss -> reconnect
+    conn.onerror = () => { /* a close event follows; reconnect is handled there */ };
+  } else {
+    const url = remote ? relayUrl : '/events';
+    conn = new EventSource(url);
+    conn.onopen = () => clearConnectWatchdog();
+    conn.onmessage = ev => onState(ev.data);
+    conn.onerror = () => onDrop();          // R10.1: SSE loss -> reconnect
+  }
+  return conn;
+}
+
+// Handle a dropped connection. Local feed (R10): retry within 1 s, at intervals <= 5 s, up to 10
+// attempts, then stop and surface a permanent failure. Remote feed (R13.4): show "State_Feed
+// unavailable" and retry every 5 s, indefinitely (no give-up).
+function onDrop() {
+  if (gaveUp || reconnectTimer) return;     // already given up, or a retry is already pending
+  try { if (feedConn && feedConn.close) feedConn.close(); } catch (e) {}
+  clearConnectWatchdog();
+  const remote = isRemote();
+  if (!remote && reconnectAttempts >= MAX_RECONNECT) { gaveUp = true; showStatus('connection could not be restored'); return; }
+  showStatus(remote ? 'State_Feed unavailable' : 'feed disconnected · reconnecting…');
+  const delay = remote ? RETRY_REMOTE_MS : (reconnectAttempts === 0 ? RETRY_FIRST_MS : RETRY_STEP_MS);
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = null;
+    reconnectAttempts++;
+    feedConn = openConn(feedArgs.feed, feedArgs.relayUrl);   // resume from the next state, no replay (R10.2)
+  }, delay);
+}
+// Read-only spectators keep only the camera controls (OrbitControls + the camera button); every
+// simulation/robot control is removed from the DOM (R1.1).
+function applyReadOnly() {
+  for (const id of ['pause', 'next', 'speedlabel', 'lobo', 'heat', 'range']) {
+    const el = $(id); if (el) el.style.display = 'none';
+  }
+}
+// Establish the State_Feed connection and keep it alive across drops (R11.3, R11.4, R10). The
+// source (local SSE vs relay) is remembered so reconnection targets the same endpoint.
+function connectFeed(feed, relayUrl) {
+  feedArgs = { feed, relayUrl };
+  reconnectAttempts = 0; gaveUp = false;
+  if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+  feedConn = openConn(feed, relayUrl);
+  return feedConn;
+}
+// Watch for a silent feed: if no good state has arrived for > 2 s, flag it while keeping the last
+// scene (R2.7). A pending reconnect or a spent budget already show their own message, so leave those.
+setInterval(() => {
+  if (gaveUp || reconnectTimer) return;
+  if (S && lastStateAt && performance.now() - lastStateAt > 2000) showStatus('feed disconnected');
+}, 500);
+const PERMITTED_FEEDS = ['local', 'remote'];
+// Open the feed from a resolved config. `staticSite` marks a public/static build (no local bridge):
+// it is always a read-only spectator (R13.5) and defaults to the remote relay feed when one is given.
+function bootFrom(cfg, staticSite) {
+  cfg = cfg || {};
+  let feed = cfg.feed;
+  if (!PERMITTED_FEEDS.includes(feed)) {                 // missing or invalid feed value
+    if (staticSite && cfg.relay_url) feed = 'remote';    // a static build with a relay is remote by nature
+    else { showNotice('default source applied · watching the local feed'); feed = 'local'; }   // R11.2
+  }
+  // R13.5: a page served from a public domain (static build) or pointed at the relay is always read-only.
+  if (cfg.read_only || staticSite || feed === 'remote') applyReadOnly();
+  connectFeed(feed, cfg.relay_url);                      // R13.2: initiate the connection on load
+}
+// Resolve the runtime config from the first available source, in order:
+//   1. window.__RELAY_CONFIG__ — injected by a static/public build so no server call is needed (R13.1)
+//   2. GET /config             — the local bridge's same-origin endpoint (R11)
+//   3. GET config.json         — a static config file beside the page (static hosting, R13.1)
+// then fall back to the local feed, read-only, as a spectator-safe default.
+if (window.__RELAY_CONFIG__) {
+  bootFrom(window.__RELAY_CONFIG__, true);
+} else {
+  fetch('/config').then(r => { if (!r.ok) throw new Error('no /config'); return r.json(); })
+    .then(cfg => bootFrom(cfg, false))
+    .catch(() => fetch('config.json').then(r => { if (!r.ok) throw new Error('no config.json'); return r.json(); })
+      .then(cfg => bootFrom(cfg, true))
+      .catch(() => {
+        // Nothing to go on: fall back to the local feed and stay read-only (spectator-safe default).
+        showNotice('default source applied · watching the local feed');
+        applyReadOnly();
+        connectFeed('local', null);
+      }));
+}
 const post = body => fetch('/control', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).catch(() => {});
 let paused = false;
 $('pause').onclick = () => { paused = !paused; $('pause').textContent = paused ? 'resume' : 'pause'; post({ paused }); };
 $('next').onclick = () => post({ next: true });
 $('speed').oninput = e => { $('spd').textContent = e.target.value + '×'; post({ speed: +e.target.value }); };
-$('cam').onclick = () => { follow = !follow; $('cam').textContent = follow ? 'camera: follow' : 'camera: free'; };
+// camera modes: follow (chase cam) -> bird (locked top-down: north stays up, so the fly is seen turning) -> free
+let camMode = 'follow';
+$('cam').onclick = () => {
+  camMode = camMode === 'follow' ? 'bird' : camMode === 'bird' ? 'free' : 'follow';
+  follow = camMode === 'follow';
+  controls.enabled = camMode !== 'bird';
+  if (camMode !== 'bird') camera.up.set(0, 1, 0);
+  $('cam').textContent = { follow: 'camera: follow', bird: "camera: bird's eye", free: 'camera: free' }[camMode];
+};
 let lobotomized = false;
 $('lobo').onclick = () => { post({ lobotomy: !lobotomized }); };          // the server's state stream flips the button
 let heatOn = true;
@@ -222,15 +393,22 @@ function frame() {
     fly.root.position.copy(pos); fly.root.rotation.y = heading; fly.root.rotation.z = -.15 * S.drive[1]; fly.root.rotation.x = -.05 * (S.fly[3] / 1.6);
     fly.setPose(demonstrationPose(fly, 'rest', t, 25));
     beam.position.set(pos.x, .008, pos.z); beam.rotation.z = heading;
+    if (S.body && S.body.heading_deg !== undefined) { roverBeam.visible = true; roverBeam.position.set(pos.x, .009, pos.z); roverBeam.rotation.z = -S.body.heading_deg * Math.PI / 180; } else roverBeam.visible = false;
     for (const p of people) { if (p.model) { p.model.position.set(p.x, 0, p.z); p.model.rotation.y = p.yaw; } if (p.mixer) p.mixer.timeScale = Math.min(2.4, p.speed / .9); p.glow.position.set(p.x, .006, p.z); p.glow.material.color.set(p.resting ? '#5aa9ff' : '#ff9a4a'); p.glow.material.emissive.set(p.resting ? '#2a6ad0' : '#ff6a00'); p.glow.scale.setScalar(p.resting ? .7 : .6 + .4 * (p.stamina ?? 1)); p.glow.material.opacity = p.sensed ? .32 : .1; }
     const tp = people[S.target];
     if (tp) { targetLine.geometry.setFromPoints([new THREE.Vector3(pos.x, .05, pos.z), new THREE.Vector3(tp.x, .05, tp.z)]); targetLine.material.color.set(S.locked ? '#3c8a45' : '#8a94a6'); }
     lockRing.visible = S.locked && !!tp; if (tp) lockRing.position.set(tp.x, .012, tp.z);
     if (follow) { controls.target.lerp(new THREE.Vector3(pos.x, .3, pos.z), .08); const want = new THREE.Vector3(pos.x - 4.5 * Math.sin(heading), 3.2, pos.z - 4.5 * Math.cos(heading)); camera.position.lerp(want, .04); }
+    if (camMode === 'bird') {                                     // straight down over the fly, orientation locked (+z up the screen)
+      camera.up.set(0, 0, -1);
+      camera.position.lerp(new THREE.Vector3(pos.x, 7, pos.z + 1e-4), .2);
+      controls.target.copy(pos);
+      camera.lookAt(pos.x, 0, pos.z);
+    }
   }
   for (const m of mixers) m.update(dt);
   drawBrain();
-  controls.update();
+  if (camMode !== 'bird') controls.update();
   renderer.setScissorTest(false); renderer.setViewport(0, 0, host.clientWidth, host.clientHeight); renderer.render(scene, camera);
   if (S) {                                                           // the inset from the fly's eye
     const fwd = new THREE.Vector3(Math.sin(heading), 0, Math.cos(heading));
@@ -238,11 +416,11 @@ function frame() {
     const hw = (S.fov_deg || 150) / 2 * Math.PI / 180, vfov = 2 * Math.atan(Math.tan(hw) / EYE.w * EYE.h) * 180 / Math.PI;
     eyeCam.fov = Math.min(120, vfov); eyeCam.aspect = EYE.w / EYE.h; eyeCam.updateProjectionMatrix();
     const range = S.see_m || 60; eyeFog.near = Math.max(1, range - 1.5); eyeFog.far = range + .5;     // 0 = unlimited: fog far away
-    const fog = scene.fog; scene.fog = eyeFog; fly.root.visible = false; beam.visible = false; trailLine.visible = false;
+    const fog = scene.fog; scene.fog = eyeFog; fly.root.visible = false; beam.visible = false; roverBeam.visible = false; trailLine.visible = false;
     const x = host.clientWidth - EYE.w - 12, y = 12;
     renderer.setScissorTest(true); renderer.setScissor(x, y, EYE.w, EYE.h); renderer.setViewport(x, y, EYE.w, EYE.h);
     renderer.render(scene, eyeCam);
-    scene.fog = fog; fly.root.visible = true; beam.visible = true; trailLine.visible = true; renderer.setScissorTest(false);
+    scene.fog = fog; fly.root.visible = true; beam.visible = true; roverBeam.visible = !!(S.body && S.body.heading_deg !== undefined); trailLine.visible = true; renderer.setScissorTest(false);
   }
   requestAnimationFrame(frame);
 }

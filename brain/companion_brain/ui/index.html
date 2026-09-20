@@ -1,0 +1,357 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Companion · fly brain live</title>
+<style>
+  :root { --bg:#0b0e14; --panel:#131826; --line:#1f2740; --text:#e6e9f0; --muted:#8a93a8; --accent:#4fd1ff; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:14px/1.4 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; padding:12px 16px 24px; }
+  header { display:flex; flex-wrap:wrap; align-items:center; gap:14px; margin-bottom:12px; }
+  header h1 { font-size:18px; margin:0; font-weight:600; letter-spacing:.2px; }
+  #state { font-size:22px; font-weight:700; padding:6px 16px; border-radius:999px; background:#2a3350; transition: background .2s; text-transform:uppercase; letter-spacing:1px; }
+  .chips { display:flex; flex-wrap:wrap; gap:8px; margin-left:auto; }
+  .chip { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:4px 10px; color:var(--muted); font-size:12px; }
+  .chip b { color:var(--text); font-weight:600; }
+  #conn { width:10px; height:10px; border-radius:50%; background:#c33; display:inline-block; margin-right:6px; }
+  .grid { display:grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap:12px; }
+  @media (max-width: 1100px) { .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (max-width: 720px) { .grid { grid-template-columns: 1fr; } }
+  .panel { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:10px 12px; min-width:0; }
+  .panel h2 { font-size:12px; text-transform:uppercase; letter-spacing:1px; color:var(--muted); margin:0 0 8px; font-weight:600; }
+  .panel h2 span { float:right; text-transform:none; letter-spacing:0; font-weight:400; }
+  .stage { position:relative; width:100%; aspect-ratio:4/3; background:#05070b; border-radius:8px; overflow:hidden; }
+  .stage img, .stage canvas { position:absolute; inset:0; width:100%; height:100%; }
+  #arena3d canvas { position:absolute; inset:0; }
+  #retina { image-rendering: pixelated; }
+  .inset { position:absolute; right:6px; bottom:6px; width:28%; border:1px solid #ffffff44; border-radius:4px; overflow:hidden; background:#000; }
+  .inset img { position:static; display:block; width:100%; height:auto; }
+  .inset span { position:absolute; left:4px; bottom:2px; font-size:9px; color:#fff; text-shadow:0 0 3px #000; }
+  .stage img { object-fit:fill; }
+  .wide { grid-column: span 2; }
+  @media (max-width: 720px) { .wide { grid-column: span 1; } }
+  .bars { display:grid; grid-template-columns: 110px 1fr 1fr 44px; gap:4px 8px; align-items:center; font-size:12px; }
+  .bars .lbl { color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .bars .lbl.hot { color:var(--text); font-weight:600; }
+  .bar { height:10px; background:#0a0d16; border-radius:3px; overflow:hidden; }
+  .bar i { display:block; height:100%; width:0; background:var(--accent); transition: width .12s linear; }
+  .bar.l i { background:#4fd1ff; } .bar.r i { background:#ffb347; }
+  .bars .val { text-align:right; color:var(--muted); font-variant-numeric: tabular-nums; }
+  .scores { display:grid; grid-template-columns: 90px 1fr 40px; gap:4px 8px; align-items:center; font-size:12px; }
+  .bars.motor { grid-template-columns: 64px 1fr 40px; margin-top:8px; }
+  #learn-bars { grid-template-columns: 124px 1fr 40px; }
+  .bars.motor .bar i { background:#8fd3a5; }
+  .bars.motor .bar.turn { position:relative; } .bars.motor .bar.turn i { position:absolute; top:0; height:100%; background:#4fd1ff; }
+  .bars.motor .bar.turn::after { content:""; position:absolute; left:50%; top:0; bottom:0; width:1px; background:#3a4360; }
+  .scores .bar i { background:#8fd3a5; }
+  .legend { font-size:11px; color:var(--muted); display:flex; gap:12px; flex-wrap:wrap; margin-top:6px; }
+  .legend i { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:4px; }
+  #types { list-style:none; padding:0; margin:0; display:grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap:3px 14px; font-size:12px; }
+  #types li { display:flex; justify-content:space-between; border-bottom:1px dashed var(--line); padding:2px 0; }
+  #types li b { font-weight:600; }
+  #types li span { color:var(--muted); font-variant-numeric: tabular-nums; }
+  .gauge { display:flex; align-items:center; gap:8px; font-size:12px; color:var(--muted); margin:4px 0; }
+  .gauge .track { flex:1; height:8px; background:#0a0d16; border-radius:4px; position:relative; }
+  .gauge .track i { position:absolute; top:-2px; width:4px; height:12px; background:var(--text); border-radius:2px; margin-left:-2px; transition:left .12s linear; }
+  .gauge .track.bipolar::after { content:""; position:absolute; left:50%; top:0; bottom:0; width:1px; background:var(--line); }
+  #tip { position:absolute; pointer-events:none; background:#000c; color:#fff; font-size:11px; padding:3px 6px; border-radius:4px; display:none; white-space:nowrap; }
+  .eyes { display:flex; gap:10px; justify-content:center; }
+  .eyes canvas { width:46%; aspect-ratio:1; background:#000; border-radius:50%; }
+  small.hint { color:var(--muted); display:block; margin-top:6px; font-size:11px; }
+  button.mini { background:#0a0d16; color:var(--muted); border:1px solid var(--line); border-radius:6px; padding:2px 8px; font-size:11px; cursor:pointer; margin-left:4px; }
+  button.mini:hover { color:var(--text); }
+  #atlas-pick { position:absolute; left:8px; top:8px; font-size:11px; color:#fff; background:#000a; padding:3px 8px; border-radius:4px; display:none; pointer-events:none; }
+</style>
+</head>
+<body>
+<header>
+  <h1><span id="conn"></span>Companion · fruit-fly brain, live</h1>
+  <div id="state">connecting</div>
+  <div class="chips">
+    <div class="chip">neurons <b id="c-n">–</b></div>
+    <div class="chip">connections <b id="c-m">–</b></div>
+    <div class="chip">brain time <b id="c-t">–</b></div>
+    <div class="chip">lag <b id="c-lag">–</b></div>
+    <div class="chip">spikes/s <b id="c-sps">–</b></div>
+    <div class="chip">PIR <b id="c-pir">–</b></div>
+  </div>
+</header>
+
+<div class="grid">
+  <div class="panel">
+    <h2>Fly's eyes <span id="cam-note">what the fly sees → optic lobe</span></h2>
+    <div class="stage"><canvas id="retina" width="80" height="60"></canvas><canvas id="overlay"></canvas><div class="inset"><img id="cam" alt=""><span id="cam-label">you, through the window</span></div></div>
+    <div class="gauge"><label style="display:flex;align-items:center;gap:6px;color:var(--text)"><input type="checkbox" id="cam-toggle" checked> webcam on (you are in the fly's world)</label></div>
+    <small class="hint">Rendered from the fly's own head in its world at 80×60, the same pixels the brain gets. Your webcam plays on a window in that world. Red = looming (LC4/LPLC2), cyan = small object (LC11/LC10a), bar height = drive. <span id="senses"></span></small>
+  </div>
+
+  <div class="panel">
+    <h2>The fly's world <span id="fly-note"><button class="mini" data-world="table">table</button><button class="mini" data-world="arena">two-odor arena</button><button class="mini" data-world="hunt">hunt arena</button><button class="mini" id="assay-run">▶ run assay</button></span></h2>
+    <div class="stage" id="arena3d"></div>
+    <div id="assay-out" style="font-size:12px;color:var(--muted);margin-top:6px;display:none"></div>
+    <div class="bars motor" id="motor"></div>
+    <small class="hint">Fly / Body Lab rig, 36 joints, moved only by the motor channels above (z-scores of descending-neuron rates against the brain's own resting activity): forward = whole descending population, turn = DNa01/02 right minus left, backward = MDN, groom = DNg11/12, threat = DNp02/04/11 + pC1d/e, song = pC1a-c, land = DNp07/10, freeze = DNp09, jump = Giant Fiber. Drag to orbit.</small>
+  </div>
+
+  <div class="panel">
+    <h2>Brain <span id="atlas-status">loading the MaleCNS neuron atlas…</span></h2>
+    <div class="stage"><div id="atlas" style="position:absolute;inset:0"></div><div id="atlas-pick"></div></div>
+    <div class="legend" style="align-items:center">
+      <span><i style="background:#56b7dc"></i>optic</span><span><i style="background:#77d4b4"></i>central brain</span><span><i style="background:#dda469"></i>ventral nerve cord</span><span><i style="background:#b69bea"></i>ascending / descending</span>
+      <span style="margin-left:auto"><button class="mini" data-view="front">front</button><button class="mini" data-view="side">side</button><button class="mini" data-view="top">top</button></span>
+      <span>brightness <input id="atlas-bright" type="range" min="10" max="100" value="40" style="width:80px;vertical-align:middle"></span>
+    </div>
+    <small class="hint" id="atlas-note">Real neuron skeletons and cell bodies from the MaleCNS connectome (HHMI Janelia × Google Research, CC BY 4.0), as in the Fly / Neural Atlas. Each simulated FlyWire neuron is mapped to its MaleCNS counterpart by cell type and side, and every spike lights that neuron. Drag to orbit, scroll to zoom, click a cell body to name it.</small>
+  </div>
+
+  <div class="panel">
+    <h2>Readout neurons <span>Hz per neuron · left | right</span></h2>
+    <div class="bars" id="rates"></div>
+  </div>
+
+  <div class="panel">
+    <h2>Learning <span>mushroom body · dopamine-gated KC→MBON depression</span></h2>
+    <div class="gauge"><label style="display:flex;align-items:center;gap:6px;color:var(--text)"><input type="checkbox" id="learn-toggle" checked> plasticity on</label>
+      <button class="mini" id="learn-probe">probe odors</button><button class="mini" id="learn-reset">reset synapses</button></div>
+    <div class="bars motor" id="learn-bars"></div>
+    <div id="learn-probe-out" style="font-size:12px;margin-top:6px;color:var(--muted)">no probe yet</div>
+    <small class="hint">The fly's own reinforcement learning. Kenyon cells that fired for the current smell, paired with dopamine from sugar (PAM neurons), lose their synapses onto the MBONs that drive avoidance, so the rewarded smell (grape, odor A) gains approach value; the lemon (odor B) is never rewarded. "Probe odors" replays each smell on a scratch copy of the brain and reports the odor-evoked valence. Weights are shown as a fraction of naive.</small>
+  </div>
+
+  <div class="panel">
+    <h2>Behaviors <span>state label · z-score / z_ref</span></h2>
+    <div class="scores" id="scores"></div>
+  </div>
+
+  <div class="panel wide">
+    <h2>Firing now <span>spikes in last 100 ms, by cell type · hover the brain map to name a neuron</span></h2>
+    <ul id="types"></ul>
+    <canvas id="spark" height="40" style="width:100%; height:40px; margin-top:8px"></canvas>
+  </div>
+</div>
+
+<script type="importmap">{"imports":{"three":"/vendor/three.module.js","three/addons/":"/vendor/addons/"}}</script>
+<script type="module">
+import { createFlyStage } from './fly3d.js';
+import { createAtlas } from './atlas.js';
+const $ = id => document.getElementById(id);
+const STATE_COLORS = { idle:'#2a3350', sleep:'#2b2a5e', track:'#1f5fa8', escape:'#c0392b', freeze:'#6c3fb5', backward:'#d97a1a', threat:'#a8123a', groom:'#1f8a5a', land:'#158a8a', social:'#c23a8a', feed:'#b7791f' };
+
+// ---------------------------------------------------------------- state from the brain
+let circuit = null, last = null, lastAt = 0, sparkBuf = [], spikeAcc = 0, spikeAccAt = performance.now();
+
+function connect() {
+  const es = new EventSource('/events');
+  es.onopen = () => { $('conn').style.background = '#2ecc71'; };
+  es.onerror = () => { $('conn').style.background = '#c33'; };
+  es.onmessage = ev => {
+    const p = JSON.parse(ev.data);
+    if (!p || !p.brain || !p.eyes) return;      // not a brain packet
+    last = p; lastAt = performance.now();
+    onPacket(p);
+  };
+}
+
+function onPacket(p) {
+  $('state').textContent = p.state;
+  $('state').style.background = STATE_COLORS[p.state] || '#2a3350';
+  $('c-t').textContent = p.brain.brain_s.toFixed(1) + ' s';
+  $('c-lag').textContent = p.brain.behind_ms + ' ms';
+  $('c-pir').textContent = p.pir ? 'motion' : 'quiet';
+  spikeAcc += p.n_spikes;
+  const now = performance.now();
+  if (now - spikeAccAt > 500) { const sps = spikeAcc * 1000 / (now - spikeAccAt); $('c-sps').textContent = Math.round(sps).toLocaleString(); sparkBuf.push(sps); if (sparkBuf.length > 240) sparkBuf.shift(); spikeAcc = 0; spikeAccAt = now; drawSpark(); }
+  renderRates(p.rates);
+  renderScores(p.scores, p.state);
+  renderMotor(p.motor);
+  renderLearning(p.learning);
+  $('cam-note').textContent = p.vision === 'retina' ? 'what the fly sees → optic lobe' : (p.vision === 'none' ? 'no vision right now (webcam closed; keep this page visible for the fly\'s own eyes)' : 'webcam fallback (keep this page visible to give the fly its own eyes)');
+  // keep the checkbox in sync with the brain (e.g. --no-webcam), but not in the seconds right after a user toggle
+  if (performance.now() - lastCamToggle > 3000 && typeof p.webcam === 'boolean' && p.webcam !== camOn) setCam(p.webcam, false);
+  if (p.world && p.world.world === 'hunt' && p.world.heat) { const w = p.world; $('senses').textContent = `Heat L/R ${w.heat[0].toFixed(2)}/${w.heat[1].toFixed(2)} · sugar ${w.sugar.toFixed(2)} · bitter ${(w.bitter || 0).toFixed(2)} · nearest person ${w.hunt.nearest.toFixed(2)} m`; }
+  else if (p.world && p.world.odor) { const w = p.world; $('senses').textContent = `Smell L/R ${w.odor[0].toFixed(2)}/${w.odor[1].toFixed(2)} · sugar ${w.sugar.toFixed(2)} · dust ${w.dust.toFixed(2)} · humid ${w.moist.toFixed(2)} · satiety ${w.satiety.toFixed(2)}`; }
+  renderTypes(p.top_types);
+  flashSpikes(p.spikes);
+  fly.onPacket(p);
+}
+
+// ---------------------------------------------------------------- camera + overlay
+const cam = $('cam'), ov = $('overlay');
+let camOn = true;
+setInterval(() => { if (camOn) cam.src = '/frame.jpg?' + Date.now(); }, 100);
+cam.addEventListener('load', () => { if (camOn && window.flyStage) window.flyStage.setWebcam(cam); });
+let lastCamToggle = -1e9;
+function setCam(on, tellBrain) {
+  camOn = on; $('cam-toggle').checked = on;
+  if (tellBrain) { lastCamToggle = performance.now(); fetch('/control', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ webcam: on }) }).catch(() => {}); }
+  if (!on) { cam.removeAttribute('src'); cam.style.visibility = 'hidden'; $('cam-label').textContent = 'webcam closed'; if (window.flyStage) window.flyStage.closeWindow(); }
+  else { cam.style.visibility = ''; $('cam-label').textContent = 'you, through the window'; }
+}
+$('cam-toggle').onchange = e => setCam(e.target.checked, true);
+function drawOverlay() {
+  const w = ov.width = ov.clientWidth, h = ov.height = ov.clientHeight, c = ov.getContext('2d');
+  c.clearRect(0, 0, w, h);
+  if (!last || !last.sees) return;
+  const s = last.sees;
+  c.strokeStyle = '#ffffff33'; c.setLineDash([4, 4]); c.beginPath(); c.moveTo(w/2, 0); c.lineTo(w/2, h); c.stroke(); c.setLineDash([]);
+  [['L', 8], ['R', w/2 + 8]].forEach(([side, x0]) => {
+    const f = s[side];
+    const bar = (x, v, col, label) => { c.fillStyle = col + '55'; c.fillRect(x, 8, 14, 60); c.fillStyle = col; c.fillRect(x, 8 + 60 * (1 - v), 14, 60 * v); c.fillStyle = '#fff'; c.font = '10px sans-serif'; c.fillText(label, x - 1, 80); };
+    bar(x0, f.loom_fast, '#ff4d4d', 'loom'); bar(x0 + 22, f.small_object, '#4fd1ff', 'obj'); bar(x0 + 44, f.bar, '#ffe66d', 'bar');
+    if (f.small_object > 0) {
+      const cx = (side === 'L' ? 0 : w/2) + (f.object_x + 1) / 2 * (w/2), cy = (f.object_y + 1) / 2 * h;
+      c.strokeStyle = '#4fd1ff'; c.lineWidth = 2; c.beginPath(); c.arc(cx, cy, 10 + 10 * f.small_object, 0, Math.PI * 2); c.stroke();
+    }
+    if (f.loom_fast > 0.05) { c.strokeStyle = '#ff4d4d'; c.lineWidth = 3 * f.loom_fast + 1; c.strokeRect(side === 'L' ? 2 : w/2 + 2, 2, w/2 - 4, h - 4); }
+  });
+  c.fillStyle = '#ffffff99'; c.fillRect(w - 12, h - 8 - 60 * s.motion, 6, 60 * s.motion);
+}
+
+// ---------------------------------------------------------------- brain: the MaleCNS atlas lit by our spikes
+const atlas = createAtlas($('atlas'), {
+  onStatus: t => { $('atlas-status').textContent = t; },
+  onSelect: r => { const pick = $('atlas-pick'); pick.style.display = 'block'; pick.textContent = `${r.type || r.instance || 'untyped'} · ${r.superclass} · ${r.side || '?'} · body ${r.id}`; },
+});
+document.querySelectorAll('[data-view]').forEach(b => b.onclick = () => atlas.preset(b.dataset.view));
+$('atlas-bright').oninput = e => atlas.setBrightness(+e.target.value / 100);
+let unmappedNote = false;
+function flashSpikes(idx) {
+  if (!circuit || !circuit.atlas) return;
+  const slot = circuit.atlas.slot, out = [];
+  for (const i of idx) { const s = slot[i]; if (s >= 0) out.push(s); }
+  if (out.length) atlas.fire(out);
+  if (!unmappedNote && circuit.atlas.stats) { unmappedNote = true; const st = circuit.atlas.stats; $('atlas-note').textContent += ` Mapped ${st.mapped.toLocaleString()} of ${st.n.toLocaleString()} simulated neurons (${Math.round(100 * st.mapped / st.n)}%); the rest are optic-lobe types the two datasets name differently.`; }
+}
+
+// ---------------------------------------------------------------- readouts, scores, types, sparkline
+const rateRows = {}, scoreRows = {};
+function renderRates(rates) {
+  const box = $('rates');
+  for (const g of Object.keys(rates)) {
+    if (!rateRows[g]) {
+      const lbl = document.createElement('div'); lbl.className = 'lbl'; lbl.textContent = g;
+      const l = document.createElement('div'); l.className = 'bar l'; l.innerHTML = '<i></i>';
+      const r = document.createElement('div'); r.className = 'bar r'; r.innerHTML = '<i></i>';
+      const v = document.createElement('div'); v.className = 'val';
+      box.append(lbl, l, r, v); rateRows[g] = { lbl, l: l.firstChild, r: r.firstChild, v };
+    }
+    const row = rateRows[g], x = rates[g];
+    row.l.style.width = Math.min(100, x.left / 1.5) + '%';
+    row.r.style.width = Math.min(100, x.right / 1.5) + '%';
+    row.v.textContent = x.all.toFixed(0);
+    row.lbl.className = 'lbl' + (x.all > 5 ? ' hot' : '');
+  }
+}
+function renderScores(scores, state) {
+  const box = $('scores');
+  for (const b of Object.keys(scores)) {
+    if (!scoreRows[b]) {
+      const lbl = document.createElement('div'); lbl.className = 'lbl'; lbl.textContent = b;
+      const bar = document.createElement('div'); bar.className = 'bar'; bar.innerHTML = '<i></i>';
+      const v = document.createElement('div'); v.className = 'val';
+      box.append(lbl, bar, v); scoreRows[b] = { lbl, i: bar.firstChild, v };
+    }
+    const row = scoreRows[b];
+    row.i.style.width = (100 * scores[b]) + '%';
+    row.i.style.background = b === state ? (STATE_COLORS[b] || '#8fd3a5') : '#3d5a4a';
+    row.v.textContent = scores[b].toFixed(2);
+    row.lbl.style.color = b === state ? 'var(--text)' : '';
+    row.lbl.style.fontWeight = b === state ? '600' : '';
+  }
+}
+const learnRows = {};
+function renderLearning(L) {
+  if (!L) return;
+  const box = $('learn-bars');
+  const rows = { 'dopamine reward': L.dopamine_reward, 'dopamine punish': L.dopamine_punish, 'weights, reward comp.': L.weight_reward_comp, 'weights, punish comp.': L.weight_punish_comp, 'eligible KCs': L.kc_eligible };
+  for (const k of Object.keys(rows)) {
+    if (!learnRows[k]) {
+      const lbl = document.createElement('div'); lbl.className = 'lbl'; lbl.textContent = k; lbl.style.width = '120px';
+      const bar = document.createElement('div'); bar.className = 'bar'; bar.innerHTML = '<i></i>';
+      const v = document.createElement('div'); v.className = 'val';
+      box.append(lbl, bar, v); learnRows[k] = { i: bar.firstChild, v };
+    }
+    const x = rows[k]; learnRows[k].i.style.width = (100 * Math.min(1, x)) + '%'; learnRows[k].v.textContent = x.toFixed(2);
+    learnRows[k].i.style.background = k.startsWith('dopamine') ? '#ffb347' : k.startsWith('weights') ? '#b69bea' : '#8fd3a5';
+  }
+  $('learn-toggle').checked = !!L.enabled;
+  if (L.probe && 'A' in L.probe) $('learn-probe-out').textContent = `probe at ${L.probe.t}s: odor A (grape) valence ${L.probe.A >= 0 ? '+' : ''}${L.probe.A.toFixed(2)} · odor B (lemon) ${L.probe.B >= 0 ? '+' : ''}${L.probe.B.toFixed(2)}`;
+}
+const control = body => fetch('/control', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).catch(() => {});
+$('learn-toggle').onchange = e => control({ learning: e.target.checked });
+$('learn-probe').onclick = () => { $('learn-probe-out').textContent = 'probing… (a few seconds)'; control({ probe: true }); };
+$('learn-reset').onclick = () => control({ reset: true });
+const motorRows = {};
+function renderMotor(motor) {
+  const box = $('motor'); if (!motor) return;
+  for (const k of Object.keys(motor)) {
+    if (!motorRows[k]) {
+      const lbl = document.createElement('div'); lbl.className = 'lbl'; lbl.textContent = k;
+      const bar = document.createElement('div'); bar.className = 'bar' + (k === 'turn' ? ' turn' : ''); bar.innerHTML = '<i></i>';
+      const v = document.createElement('div'); v.className = 'val';
+      box.append(lbl, bar, v); motorRows[k] = { lbl, i: bar.firstChild, v };
+    }
+    const row = motorRows[k], x = motor[k];
+    if (k === 'turn') { row.i.style.left = (x < 0 ? 50 + 50 * x : 50) + '%'; row.i.style.width = (50 * Math.abs(x)) + '%'; }
+    else row.i.style.width = (100 * x) + '%';
+    row.v.textContent = x.toFixed(2);
+    row.lbl.className = 'lbl' + (Math.abs(x) > 0.15 ? ' hot' : '');
+  }
+}
+function renderTypes(list) {
+  const ul = $('types'); ul.innerHTML = '';
+  for (const [name, n] of list) { const li = document.createElement('li'); li.innerHTML = `<b></b><span></span>`; li.firstChild.textContent = name; li.lastChild.textContent = n + ' spk'; ul.append(li); }
+}
+function drawSpark() {
+  const cv = $('spark'), w = cv.width = cv.clientWidth, h = cv.height, c = cv.getContext('2d');
+  c.clearRect(0, 0, w, h); if (!sparkBuf.length) return;
+  const mx = Math.max(1000, ...sparkBuf);
+  c.strokeStyle = '#8fd3a5'; c.lineWidth = 1.5; c.beginPath();
+  sparkBuf.forEach((v, i) => { const x = i / 239 * w, y = h - 2 - (h - 4) * v / mx; i ? c.lineTo(x, y) : c.moveTo(x, y); });
+  c.stroke(); c.fillStyle = '#8a93a8'; c.font = '10px sans-serif'; c.fillText('spikes/s, last 2 min · peak ' + Math.round(mx).toLocaleString(), 4, 10);
+}
+
+// ---------------------------------------------------------------- the 3D fly
+const fly = createFlyStage($('arena3d'), $('retina'));
+window.flyStage = fly;
+document.querySelectorAll('[data-world]').forEach(b => b.onclick = () => { fly.setWorld(b.dataset.world); document.querySelectorAll('[data-world]').forEach(x => x.style.color = x === b ? 'var(--text)' : ''); });
+$('assay-run').onclick = () => { fly.startAssay(); document.querySelectorAll('[data-world]').forEach(x => x.style.color = x.dataset.world === 'arena' ? 'var(--text)' : ''); };
+function renderAssay() {
+  const a = fly.assay, out = $('assay-out');
+  if (fly.world.name === 'hunt') {
+    const h = fly.hunt; out.style.display = 'block';
+    const phase = { idle: 'loading', hunt: `hunting ${h.t.toFixed(0)} s`, reward: 'TOUCH → sugar + reward dopamine', punish: 'timeout → bitter + punishment dopamine' }[h.phase];
+    out.innerHTML = `<b style="color:var(--text)">episode ${h.episode} · ${phase}</b> · touched <b style="color:var(--text)">${h.touches}</b> (${h.frontal} head-on), missed <b style="color:var(--text)">${h.misses}</b> · nearest person ${h.nearest.toFixed(2)} m · seed ${h.seed} <span>(a 32 cm vehicle: forward / turn from descending neurons, heat + vision in; no walking, no flight)</span>`;
+    return;
+  }
+  if (fly.world.name !== 'arena') { out.style.display = 'none'; return; }
+  out.style.display = 'block';
+  const pi = v => v == null ? '–' : (v >= 0 ? '+' : '') + v.toFixed(2);
+  const phase = { idle: 'arena · press ▶ run assay: 60 s naive test → training confined with grape scent + sugar → 60 s test', 'naive test': `naive test ${a.t.toFixed(0)}/60 s · grape side ${a.sideA.toFixed(0)} s, lemon side ${a.sideB.toFixed(0)} s`, training: `training ${a.t.toFixed(0)} s · confined with grape scent + sugar · fed ${a.fed.toFixed(1)} s`, test: `test ${a.t.toFixed(0)}/60 s · grape side ${a.sideA.toFixed(0)} s, lemon side ${a.sideB.toFixed(0)} s`, done: 'assay done' }[a.phase];
+  out.innerHTML = `<b style="color:var(--text)">${phase}</b> · preference for grape scent: naive <b style="color:var(--text)">${pi(a.naive)}</b> → trained <b style="color:var(--text)">${pi(a.trained)}</b> <span>(PI = (t<sub>A</sub> − t<sub>B</sub>) / (t<sub>A</sub> + t<sub>B</sub>); +1 = always on the grape side)</span>`;
+}
+
+// ---------------------------------------------------------------- main loop
+let lastFrame = performance.now();
+function loop(now) {
+  const dt = Math.min(fly.world.name === 'hunt' ? 0.1 : 0.05, (now - lastFrame) / 1000); lastFrame = now;   // the hunt's clock may step 100 ms when frames are slow
+  atlas.step();
+  fly.step(dt);
+  if ((now | 0) % 4 === 0) renderAssay();
+  drawOverlay();
+  if (last) {
+    if (now - lastAt > 3000) { $('state').textContent = 'no signal'; $('state').style.background = '#444'; }
+  }
+  requestAnimationFrame(loop);
+}
+fetch('/circuit.json').then(r => r.json()).then(c => {
+  circuit = c;
+  fly.setHuntConfig(c.hunt);
+  $('c-n').textContent = c.n.toLocaleString(); $('c-m').textContent = c.connections.toLocaleString();
+  connect(); requestAnimationFrame(loop);
+});
+
+</script>
+</body>
+</html>

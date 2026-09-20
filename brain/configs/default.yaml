@@ -375,7 +375,15 @@ body:
   s1:                          # DJI RoboMaster S1 as the legs, S-Bus from the Pi (docs/wiring.md); `run --s1 [PORT]`
     enabled: false
     port: /dev/ttyAMA0         # Pi 5 header UART (dtparam=uart0=on); an FTDI adapter with inverted TX: /dev/ttyUSB0
-    max_stick: 0.5             # full brain drive = this fraction of stick throw; raise once it behaves
+    # Measured 2026-09-19 on the slow preset: full yaw stick = 90 deg/s, full forward stick = 0.85 m/s.
+    # The fly's model (hunt.turn_max 200 deg/s, hunt.speed_max 1.6 m/s) has 125 deg/s per m/s; these sticks give the
+    # same ratio, so the robot traces the fly's path at ~45% of its pace. Re-measure with tools/s1_sbus.py --pulse.
+    stick_forward: 0.85        # full forward drive = this fraction of stick throw (brain drive channels)
+    stick_strafe: 0.85
+    stick_yaw: 1.0             # full turn drive = this fraction of yaw stick (brain drive channels)
+    yaw_dps_full: 90           # the hunt viewer sends the fly's real yaw rate and speed instead: deg/s at full yaw stick ...
+    speed_mps_full: 0.85       # ... and m/s at full forward stick (both measured on the slow preset)
+    rotation_only: true        # the first matching test: the robot copies the fly's rotation only, never drives
     free_mode: true            # channel 4 turns the chassis (the hunt vehicle) rather than the gimbal
     speed: slow                # S1 speed preset: slow | medium | fast
     sign_forward: 1            # flip any of these if the bench test drives the wrong way

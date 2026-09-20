@@ -269,7 +269,10 @@ def cmd_hunt_gpu(args, cfg):
         print(f"[hunt-gpu] loaded {args.load}: {meta}", flush=True)
     if args.watch:
         from .hunt_gpu.viewer import serve
-        serve(cfg, net, port=args.port, open_browser=args.open, seed=args.seed, speed=args.speed, net_label=Path(args.load).name if args.load else "", humans=humans)
+        serve(cfg, net, port=args.port, open_browser=args.open, seed=args.seed, speed=args.speed,
+              net_label=Path(args.load).name if args.load else "", humans=humans, body=_s1_body(args, cfg),
+              read_only=args.public, v_max=args.v_max, w_max=args.w_max, sign_yaw=args.sign_yaw,
+              **_deploy_kwargs(args))
         return
     what = "scripted hunter" if net is None else "trained fly"
     mode = cfg.hunt_gpu.humans.get("mode", "learn")
@@ -386,7 +389,10 @@ def cmd_hunt_brain(args, cfg):
     if args.watch:
         from .hunt_gpu.viewer import serve
         hunter = SpikingHunter(cfg, hc, args.load)
-        serve(cfg, None, port=args.port, open_browser=args.open, seed=args.seed, speed=args.speed, net_label=Path(args.load).name if args.load else "the untrained connectome", humans=humans, spiking=hunter)
+        serve(cfg, None, port=args.port, open_browser=args.open, seed=args.seed, speed=args.speed,
+              net_label=Path(args.load).name if args.load else "the untrained connectome", humans=humans, spiking=hunter,
+              body=_s1_body(args, cfg), read_only=args.public,
+              v_max=args.v_max, w_max=args.w_max, sign_yaw=args.sign_yaw, **_deploy_kwargs(args))
         return
     opp = {"patrol": "patrol walkers", "wander": "people walking about", "flee": "scripted runners", "learn": "trained runners" if humans is not None else "scripted runners (no trained runners given)"}[cfg.hunt_gpu.humans.get("mode", "learn")]
     t0 = time.time()
@@ -401,6 +407,46 @@ def cmd_hunt_brain(args, cfg):
     trk = f", then tracked them {sm['track']:.0%} of the time, {sm['touches']:.1f} touches per episode" if sm.get("track") is not None else ""
     print(f"[brain] touch rate {sm['touch_rate']:.0%}, mean time to first touch {sm['t_touch']} s, head-on {sm['frontal']}, score {sm['score']:.2f}{trk}; "
           f"nobody in range {sm['blind']:.0%} of the time, of which standing still {sm['idle']:.0%} | {time.time() - t0:.0f} s wall", flush=True)
+
+
+def _relay_subscribe_url(publish_url):
+    """The relay's read-only subscriber (fan-out) endpoint for a given publisher ingest URL. The relay
+    accepts the publisher on /ingest and fans out to browsers on /events (see relay/server.py), so a
+    locally-served page pointed at the relay in --remote mode reuses the --publish URL with /ingest
+    swapped for /events. Returned unchanged if it carries no /ingest path."""
+    if not publish_url:
+        return None
+    return publish_url.replace("/ingest", "/events", 1) if "/ingest" in publish_url else publish_url
+
+
+def _deploy_kwargs(args):
+    """The deploy / feed wiring shared by `hunt-gpu --watch` and `hunt-brain --watch` (task 9.1).
+
+    - `--bind` defaults to loopback (127.0.0.1) in deployed/publish mode so the machine exposes no
+      non-loopback listener (R14.1/14.3); the user can still force `lan`/`local` explicitly.
+    - `--remote` serves the page with feed="remote" so it consumes state from the relay (R11.4); the
+      subscriber URL is taken from `--relay-url`, else derived from `--publish` (/ingest -> /events).
+    - `--publish` / `--publish-token` enable the outbound-only Publisher inside `serve` (R11.5, R14.1)."""
+    bind_choice = args.bind if args.bind is not None else ("local" if args.publish else "lan")
+    relay_url = args.relay_url or (_relay_subscribe_url(args.publish) if args.publish else None)
+    return dict(
+        bind=("127.0.0.1" if bind_choice == "local" else "0.0.0.0"),
+        feed=("remote" if args.remote else "local"),
+        relay_url=relay_url,
+        publish_url=args.publish,
+        publish_token=args.publish_token,
+    )
+
+
+def _s1_body(args, cfg):
+    """`--s1 [PORT]`: a RoboMaster S1 on S-Bus mirroring the fly (docs/wiring.md); None when not asked for."""
+    s1_cfg = dict(cfg.body.get("s1", {}))
+    if getattr(args, "s1", None) is None and not s1_cfg.get("enabled"):
+        return None
+    from .body.s1 import S1Body
+    s1 = S1Body(s1_cfg, port=(getattr(args, "s1", None) or None))
+    print(f"[body] RoboMaster S1 on {s1.cfg['port']} (S-Bus, free_mode={s1.cfg['free_mode']}, speed {s1.cfg['speed']}, sticks fwd {s1.cfg['stick_forward']} / yaw {s1.cfg['stick_yaw']})", flush=True)
+    return s1
 
 
 def cmd_run(args, cfg):
@@ -482,7 +528,7 @@ def cmd_run(args, cfg):
     if args.s1 is not None or s1_cfg.get("enabled"):
         from .body.s1 import S1Body, MultiBody
         s1 = S1Body(s1_cfg, port=args.s1 or None)
-        print(f"[body] RoboMaster S1 on {s1.cfg['port']} (S-Bus, free_mode={s1.cfg['free_mode']}, speed {s1.cfg['speed']}, max_stick {s1.cfg['max_stick']})", flush=True)
+        print(f"[body] RoboMaster S1 on {s1.cfg['port']} (S-Bus, free_mode={s1.cfg['free_mode']}, speed {s1.cfg['speed']}, sticks fwd {s1.cfg['stick_forward']} / yaw {s1.cfg['stick_yaw']})", flush=True)
         body = MultiBody(body, s1)
     period = 1.0 / float(cfg.body.rate_hz)
     pir_until = 0.0
@@ -691,7 +737,25 @@ def main(argv=None):
     p.add_argument("--cpu-check", action="store_true", help="also run the loaded fly through the CPU arena on the same seeds")
     p.add_argument("--humans", default=None, metavar="MODE|PT", help="the other player: patrol, flee, learn, or a trained runners file (default: the evaders_*.pt next to --load, else the config)")
     p.add_argument("--watch", action="store_true", help="live 3-D view of the loaded fly (or the scripted hunter) hunting, at http://localhost:8601")
-    p.add_argument("--port", type=int, default=8601); p.add_argument("--open", action="store_true", help="open the view in the browser")
+    p.add_argument("--s1", nargs="?", const="", default=None, metavar="PORT", help="with --watch: a RoboMaster S1 on S-Bus mirrors the fly (default body.s1.port)")
+    p.add_argument("--port", type=int, default=8601, help="the view / state-feed port (1024-65535, default 8601)")
+    p.add_argument("--open", action="store_true", help="open the view in the browser")
+    p.add_argument("--public", action=argparse.BooleanOptionalAction, default=True,
+                   help="serve every web viewer read-only (Spectator_Mode); --no-public lets the local operator drive from the page (default: public)")
+    p.add_argument("--bind", choices=("lan", "local"), default=None,
+                   help="lan = bind 0.0.0.0 so LAN devices can watch; local = bind 127.0.0.1 only "
+                        "(default: local when --publish is set for a deployed machine, else lan)")
+    p.add_argument("--v-max", type=float, default=None, metavar="MPS", help="cap the mirrored forward speed on the S1 (0..0.85 m/s)")
+    p.add_argument("--w-max", type=float, default=None, metavar="DPS", help="cap the mirrored turn rate on the S1 (0..90 deg/s)")
+    p.add_argument("--sign-yaw", choices=("normal", "inverted"), default=None, help="invert the S1 yaw stick sign if the robot turns the wrong way")
+    p.add_argument("--publish", default=None, metavar="WSS_URL",
+                   help="deploy: publish state outbound to the relay's /ingest (e.g. wss://relay.example/ingest); "
+                        "starts the outbound-only publish client and defaults --bind to local (127.0.0.1)")
+    p.add_argument("--publish-token", default=None, metavar="TOKEN", help="bearer token presented to the relay on --publish")
+    p.add_argument("--remote", action="store_true",
+                   help="serve the page with feed=remote so it consumes state from the relay instead of the same-origin SSE")
+    p.add_argument("--relay-url", default=None, metavar="URL",
+                   help="the relay subscriber endpoint the --remote page connects to (default: derived from --publish, /ingest -> /events)")
     p.add_argument("--speed", type=float, default=1.0, help="playback speed of the live view (1 = real time)")
     p.add_argument("--save-every", type=int, default=10, help="updates between hunter_gpu_last.pt checkpoints")
     p.add_argument("--out", default=None, help="output directory (default data/cache)")
@@ -713,7 +777,25 @@ def main(argv=None):
     p.add_argument("--generations", type=int, default=20); p.add_argument("--pop", type=int, default=None)
     p.add_argument("--check", action="store_true", help="compare the rate model's responses with the spiking subcircuit's")
     p.add_argument("--watch", action="store_true", help="live view of the spiking fly hunting, with its neurons, at http://localhost:8601")
-    p.add_argument("--port", type=int, default=8601); p.add_argument("--open", action="store_true"); p.add_argument("--speed", type=float, default=1.0)
+    p.add_argument("--s1", nargs="?", const="", default=None, metavar="PORT", help="with --watch: a RoboMaster S1 on S-Bus mirrors the fly (default body.s1.port)")
+    p.add_argument("--port", type=int, default=8601, help="the view / state-feed port (1024-65535, default 8601)")
+    p.add_argument("--open", action="store_true"); p.add_argument("--speed", type=float, default=1.0)
+    p.add_argument("--public", action=argparse.BooleanOptionalAction, default=True,
+                   help="serve every web viewer read-only (Spectator_Mode); --no-public lets the local operator drive from the page (default: public)")
+    p.add_argument("--bind", choices=("lan", "local"), default=None,
+                   help="lan = bind 0.0.0.0 so LAN devices can watch; local = bind 127.0.0.1 only "
+                        "(default: local when --publish is set for a deployed machine, else lan)")
+    p.add_argument("--v-max", type=float, default=None, metavar="MPS", help="cap the mirrored forward speed on the S1 (0..0.85 m/s)")
+    p.add_argument("--w-max", type=float, default=None, metavar="DPS", help="cap the mirrored turn rate on the S1 (0..90 deg/s)")
+    p.add_argument("--sign-yaw", choices=("normal", "inverted"), default=None, help="invert the S1 yaw stick sign if the robot turns the wrong way")
+    p.add_argument("--publish", default=None, metavar="WSS_URL",
+                   help="deploy: publish state outbound to the relay's /ingest (e.g. wss://relay.example/ingest); "
+                        "starts the outbound-only publish client and defaults --bind to local (127.0.0.1)")
+    p.add_argument("--publish-token", default=None, metavar="TOKEN", help="bearer token presented to the relay on --publish")
+    p.add_argument("--remote", action="store_true",
+                   help="serve the page with feed=remote so it consumes state from the relay instead of the same-origin SSE")
+    p.add_argument("--relay-url", default=None, metavar="URL",
+                   help="the relay subscriber endpoint the --remote page connects to (default: derived from --publish, /ingest -> /events)")
     p.add_argument("--device", default="auto"); p.add_argument("--save-every", type=int, default=5); p.add_argument("--out", default=None)
     p.set_defaults(fn=cmd_hunt_brain)
     p = sub.add_parser("run"); p.add_argument("--full", action="store_true")
