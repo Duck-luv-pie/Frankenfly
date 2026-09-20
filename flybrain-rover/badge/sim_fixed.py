@@ -40,11 +40,16 @@ def load_circuit(path="badge/flybadge_circuit.lua"):
               "n_lc4", "n_lplc2", "n_lc10a"):
         m[k] = int(re.search(rf"^M\.{k} = (-?\d+)", src, re.M).group(1))
     m["colptr"] = [int(x) for x in re.search(r"M\.colptr = \{([^}]*)\}", src).group(1).split(",")]
-    def unesc(field):
+    def payload(field):
+        """The circuit ships as base64 (see export_badge_circuit.py); older files used \\NNN escapes."""
+        b = re.search(rf'M\.{field}_b64 = "([A-Za-z0-9+/=]*)"', src)
+        if b:
+            import base64
+            return list(base64.b64decode(b.group(1)))
         raw = re.search(rf'M\.{field} = "((?:[^"\\]|\\\d+)*)"', src).group(1)
         return [int(x) for x in re.findall(r"\\(\d+)", raw)]
-    m["post"] = unesc("post")
-    m["w"] = [v - 256 if v > 127 else v for v in unesc("w")]
+    m["post"] = payload("post")
+    m["w"] = [v - 256 if v > 127 else v for v in payload("w")]
     assert len(m["post"]) == len(m["w"]) == m["n_edges"], "circuit file is inconsistent"
     return m
 

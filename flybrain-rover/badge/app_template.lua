@@ -35,6 +35,25 @@ author=FlyBrain Rover
 
 --@CIRCUIT@
 
+-- base64 -> byte string, once at load. The circuit ships as base64 rather than \NNN escapes because it is
+-- shorter and has no backslashes, and a serial push that mangles or truncates one byte of a 16 KB file
+-- shows up as "unfinished string" with no clue where.
+local function b64(s)
+  local A = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+  local map, out, n, bits = {}, {}, 0, 0
+  for i = 1, 64 do map[A:sub(i, i)] = i - 1 end
+  for i = 1, #s do
+    local v = map[s:sub(i, i)]
+    if v then
+      bits = bits * 64 + v; n = n + 6
+      if n >= 8 then n = n - 8; local byte = bits // (2 ^ n); bits = bits % (2 ^ n); out[#out + 1] = string.char(byte) end
+    end
+  end
+  return table.concat(out)
+end
+C.post, C.w = b64(C.post_b64), b64(C.w_b64)
+C.post_b64, C.w_b64 = nil, nil
+
 -- fixed point: 1 unit = 1/256 mV, one step = 10 ms. Must match badge/sim_fixed.py exactly.
 local V_REST, V_TH = -13312, -11520
 local SYN_DECAY = 35            -- exp(-dt/tau_syn) = exp(-10/5) as a 256ths fraction

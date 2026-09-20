@@ -107,8 +107,9 @@ def main() -> None:
     p_i, q_i, q = p_i[srt], q_i[srt], q[srt]
     colptr = np.concatenate([[0], np.cumsum(np.bincount(p_i, minlength=order.numel()))])
 
-    def lua_bytes(arr):
-        return "".join("\\%d" % int(v) for v in arr)
+    def lua_b64(arr):
+        import base64
+        return base64.b64encode(bytes(int(v) & 0xFF for v in arr)).decode()
 
     n_neurons, n_edges = int(order.numel()), int(q.size)
     kept_types = {}
@@ -129,6 +130,8 @@ def main() -> None:
                 f"""[{n_lc4 + n_lplc2 + n_lc10a + 1}..{n_neurons - gf.numel()}] intermediates, """
                 f"""[{n_neurons - gf.numel() + 1}..{n_neurons}] giant fibre.
 -- Synapse weight = byte value (signed, -127..127) times {scale:.4f} raw synapse counts.
+-- post_b64 / w_b64 are base64: shorter than decimal escapes and free of backslashes, which a serial
+-- push cannot mangle. main.lua decodes them once at load.
 local M = {{}}
 M.n = {n_neurons}
 M.n_lc4 = {n_lc4}
@@ -143,8 +146,8 @@ M.n_edges = {n_edges}
 M.w_scale = {scale:.6f}
 -- outgoing edges grouped by source neuron; colptr[i]..colptr[i+1]-1 are neuron i's edges
 M.colptr = {{{",".join(str(int(v)) for v in colptr)}}}
-M.post = "{lua_bytes(q_i + 1)}"
-M.w = "{lua_bytes(np.where(q < 0, q.astype(np.int16) + 256, q))}"   -- int8 as unsigned bytes
+M.post_b64 = "{lua_b64(q_i + 1)}"
+M.w_b64 = "{lua_b64(np.where(q < 0, q.astype(np.int16) + 256, q))}"   -- int8 as unsigned bytes
 return M
 """)
     size = os.path.getsize(a.out)
