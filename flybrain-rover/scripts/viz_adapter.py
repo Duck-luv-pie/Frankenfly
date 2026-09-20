@@ -82,7 +82,8 @@ class Source:
     def __init__(self, replay: str | None, live: str | None, loop: bool = True):
         self.replay, self.live, self.loop = replay, live, loop
         self.speed = 1.0          # the viewer's slider; replay only, live is real time
-        self.paused = False       # the viewer's pause; replay only, live pauses the brain instead
+        self.paused = False       # the viewer's pause; replay only, live freezes the fly instead
+        self.restart = False      # the viewer's next episode; replay only, jumps back to frame 0
         self.meta = {}
         if replay:
             d = json.load(open(replay)); self.frames = d["frames"]; self.meta = d.get("meta", {})
@@ -94,6 +95,8 @@ class Source:
             while True:
                 nxt = time.perf_counter()
                 for f in self.frames:
+                    if self.restart:                         # next episode: back to the top of the recording
+                        self.restart = False; break
                     while self.paused:                       # hold on the current frame, do not drop it
                         time.sleep(0.05); nxt = time.perf_counter()
                     on_frame(f)
@@ -308,6 +311,8 @@ def serve(ad: Adapter, brain_json: bytes, ui_dir: Path, asset_dirs: list[Path], 
                 ad.src.paused = bool(body["paused"])          # replay: one clock, so it holds everything
             if ad.live and "paused" in body:
                 ad.fly_frozen = bool(body["paused"])          # live: hold the fly, leave the brain running
+            if not ad.live and body.get("next"):
+                ad.src.restart = True                         # replay: play the recording again from the start
             if ad.live and body.get("next"):
                 # the page's pause silences the brain (hotkey l, a toggle); next episode is a fresh fly: baseline
                 # brain (hotkey 1) and the dead-reckoned pose back at the origin

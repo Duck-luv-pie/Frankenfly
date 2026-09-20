@@ -169,15 +169,25 @@ class YoloPerson:
 
 
 class FakeBox:
-    """A person-sized box sweeping left-right across the frame, for plumbing tests without a detector."""
-    def __init__(self, W=320, H=240, period=6.0):
-        self.W, self.H, self.period, self.t0 = W, H, period, time.time()
+    """Person-sized boxes drifting across the frame, for plumbing tests and for the viewer without a camera.
+
+    Several people at different distances and speeds, because one target makes the 3-D viewer look like a
+    test rig while a crowd looks like the room the fly is built to hunt in. Each walks at its own rate and
+    turns at the edges, so the retina sees real left-right motion instead of a metronome."""
+    def __init__(self, W=320, H=240, period=6.0, n=3):
+        self.W, self.H, self.t0 = W, H, time.time()
+        # (seconds per sweep, phase offset, apparent width px); a narrower box is drawn further away
+        self.walkers = [(period * (0.8 + 0.5 * i), i / max(1, n), 30 + 14 * ((i + 1) % 3)) for i in range(max(1, n))]
 
     def __call__(self, frame_bgr=None):
-        ph = ((time.time() - self.t0) % self.period) / self.period
-        cx = self.W * (0.15 + 0.7 * (0.5 - 0.5 * np.cos(2 * np.pi * ph)))
-        w = 40
-        return [(cx - w / 2, 20.0, cx + w / 2, float(self.H))]
+        now = time.time() - self.t0
+        out = []
+        for period, phase, w in self.walkers:
+            ph = ((now / period) + phase) % 1.0
+            cx = self.W * (0.12 + 0.76 * (0.5 - 0.5 * np.cos(2 * np.pi * ph)))
+            top = 20.0 + (44 - w) * 1.4
+            out.append((cx - w / 2, top, cx + w / 2, float(self.H)))
+        return out
 
 
 def companion_path(explicit=None):
@@ -527,6 +537,8 @@ def main(argv=None, hotkeys=None):
     ap.add_argument("--engine", default="event", help="event engine is the fast one at batch 1")
     ap.add_argument("--fake-box", "--fake-boxes", dest="fake_box", action="store_true",
                     help="no detector: synthetic sweeping person box")
+    ap.add_argument("--fake-people", type=int, default=3,
+                    help="how many people --fake-boxes invents (1 is the old single sweeper)")
     ap.add_argument("--no-camera", action="store_true", help="synthetic 320x240 frames at 30 fps (no OpenCV needed)")
     ap.add_argument("--dry-run", action="store_true", help="print wheel commands instead of sending them")
     ap.add_argument("--watchdog-ms", type=float, default=300.0)
@@ -567,7 +579,7 @@ def main(argv=None, hotkeys=None):
         print("rates", brain.rates())
         return
 
-    detector = FakeBox() if a.fake_box else None
+    detector = FakeBox(n=a.fake_people) if a.fake_box else None
     if detector is None:
         try:
             detector = YoloPerson(a.yolo, device=a.yolo_device)
