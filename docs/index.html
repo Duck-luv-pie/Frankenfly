@@ -2,556 +2,549 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>FlyBadge</title>
-<meta name="description" content="Put a real fruit fly's escape circuit on your Hack the North badge. 150 connectome neurons, 900 measured synapses, one paste.">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FlyBrain Rover</title>
+<meta name="description" content="15,000 neurons of a real fruit fly connectome, running. Watch it find a person, then cut its tracking cells and watch it fail.">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500&display=swap">
 <style>
   :root{
     --ground:#0a0a0a; --panel:#151312; --panel2:#1c1917; --rule:#2b2724;
     --text:#e8e6e4; --dim:#8a8580; --faint:#5c5854;
-    --coral:#FF715B; --blue:#5aa9ff; --good:#44DD88;
+    --coral:#FF715B; --blue:#5aa9ff; --good:#44DD88; --dope:#e8c34d;
     --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
     --sans:"IBM Plex Sans",system-ui,-apple-system,sans-serif;
   }
   *{box-sizing:border-box}
-  html{color-scheme:dark}
-  body{background:var(--ground);color:var(--text);font-family:var(--sans);line-height:1.6;margin:0;
-       padding:0 20px 80px;-webkit-font-smoothing:antialiased}
-  .wrap{max-width:1000px;margin:0 auto}
-  h1,h2,h3{text-wrap:balance;margin:0}
-  a{color:var(--coral)}
-  header{padding:54px 0 30px}
-  .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--coral);margin-bottom:16px}
-  h1{font-family:var(--mono);font-size:clamp(30px,6vw,54px);font-weight:600;letter-spacing:-.025em;line-height:1.1}
-  .thesis{max-width:60ch;color:var(--dim);margin-top:18px;font-size:17px}
-  .thesis strong{color:var(--text);font-weight:500}
-  section{padding:40px 0;border-top:1px solid var(--rule)}
-  h2{font-family:var(--mono);font-size:20px;font-weight:600;letter-spacing:-.01em}
-  .lede{color:var(--dim);max-width:66ch;margin-top:10px}
+  html,body{margin:0;padding:0}
+  body{background:var(--ground);color:var(--text);font-family:var(--sans);line-height:1.6;
+       -webkit-font-smoothing:antialiased}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 20px}
 
-  .sim{display:grid;grid-template-columns:minmax(300px,380px) 1fr;gap:26px;margin-top:26px;align-items:start}
-  @media(max-width:760px){.sim{grid-template-columns:1fr}}
-  .badge{background:#000;border:1px solid var(--rule);border-radius:9px;padding:15px 40px;position:relative}
-  .screen{width:100%;aspect-ratio:320/240;background:#050505;border:1px solid #241f1c;position:relative;overflow:hidden;font-family:var(--mono)}
-  .scr-t{position:absolute;left:8px;top:6px;font-size:11px;color:var(--coral);font-weight:600}
-  .scr-s{position:absolute;left:8px;top:22px;font-size:8.5px;color:var(--faint)}
-  .scr-gf{position:absolute;left:8px;top:42px;font-size:14px;font-weight:600}
-  .scr-st{position:absolute;left:8px;top:64px;font-size:10px;font-weight:600;color:var(--good)}
-  .scr-fly{position:absolute;font-size:19px;color:#fff;transition:top .07s;left:50%;margin-left:-14px}
-  .scr-bar{position:absolute;left:8px;right:8px;bottom:26px;height:7px;background:#221e1b}
-  .scr-bar i{display:block;height:100%;background:var(--coral);width:0}
-  .scr-hint{position:absolute;left:8px;bottom:8px;font-size:8px;color:var(--faint)}
-  .led{position:absolute;width:11px;height:11px;border-radius:50%;background:#1a1512;border:1px solid #2b2320}
-  .ctrls{display:flex;gap:9px;margin-top:15px;flex-wrap:wrap}
-  button{font-family:var(--mono);font-size:12px;font-weight:500;padding:9px 15px;cursor:pointer;background:var(--panel2);
-         color:var(--text);border:1px solid var(--rule);border-radius:5px}
-  button:hover{border-color:var(--coral)}
-  button:focus-visible{outline:2px solid var(--coral);outline-offset:2px}
-  button.primary{background:var(--coral);color:#140a08;border-color:var(--coral);font-weight:600}
-  button.big{font-size:14px;padding:13px 22px}
-  .raster{width:100%;height:210px;background:#050505;border:1px solid var(--rule);display:block}
-  .key{display:flex;gap:16px;flex-wrap:wrap;font-family:var(--mono);font-size:11px;color:var(--dim);margin-top:9px}
-  .key i{display:inline-block;width:9px;height:9px;margin-right:5px;vertical-align:baseline}
-  .readout{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--rule);border:1px solid var(--rule);margin-top:14px}
-  .readout div{background:var(--panel);padding:9px 11px}
-  .readout .k{font-family:var(--mono);font-size:10px;color:var(--dim);letter-spacing:.05em;text-transform:uppercase}
-  .readout .v{font-family:var(--mono);font-size:17px;font-weight:600;font-variant-numeric:tabular-nums;margin-top:3px}
+  /* ---- masthead ---- */
+  header{padding:40px 0 20px}
+  .eyebrow{font-family:var(--mono);font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;
+           color:var(--coral);margin:0 0 14px}
+  h1{font-family:var(--mono);font-size:clamp(28px,5.2vw,46px);font-weight:600;letter-spacing:-.03em;
+     line-height:1.08;margin:0;text-wrap:balance}
+  .lede{max-width:62ch;color:var(--dim);margin:16px 0 0;font-size:15.5px}
+  .lede b{color:var(--text);font-weight:500}
 
-  .steps{counter-reset:s;display:grid;gap:0;margin-top:22px;border:1px solid var(--rule)}
-  .step{display:grid;grid-template-columns:52px 1fr;gap:16px;padding:18px 18px 18px 14px;border-bottom:1px solid var(--rule);background:var(--panel)}
-  .step:last-child{border-bottom:0}
-  .step .n{font-family:var(--mono);font-size:22px;font-weight:600;color:var(--coral);font-variant-numeric:tabular-nums;line-height:1.1}
-  .step h3{font-size:15.5px;font-weight:600}
-  .step p{margin:5px 0 0;color:var(--dim);font-size:14.5px;max-width:64ch}
-  .step p b{color:var(--text);font-weight:600}
-  code{font-family:var(--mono);font-size:12.5px;background:var(--panel2);padding:2px 6px;border-radius:3px;border:1px solid var(--rule);color:var(--coral)}
-  .copyrow{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:12px}
-  .copied{font-family:var(--mono);font-size:12px;color:var(--good);opacity:0;transition:opacity .2s}
-  .copied.on{opacity:1}
-  .facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1px;background:var(--rule);border:1px solid var(--rule);margin-top:22px}
-  .facts div{background:var(--panel);padding:14px 16px}
-  .facts .v{font-family:var(--mono);font-size:24px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--text)}
-  .facts .k{font-family:var(--mono);font-size:11px;color:var(--dim);margin-top:4px}
-  p.body{max-width:66ch;color:var(--text);margin:14px 0 0}
-  p.body+p.body{margin-top:10px}
-  footer{padding:30px 0;color:var(--faint);font-family:var(--mono);font-size:11.5px;border-top:1px solid var(--rule)}
-  footer a{color:var(--dim)}
-  @media(prefers-reduced-motion:reduce){*{transition:none!important}}
+  /* ---- episode tabs ---- */
+  .episodes{display:flex;flex-wrap:wrap;gap:8px;margin:24px 0 0}
+  .ep{font-family:var(--mono);font-size:12px;font-weight:500;padding:9px 14px;cursor:pointer;
+      background:var(--panel);color:var(--dim);border:1px solid var(--rule);border-radius:2px;
+      transition:color .12s,border-color .12s,background .12s;text-align:left}
+  .ep:hover{color:var(--text);border-color:#3a3430}
+  .ep[aria-pressed="true"]{color:var(--ground);background:var(--coral);border-color:var(--coral);font-weight:600}
+  .ep.cut[aria-pressed="true"]{background:var(--blue);border-color:var(--blue)}
+  .ep-blurb{font-family:var(--sans);font-size:13.5px;color:var(--faint);margin:12px 0 0;min-height:1.6em}
+
+  /* ---- the instrument ---- */
+  .rig{display:grid;grid-template-columns:minmax(0,1fr) 316px;gap:14px;margin:16px 0 0;align-items:start}
+  @media (max-width:880px){ .rig{grid-template-columns:minmax(0,1fr)} }
+  .cell{background:var(--panel);border:1px solid var(--rule);border-radius:2px}
+  .cap{font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;
+       color:var(--faint);padding:10px 12px 0;display:flex;justify-content:space-between;gap:10px}
+  .cap em{font-style:normal;color:var(--dim)}
+  #arena{display:block;width:100%;height:auto}
+  .readout{display:flex;gap:18px;flex-wrap:wrap;padding:9px 12px 11px;border-top:1px solid var(--rule);
+           font-family:var(--mono);font-size:11px;color:var(--faint);font-variant-numeric:tabular-nums}
+  .readout b{color:var(--text);font-weight:500}
+  .readout span{white-space:nowrap}
+  .rail{display:flex;flex-direction:column;gap:14px}
+
+  /* steering gauge */
+  .steer{padding:10px 12px 14px}
+  .steer-row{display:grid;grid-template-columns:1fr 46px 1fr;align-items:center;gap:6px;margin-top:9px}
+  .tube{height:15px;background:var(--panel2);border:1px solid var(--rule);position:relative;overflow:hidden}
+  .tube i{position:absolute;top:0;bottom:0;display:block;width:0%}
+  .tube.l i{right:0;background:var(--coral)}
+  .tube.r i{left:0;background:var(--blue)}
+  .steer-mid{font-family:var(--mono);font-size:9.5px;color:var(--faint);text-align:center;letter-spacing:.06em}
+  .steer-num{font-family:var(--mono);font-size:11px;font-variant-numeric:tabular-nums;color:var(--dim);
+             display:flex;justify-content:space-between;margin-top:6px}
+  .steer-num b{font-weight:500;color:var(--text)}
+
+  /* rate bars */
+  .bars{padding:8px 12px 13px;display:grid;gap:3px}
+  .bar{display:grid;grid-template-columns:74px 1fr 40px;align-items:center;gap:8px;
+       font-family:var(--mono);font-size:10.5px}
+  .bar .nm{color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .bar .tr{height:9px;background:var(--panel2);border:1px solid var(--rule)}
+  .bar .tr i{display:block;height:100%;width:0%;background:var(--blue)}
+  .bar.mot .tr i{background:var(--coral)}
+  .bar.dop .tr i{background:var(--dope)}
+  .bar .hz{color:var(--faint);text-align:right;font-variant-numeric:tabular-nums}
+  .bar.on .nm,.bar.on .hz{color:var(--text)}
+  .bar.dead .nm,.bar.dead .hz{color:#4a4440}
+  .bar.sat .hz{color:var(--coral)}
+  .legend{font-family:var(--mono);font-size:9.5px;color:var(--faint);padding:2px 12px 11px;
+          letter-spacing:.03em}
+  .legend b{color:var(--coral);font-weight:500}
+
+  #raster{display:block;width:100%;height:auto}
+
+  /* ---- transport ---- */
+  .transport{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:14px 0 0;
+             background:var(--panel);border:1px solid var(--rule);border-radius:2px;padding:11px 13px}
+  button{font-family:var(--mono);font-size:12px;font-weight:500;padding:8px 13px;cursor:pointer;
+         background:var(--panel2);color:var(--text);border:1px solid var(--rule);border-radius:2px;
+         transition:border-color .12s,color .12s}
+  button:hover{border-color:#453e39}
+  button:focus-visible,.ep:focus-visible,input:focus-visible{outline:2px solid var(--coral);outline-offset:2px}
+  #play{min-width:78px;color:var(--coral);border-color:#4a2a24}
+  #play:hover{border-color:var(--coral)}
+  .speeds{display:flex;gap:4px;margin-left:auto}
+  .speeds button{padding:8px 10px;color:var(--faint);min-width:44px}
+  .speeds button[aria-pressed="true"]{color:var(--ground);background:var(--text);border-color:var(--text);font-weight:600}
+  #scrub{flex:1 1 200px;min-width:140px;accent-color:var(--coral);height:20px;cursor:pointer;background:transparent}
+  .clock{font-family:var(--mono);font-size:11.5px;color:var(--dim);font-variant-numeric:tabular-nums;
+         white-space:nowrap;min-width:88px}
+  .hint{font-family:var(--mono);font-size:10.5px;color:var(--faint);margin:9px 0 0}
+
+  /* ---- prose ---- */
+  section{padding:56px 0 0}
+  h2{font-family:var(--mono);font-size:19px;font-weight:600;letter-spacing:-.01em;margin:0 0 14px}
+  p{max-width:66ch;margin:0 0 15px;color:var(--dim);font-size:15px}
+  p b{color:var(--text);font-weight:500}
+  .cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(248px,1fr));gap:26px;margin-top:6px}
+  .cols p{margin:0}
+  .ladder{display:grid;gap:1px;background:var(--rule);border:1px solid var(--rule);border-radius:2px;
+          margin:0 0 26px;max-width:640px}
+  .rung{background:var(--panel);padding:14px 16px;display:grid;grid-template-columns:132px 1fr;
+        gap:14px;align-items:baseline}
+  @media (max-width:520px){ .rung{grid-template-columns:1fr;gap:2px} }
+  .rung .n{font-family:var(--mono);font-size:22px;font-weight:600;letter-spacing:-.02em;
+           color:var(--text);font-variant-numeric:tabular-nums}
+  .rung:last-child .n{color:var(--coral)}
+  .rung .d{color:var(--dim);font-size:14px}
+  .note{border-left:2px solid var(--rule);padding-left:15px;color:var(--faint);font-size:13.5px;max-width:62ch}
+  .note b{color:var(--dim);font-weight:500}
+  a{color:var(--coral);text-decoration:none;border-bottom:1px solid #4a2a24}
+  a:hover{border-bottom-color:var(--coral)}
+  footer{margin-top:64px;padding:22px 0 44px;border-top:1px solid var(--rule);
+         font-family:var(--mono);font-size:11px;color:var(--faint);
+         display:flex;gap:18px;flex-wrap:wrap;justify-content:space-between}
+  footer a{border-bottom:none;color:var(--dim)}
+  footer a:hover{color:var(--coral)}
+  .loading{font-family:var(--mono);font-size:11.5px;color:var(--faint);padding:14px 12px}
 </style>
 </head>
 <body>
+
 <div class="wrap">
 <header>
-  <div class="eyebrow">Hack the North 2026 · badge hack</div>
-  <h1>Put a fly's brain on your badge.</h1>
-  <p class="thesis">This is not a model of a fly and not a trained network. It is 150 neurons and 900 synapses
-  copied from the wiring diagram of a real fruit fly, running on the badge in your lanyard.
-  <strong>Swat at it and the neuron that launches a real fly's escape jump fires.</strong> One paste, no account,
-  it stays on the badge after the event.</p>
+  <p class="eyebrow">Male <i>Drosophila</i> CNS &middot; neuPrint male-cns:v1.0</p>
+  <h1>A fly brain, running.</h1>
+  <p class="lede">Fifteen thousand neurons from a real fruit fly connectome, wired the way the electron
+    microscope found them. A camera is its eye, its descending neurons are the wheels, and
+    <b>nothing in between is programmed</b>. Cut its tracking cells and watch it fail.</p>
+
+  <div class="episodes" id="episodes" role="group" aria-label="Choose an episode"></div>
+  <p class="ep-blurb" id="ep-blurb">&nbsp;</p>
 </header>
 
-<section style="border-top:0;padding-top:8px">
-  <h2>Try it here first</h2>
-  <p class="lede">The same circuit, the same arithmetic, running in your browser. Swat it, then press <b>B</b> to
-  cut the eye's wiring and swat again. There is no flinch rule anywhere; the escape only ever comes out of the
-  synapses.</p>
-  <div class="sim">
-    <div>
-      <div class="badge" id="badge">
-        <div class="screen">
-          <div class="scr-t">FlyBadge</div>
-          <div class="scr-s">150 real neurons &nbsp; 900 real synapses</div>
-          <div class="scr-gf" id="gfTxt">giant fibre &nbsp;0 Hz</div>
-          <div class="scr-st" id="stTxt">INTACT</div>
-          <div class="scr-fly" id="fly" style="top:47%">&#9673;&#9673;</div>
-          <div class="scr-bar"><i id="bar"></i></div>
-          <div class="scr-hint">swat me &nbsp; B lesion &nbsp; A restore</div>
-        </div>
-      </div>
-      <div class="ctrls">
-        <button class="primary" id="swat">SWAT</button>
-        <button id="bLes">B &nbsp;lesion the eye</button>
-        <button id="aRes">A &nbsp;restore</button>
-      </div>
-      <div class="readout">
-        <div><div class="k">GF rate</div><div class="v" id="rGf">0</div></div>
-        <div><div class="k">Escapes</div><div class="v" id="rEsc">0</div></div>
-        <div><div class="k">Drive</div><div class="v" id="rDrv">0</div></div>
-      </div>
+<div class="rig">
+  <div class="cell">
+    <div class="cap"><span>Arena &middot; top view</span><em id="arena-tag">&nbsp;</em></div>
+    <canvas id="arena" width="1280" height="800" role="img"
+            aria-label="Top view of the arena: the rover, its field of view, and the people it can see"></canvas>
+    <div class="readout">
+      <span>forward <b id="ro-fwd">0.000</b></span>
+      <span>turn <b id="ro-turn">+0.000</b></span>
+      <span>eye <b id="ro-eye">&mdash;</b></span>
+      <span>range <b id="ro-range">&mdash;</b></span>
     </div>
-    <div>
-      <canvas class="raster" id="raster" width="640" height="210"></canvas>
-      <div class="key">
-        <span><i style="background:#FF715B"></i>LC4 / LPLC2, the looming detectors</span>
-        <span><i style="background:#5aa9ff"></i>LC10a</span>
-        <span><i style="background:#8a8580"></i>relays</span>
-        <span><i style="background:#fff"></i>giant fibre</span>
+  </div>
+
+  <div class="rail">
+    <div class="cell steer">
+      <div class="cap"><span>DNa02 &middot; steering</span><em id="steer-tag">&nbsp;</em></div>
+      <div class="steer-row">
+        <div class="tube l"><i id="dl"></i></div>
+        <div class="steer-mid">L &middot; R</div>
+        <div class="tube r"><i id="dr"></i></div>
       </div>
-      <p class="lede" style="margin-top:14px;font-size:14px">Each dot is one neuron firing. Coral is the eye, white
-      is the giant fibre. Watch the white row: it fires only after the coral rows do, because that is the order the
-      synapses run in.</p>
+      <div class="steer-num"><span>left <b id="dln">0</b> Hz</span><span><b id="drn">0</b> Hz right</span></div>
     </div>
+
+    <div class="cell">
+      <div class="cap"><span>Firing rate</span><em>Hz</em></div>
+      <div class="bars" id="bars"></div>
+      <p class="legend">scaled to 340 Hz &middot; <b>coral</b> = saturated, above 200</p>
+    </div>
+
+    <div class="cell">
+      <div class="cap"><span>Spike raster</span><em id="raster-tag">512 sampled</em></div>
+      <canvas id="raster" width="1120" height="336" role="img"
+              aria-label="A raster of 512 sampled neurons flashing as they spike"></canvas>
+    </div>
+  </div>
+</div>
+
+<div class="transport">
+  <button id="play" aria-keyshortcuts="Space">Play</button>
+  <input type="range" id="scrub" min="0" max="0" value="0" step="1" aria-label="Scrub through the episode">
+  <span class="clock" id="clock">0.00 / 0.00 s</span>
+  <div class="speeds" role="group" aria-label="Playback speed">
+    <button data-speed="0.25">0.25&times;</button>
+    <button data-speed="0.5">0.5&times;</button>
+    <button data-speed="1" aria-pressed="true">1&times;</button>
+    <button data-speed="2">2&times;</button>
+    <button data-speed="4">4&times;</button>
+  </div>
+</div>
+<p class="hint">space play/pause &middot; &larr; &rarr; step one frame &middot; 1&ndash;4 switch episode</p>
+
+<section>
+  <h2>Three numbers, each smaller than the last</h2>
+  <div class="ladder">
+    <div class="rung"><div class="n">166,700</div><div class="d">every neuron in a male fruit fly, from the connectome published this month</div></div>
+    <div class="rung"><div class="n">15,000</div><div class="d">the ones on a path from eye to leg. That is what runs above, at 2,334,959 signed synapses</div></div>
+    <div class="rung"><div class="n">275</div><div class="d">the LC10a tracking cells. Under two percent. Pull them and it goes blind to people</div></div>
+  </div>
+  <p>Switch to <b>LC10a cut</b> above. Every other neuron, every synapse and every weight is identical;
+    all that changes is that every synapse onto and out of those 275 cells is set to zero. Watch what
+    that does, because it is not what most people expect: <b>LC10a still fires</b> whenever somebody is in
+    view, peaking at seventy hertz, because the retina injects current into it directly and the eye is
+    not what we cut. It simply has nowhere to send it. DNa02 sits at zero on both sides for the whole
+    fifteen seconds, and the rover wanders.</p>
+</section>
+
+<section>
+  <h2>What you are looking at</h2>
+  <div class="cols">
+    <p><b>The wedge</b> is the fly's field of view, 98.4&deg; wide, split into the 24 retina columns the
+      brain actually reads. Each one lights with the fraction of it a person covers. That is the entire
+      sensory input &mdash; the brain never sees a pixel.</p>
+    <p><b>DNa02</b> is the steering cell. There is one per side, and the difference between them is the
+      turn command. Watch the two tubes trade places as a person crosses the field of view. Left eye,
+      left steering neuron, and no line of code in between. On the lesioned run both sit at zero for
+      the whole fifteen seconds.</p>
+    <p><b>The raster</b> is 512 neurons sampled at random out of the fifteen thousand, flashing when they
+      spike. It is a 20&nbsp;millisecond window, so a dot means at least one spike in that step.</p>
   </div>
 </section>
 
 <section>
-  <h2>Install it on your badge</h2>
-  <p class="lede">Four steps, about two minutes. You need Chrome or Edge and a USB cable that carries data.</p>
-  <div class="copyrow">
-    <button class="primary big" id="copy">Copy the app</button>
-    <span class="copied" id="copied">copied, 16 KB, paste it in step 3</span>
-  </div>
-  <div class="steps">
-    <div class="step"><div class="n">1</div><div>
-      <h3>Battery switch off, then plug in</h3>
-      <p>The switch is on the top edge. Use a cable that carries <b>data</b>, not a charge-only one. The badge
-      shows up as a serial device.</p></div></div>
-    <div class="step"><div class="n">2</div><div>
-      <h3>Open the badge IDE</h3>
-      <p><a href="https://badge.hackthenorth.com/ide" target="_blank" rel="noopener">badge.hackthenorth.com/ide</a>
-      in <b>Chrome or Edge</b>. Safari and Firefox do not support WebSerial, so the Connect button will do
-      nothing there.</p></div></div>
-    <div class="step"><div class="n">3</div><div>
-      <h3>Import app, paste, Connect, Push</h3>
-      <p>Click <b>Import app</b> and paste what you copied above, the whole thing including the
-      <code>--[==[badge-app</code> header at the top. Click <b>Connect</b> and pick the port named
-      <b>USB JTAG/serial debug unit</b>. Click <b>Push</b> and keep the cable in until it finishes.</p></div></div>
-    <div class="step"><div class="n">4</div><div>
-      <h3>Open FlyBadge from the launcher, and swat</h3>
-      <p>Switch the battery back on. FlyBadge is in your app grid. Swat at it: all six LEDs flash white and the fly
-      jumps. <b>B</b> removes the eye's wiring, <b>A</b> puts it back, <b>UP</b> and <b>DOWN</b> set how hard a
-      swat has to be. If it flinches on its own sitting on the table, press DOWN a few times.</p></div></div>
-  </div>
-</section>
-
-<section>
-  <h2>What is actually in it</h2>
-  <div class="facts">
-    <div><div class="v">150</div><div class="k">neurons, each a named cell in the connectome</div></div>
-    <div><div class="v">900</div><div class="k">synapses, with their measured counts and signs</div></div>
-    <div><div class="v">100 Hz</div><div class="k">membrane update, in integer arithmetic</div></div>
-    <div><div class="v">0</div><div class="k">lines of hand-written escape logic</div></div>
-  </div>
-  <p class="body">In 2026 the complete wiring diagram of a male fruit fly's brain was published: every neuron, every
-  synapse. Two cell types in the fly's eye, <b>LC4</b> and <b>LPLC2</b>, detect an object looming toward the fly.
-  They converge on one neuron, the <b>giant fibre</b>, whose single spike launches the escape jump. That is the
-  circuit that fires when you swat at a fly and miss.</p>
-  <p class="body">FlyBadge takes those cells and the synapses between them straight from the connectome, quantizes
-  the synapse counts to fit in the badge's 48 KB of memory, and simulates them as leaky integrate-and-fire neurons
-  on the badge's ESP32-C3. The badge has no light sensor, so the swat itself is the stimulus: the accelerometer sees
-  your hand arrive, and that current goes into LC4 and LPLC2. Everything after that is the fly's own wiring.</p>
-  <p class="body">It is a subsample. The full population is 311 cells and 20,607 synapses, which will not compile on
-  the badge. The cells kept are the ones that project most strongly toward the giant fibre, and the file says so on
-  its first line. The same arithmetic runs on a laptop in Python and in this page, and the three agree spike for
-  spike.</p>
+  <h2>What is the fly's and what is ours</h2>
+  <p>The steering is the claim, and it is untouched wiring: connection for connection, sign for sign,
+    strength for strength, straight out of neuPrint. Three things are ours and we label them everywhere.
+    <b>The encoder</b> that turns a camera into current on the eye neurons. <b>The read-out</b> that turns
+    descending-neuron firing rates into wheel commands. <b>The search behaviour</b> for when nobody is in
+    view, which is a state we wrote, not a circuit we found.</p>
+  <p class="note"><b>And one caveat worth saying out loud.</b> This page is a recording, not a live
+    simulation &mdash; fifteen thousand leaky integrate-and-fire neurons will not run in a browser tab. It
+    was produced by the same code in the repository, at 50&nbsp;Hz, and the replay files are checked in so
+    you can regenerate them yourself.</p>
 </section>
 
 <footer>
-  Built at Hack the North 2026, part of FlyBrain Rover: the same connectome, at 15,000 neurons, driving a robot toward
-  the person in front of it. Source and the rest of the project:
-  <a href="https://github.com/Duck-luv-pie/hunting-fly" id="repo" target="_blank" rel="noopener">GitHub</a> ·
-  Connectome: Berg et al., Cell, 2026 (neuPrint male-cns:v1.0) · LIF constants: Shiu et al., 2024.
+  <span>Berg et&nbsp;al., <i>Cell</i>, 2026 &middot; neuPrint male-cns:v1.0 &middot; Shiu et&nbsp;al. 2024 LIF constants</span>
+  <span><a href="badge.html">Put it on your badge</a> &middot; <a href="https://github.com/Duck-luv-pie/Frankenfly">Source</a></span>
 </footer>
 </div>
 
-<script type="text/plain" id="app">--[==[badge-app
-slug=flybadge
-name=FlyBadge
-icon=FLY
-api=2
-heap_kb=96
-wake_lock=1
-version=1.0
-author=FlyBrain Rover
-]==]
-
--- FlyBadge -- a real fruit fly's escape circuit, running on your badge.
---
--- The neurons and synapses below are not a model of a fly and not a trained network. They are measured
--- anatomy: a subsample of the male Drosophila CNS connectome (neuPrint male-cns:v1.0, Berg et al. 2026).
--- LC4 and LPLC2 are the looming detectors in the fly's optic lobe. They converge on the giant fibre, the
--- single neuron whose spike launches an escape jump. That convergence is what fires when you swat at a fly
--- and miss, and it is wired here exactly as it is wired in the animal, with the real synapse counts and
--- the real signs.
---
---   swat at the badge   -> the accelerometer sees it -> current into LC4 and LPLC2
---   giant fibre spikes  -> every LED flashes and the fly jumps
---   B                   -> zero the outgoing synapses of LC4 and LPLC2 (a lesion). Swat all you like.
---   A                   -> put them back
---   UP / DOWN           -> sensitivity, saved between runs
---
--- There is no flinch rule anywhere in this file. Deleting the lesion check would not leave a hidden
--- reflex behind, because the escape only ever came out of the wiring.
---
--- The membrane equation runs in integers: the ESP32-C3 has no floating point unit, so one unit is 1/256
--- of a millivolt and the decay factors are 8-bit fractions. badge/sim_fixed.py runs this same arithmetic
--- on a laptop against this same circuit file, which is how the constants were chosen.
-
--- flybadge_circuit.lua -- GENERATED by badge/export_badge_circuit.py, do not edit.
--- A subsample of the male Drosophila CNS connectome (neuPrint male-cns:v1.0): 150 neurons and
--- 900 synapses of the looming-to-escape pathway. Every synapse below is real, with its real sign;
--- the sampling is ours (54 of the LC4 cells, 55 of LPLC2, ranked by how much they project
--- toward the giant fibre) because the full population is 311 neurons and 20,607 synapses, which does
--- not compile in 48 KiB of Lua heap.
--- Neuron order: [1..54] LC4, [55..109] LPLC2, [110..121] LC10a, [122..148] intermediates, [149..150] giant fibre.
--- Synapse weight = byte value (signed, -127..127) times 5.8189 raw synapse counts.
-local C = {}
-C.n = 150
-C.n_lc4 = 54
-C.n_lplc2 = 55
-C.n_lc10a = 12
-C.eye_last = 109          -- neurons 1..eye_last are LC4/LPLC2: the lesion target
-C.lc10a_first = 110
-C.lc10a_last = 121
-C.gf_first = 149
-C.gf_last = 150
-C.n_edges = 900
-C.w_scale = 5.818898
--- outgoing edges grouped by source neuron; colptr[i]..colptr[i+1]-1 are neuron i's edges
-C.colptr = {0,9,16,25,29,38,43,50,55,60,66,75,81,88,96,102,107,114,119,129,136,145,152,157,166,173,180,183,191,200,204,208,214,222,231,236,242,249,257,263,270,277,283,289,294,299,306,310,316,322,330,337,342,348,354,364,370,379,388,399,405,415,421,425,432,440,446,451,457,462,472,480,486,493,499,504,508,511,522,528,531,536,538,544,552,559,564,572,575,582,590,593,596,601,610,620,627,631,634,638,647,653,659,664,667,677,677,679,683,688,688,689,689,689,689,689,689,689,689,689,689,689,702,711,719,728,735,740,752,760,766,776,787,796,806,809,817,823,832,841,844,848,855,864,870,880,885,889,892,895,900}
-C.post = "\3\11\21\24\124\132\138\144\150\18\53\124\132\138\141\150\1\21\24\41\124\132\138\144\150\124\132\138\150\7\19\39\52\132\138\139\141\150\36\124\132\138\150\5\28\132\138\139\141\150\128\134\147\148\149\127\128\134\148\149\19\132\138\139\141\150\1\21\24\51\124\132\138\144\150\25\132\138\139\141\150\14\45\48\127\128\134\149\13\15\30\44\127\128\134\149\9\33\127\128\134\149\51\124\132\138\150\4\24\53\124\132\138\150\124\132\138\139\150\5\10\34\39\124\132\138\139\141\150\22\128\134\146\147\148\149\3\11\24\31\41\124\132\144\150\20\40\128\134\147\148\149\27\124\132\138\150\1\3\11\17\51\124\132\138\150\12\50\124\132\138\139\150\29\43\128\134\147\148\149\132\138\150\7\19\34\132\138\139\141\150\20\22\26\43\54\128\134\147\149\14\128\134\149\124\132\138\150\33\44\127\128\134\149\9\15\32\48\127\128\134\149\5\10\28\50\124\132\139\141\150\4\124\132\138\150\6\23\124\132\138\150\28\124\132\138\139\141\150\29\40\128\134\146\147\148\149\5\19\37\132\138\150\29\38\128\134\147\148\149\3\11\124\132\138\144\150\127\128\134\147\148\149\29\40\128\134\146\149\32\127\128\134\149\13\127\128\134\149\47\127\128\134\147\148\149\127\128\148\149\13\15\127\128\134\149\10\124\132\138\141\150\12\25\28\124\132\139\141\150\11\16\18\53\124\138\150\5\124\132\138\150\17\124\132\138\144\150\40\127\128\134\148\149\61\65\66\67\74\78\96\105\134\149\67\71\102\123\134\149\15\72\78\94\99\103\134\140\149\64\70\79\86\87\101\138\144\150\63\70\73\83\89\95\100\101\138\144\150\73\81\90\95\144\150\55\57\67\71\78\80\82\94\134\149\66\71\72\84\134\149\4\109\144\150\58\70\87\98\101\144\150\55\66\67\71\80\102\134\149\62\65\67\134\142\149\55\56\102\105\149\66\71\91\105\134\149\56\74\96\103\149\59\64\87\89\95\100\101\135\144\150\56\62\68\78\105\134\140\149\57\62\103\134\140\149\59\86\89\93\129\138\150\61\69\75\105\134\149\74\85\108\134\149\45\62\96\149\109\144\150\55\57\61\68\71\76\94\99\103\140\149\58\70\87\100\144\150\134\142\149\87\100\135\144\150\134\149\58\90\95\138\144\150\57\62\82\94\96\108\134\149\71\72\75\94\97\134\149\73\89\104\138\150\58\59\64\70\79\81\144\150\90\95\150\86\88\93\129\138\144\150\60\83\88\92\95\101\135\150\68\80\149\2\18\144\73\89\138\144\150\55\57\66\68\85\96\108\134\149\60\70\77\81\88\90\93\138\144\150\57\68\75\84\94\140\149\67\85\134\149\64\144\150\57\78\134\149\59\60\70\77\79\81\101\144\150\58\70\100\138\144\150\56\65\67\105\134\149\57\72\134\140\149\86\144\150\66\67\68\71\74\75\97\102\134\149\22\149\66\75\142\149\1\21\59\60\144\113\123\124\126\129\132\133\138\141\142\144\145\149\150\122\127\128\129\134\136\142\149\150\122\130\132\135\138\144\145\150\122\123\126\129\136\138\142\149\150\122\123\129\136\142\149\150\123\128\134\143\149\8\122\123\127\131\132\133\134\142\143\149\150\122\123\131\133\138\142\149\150\122\123\124\143\149\150\122\123\128\129\132\138\142\145\149\150\122\123\124\128\129\131\133\138\142\149\150\122\123\128\129\132\142\145\149\150\122\123\127\128\129\132\142\143\149\150\124\140\150\122\123\125\129\138\142\149\150\12\132\138\141\144\150\122\123\124\128\129\132\142\149\150\10\18\37\49\50\52\138\141\150\127\133\149\7\137\139\150\122\123\129\131\134\149\150\122\123\127\130\134\142\147\149\150\3\122\124\129\130\150\122\123\124\129\132\133\138\142\149\150\128\134\147\148\149\8\146\148\149\146\147\149\122\123\142\122\124\129\130\138"
-C.w = "\2\2\2\2\7\5\3\3\9\2\2\3\7\2\3\11\2\2\2\2\8\5\2\3\14\3\4\4\9\3\3\2\2\7\4\3\2\14\3\3\4\3\10\3\3\3\3\4\4\9\9\4\2\2\12\3\7\5\3\8\2\4\3\4\3\11\2\2\2\2\4\5\4\2\15\3\5\2\1\2\8\3\2\3\8\7\4\11\3\1\2\1\6\7\5\9\1\2\2\8\6\8\2\2\4\3\11\2\2\2\7\3\2\14\3\2\2\2\9\2\2\2\2\2\4\3\2\4\11\2\5\4\2\4\2\10\1\1\2\2\2\7\3\2\9\2\2\5\3\4\3\10\2\2\2\3\11\3\2\2\2\2\7\2\2\10\2\2\3\3\1\3\9\2\2\3\3\3\3\6\3\3\6\3\3\2\4\3\3\2\7\2\2\2\2\2\5\2\2\10\2\5\4\9\5\2\2\6\2\2\4\5\3\11\1\2\3\2\5\4\3\6\2\2\2\2\2\2\2\4\7\2\5\3\2\8\3\2\4\4\2\7\3\3\5\2\1\3\10\2\2\6\4\2\3\2\7\2\2\2\5\3\12\2\2\4\3\5\4\10\2\1\5\2\2\2\7\2\2\2\2\3\8\2\2\6\2\2\8\1\4\4\3\7\2\5\2\1\8\2\3\3\2\2\2\6\4\3\3\7\2\1\4\2\2\6\2\4\3\4\2\13\2\2\2\2\2\3\1\9\1\2\2\2\4\3\7\2\2\4\3\11\2\5\2\4\2\11\2\2\4\4\2\9\2\4\2\3\2\2\2\2\2\7\2\2\2\1\4\5\1\3\2\2\2\3\2\3\6\4\2\2\2\2\2\2\7\7\2\4\2\2\2\1\2\2\1\3\8\2\2\2\1\4\10\3\1\1\2\2\1\2\2\1\7\2\2\3\3\3\8\2\2\4\2\3\2\2\2\2\5\6\2\3\1\2\2\1\3\6\2\2\2\2\2\7\3\1\3\2\8\2\2\2\2\2\5\2\2\2\2\7\3\3\3\1\2\2\2\2\3\8\2\2\2\2\2\3\2\9\3\2\3\3\2\6\2\2\2\3\2\2\6\2\2\2\2\2\8\2\2\2\2\10\3\1\2\2\2\5\3\2\3\2\2\2\2\1\2\2\3\8\2\1\2\4\5\7\2\2\5\2\2\2\3\5\2\4\2\2\2\1\2\9\1\2\2\2\2\2\2\8\2\2\2\2\2\2\8\2\2\2\2\5\2\2\2\2\2\2\5\7\2\2\11\3\2\1\2\2\2\8\2\2\2\2\2\2\2\8\2\2\8\2\2\2\1\1\2\2\5\2\1\2\2\2\2\2\2\5\2\3\2\2\2\2\2\4\3\9\1\2\2\2\2\2\5\2\2\2\5\1\3\5\2\2\3\6\2\2\2\2\3\2\3\4\6\2\2\3\2\2\8\2\2\2\2\2\6\3\2\2\2\3\2\1\6\2\2\2\2\2\2\1\2\2\8\2\2\2\2\2\6\2\2\2\2\3\1\3\7\3\8\2\2\18\1\4\6\3\10\127\4\6\2\3\19\4\5\92\14\249\251\253\254\252\249\253\185\250\250\254\253\254\254\251\229\228\250\251\249\254\254\235\222\248\253\252\251\205\2\6\13\2\11\5\11\8\3\1\48\3\11\5\2\3\2\2\13\37\4\2\7\5\9\40\251\252\230\238\226\254\239\248\236\229\12\4\2\7\3\9\13\5\1\2\44\253\252\225\234\222\239\242\235\232\5\16\3\11\4\6\6\2\40\5\234\252\212\252\251\253\253\254\252\238\233\1\2\2\2\2\41\11\8\3\5\5\8\3\2\38\2\2\2\2\2\2\2\3\37\234\253\219\2\2\4\37\7\9\3\2\2\24\11\2\3\7\3\2\3\2\27\8\255\251\252\254\254\224\5\2\4\4\2\2\2\2\2\30\3\2\2\6\32\2\2\3\32\3\2\31\1\2\2\3\3\3\2\1"   -- int8 as unsigned bytes
-
-
--- fixed point: 1 unit = 1/256 mV, one step = 10 ms. Must match badge/sim_fixed.py exactly.
-local V_REST, V_TH = -13312, -11520
-local SYN_DECAY = 35            -- exp(-dt/tau_syn) = exp(-10/5) as a 256ths fraction
-local GAIN_Q = 75               -- one int8 weight unit in membrane units
-local REFRAC = 1                -- one 10 ms step
-local STEPS_PER_TICK = 2        -- ticks are nominally 20 ms, the brain runs at 100 Hz
-local CUR_MAX = 4000            -- membrane units; threshold is about 1750
-local FLASH_MS, JUMP_MS, FLIRT_MS = 160, 260, 3000
-
-local byte, floor, abs = string.byte, math.floor, math.abs
-local V, G, REF, SYN = {}, {}, {}, {}
-local spk, spk_n = {}, 0
-local lesion, gain = false, 3
-local loom, last = 0, nil
-local gf_count, gf_rate, win_start = 0, 0, 0
-local flash_until, jump_until, flirt_until, last_beacon = 0, 0, 0, 0
-local tick_ms, led_state = 0, ""
-local ui = {}
-local radio_ok = false
-
-local function reset_brain()
-  for i = 1, C.n do V[i] = V_REST; G[i] = 0; REF[i] = 0; SYN[i] = 0 end
-  spk, spk_n = {}, 0
-end
-
--- One 10 ms step of leaky integrate-and-fire over the real connectome. Event driven: only the neurons
--- that fired last step push current, so the cost is spikes times out-degree, not the whole matrix.
-local function step(cur, flirt)
-  local syn, colptr, post, w = SYN, C.colptr, C.post, C.w
-  for i = 1, C.n do syn[i] = 0 end
-  for k = 1, spk_n do
-    local i = spk[k]
-    if not (lesion and i <= C.eye_last) then
-      for e = colptr[i] + 1, colptr[i + 1] do
-        local wv = byte(w, e)
-        if wv > 127 then wv = wv - 256 end
-        local p = byte(post, e)
-        syn[p] = syn[p] + wv * GAIN_Q
-      end
-    end
-  end
-  local n_new, fired = 0, {}
-  local eye_last, gf_first = C.eye_last, C.gf_first
-  local lc_a, lc_b = C.lc10a_first, C.lc10a_last
-  local gf_now = 0
-  for i = 1, C.n do
-    local g = floor(G[i] * SYN_DECAY / 256) + syn[i]
-    G[i] = g
-    if REF[i] > 0 then
-      REF[i] = REF[i] - 1
-      V[i] = V_REST
-    else
-      local inj = 0
-      if i <= eye_last then inj = cur
-      elseif flirt and i >= lc_a and i <= lc_b then inj = 2400 end
-      local v = V[i] + floor((V_REST - V[i] + g + inj) / 2)
-      if v >= V_TH then
-        V[i] = V_REST
-        REF[i] = REFRAC
-        n_new = n_new + 1
-        fired[n_new] = i
-        if i >= gf_first then gf_now = gf_now + 1 end
-      else
-        V[i] = v
-      end
-    end
-  end
-  spk, spk_n = fired, n_new
-  return gf_now
-end
-
-local function set_leds(r, g, b)
-  badge.led.set_all(r, g, b)
-  badge.led.show()
-end
-
-function on_enter(root)
-  gain = badge.store.get_int("gain", 3)
-  reset_brain()
-
-  local bg = badge.ui.box(root, 320, 240)
-  bg:style({ bg_color = 0x000000, border_width = 0 })
-  bg:set_pos(0, 0)
-
-  local title = badge.ui.label(root, "FlyBadge")
-  title:style({ text_color = 0xFF715B, text_font = 20 })
-  title:align("top_left", 10, 8)
-
-  ui.sub = badge.ui.label(root, C.n .. " real neurons   " .. C.n_edges .. " real synapses")
-  ui.sub:style({ text_color = 0x888888, text_font = 14 })
-  ui.sub:align("top_left", 10, 32)
-
-  ui.fly = badge.ui.label(root, "***")
-  ui.fly:style({ text_color = 0xFFFFFF, text_font = 24 })
-  ui.fly:set_pos(140, 110)
-
-  ui.gf = badge.ui.label(root, "giant fibre  0 Hz")
-  ui.gf:style({ text_color = 0xFFFFFF, text_font = 20 })
-  ui.gf:align("top_left", 10, 60)
-
-  ui.state = badge.ui.label(root, "INTACT")
-  ui.state:style({ text_color = 0x44DD88, text_font = 18 })
-  ui.state:align("top_left", 10, 86)
-
-  ui.drive = badge.ui.bar(root, 0, CUR_MAX, 0)
-  ui.drive:set_size(300, 10)
-  ui.drive:set_pos(10, 160)
-  ui.drive:style({ bg_color = 0x222222 })
-
-  ui.perf = badge.ui.label(root, "")
-  ui.perf:style({ text_color = 0x666666, text_font = 14 })
-  ui.perf:align("bottom_left", 10, -26)
-
-  ui.hint = badge.ui.label(root, "swat me    B lesion    A restore    UP/DOWN gain")
-  ui.hint:style({ text_color = 0x888888, text_font = 14 })
-  ui.hint:align("bottom_left", 10, -8)
-
-  badge.led.clear(); badge.led.show()
-  led_state = "o"
-  win_start = badge.sys.ms()
-
-  radio_ok = badge.radio.enable()
-  if radio_ok then
-    badge.radio.on_recv(function(mac, rssi, payload)
-      if payload == "FLY1" then flirt_until = badge.sys.ms() + FLIRT_MS end
-    end)
-  end
-end
-
-function on_tick()
-  local t0 = badge.sys.ms()
-
-  -- Looming, from the only sensor the badge has. There is no light sensor on this hardware, so the
-  -- stimulus is the swat itself: a hand coming down moves the badge, and the accelerometer reports it.
-  -- Per-axis change catches a rotation as well as a shove, which a magnitude alone would miss.
-  local x, y, z = badge.sensor.accel()
-  local jerk = 0
-  if x then
-    if last then jerk = abs(x - last[1]) + abs(y - last[2]) + abs(z - last[3])
-    else last = {} end
-    last[1], last[2], last[3] = x, y, z
-  end
-  if badge.sensor.shake() then jerk = jerk + 400 end
-  loom = floor(loom * 3 / 4) + jerk        -- leaky, so one swat drives the eye for a few ticks
-  local cur = loom * gain
-  if cur > CUR_MAX then cur = CUR_MAX end
-
-  local now = badge.sys.ms()
-  local flirt = now < flirt_until
-  local gf_tick = 0
-  for _ = 1, STEPS_PER_TICK do
-    gf_tick = gf_tick + step(cur, flirt)
-  end
-  gf_count = gf_count + gf_tick
-  if gf_tick > 0 then                      -- this tick's spikes, not the whole reporting window
-    flash_until, jump_until = now + FLASH_MS, now + JUMP_MS
-  end
-
-  -- LEDs: white on an escape spike, pink while another badge is nearby, one red dot when lesioned.
-  -- Written only when the state changes, so an idle tick costs no native calls.
-  local want = (now < flash_until) and "f" or (flirt and "p" or (lesion and "l" or "o"))
-  if want ~= led_state then
-    led_state = want
-    if want == "f" then set_leds(255, 255, 255)
-    elseif want == "p" then set_leds(120, 20, 60)
-    elseif want == "l" then badge.led.clear(); badge.led.set(1, 60, 0, 0); badge.led.show()
-    else badge.led.clear(); badge.led.show() end
-  end
-  ui.drive:set_value(cur)
-
-  ui.fly:set_pos(140, now < jump_until and 70 or 110)
-
-  if radio_ok and now - last_beacon > 1000 then
-    last_beacon = now
-    badge.radio.send("FLY1")
-  end
-
-  tick_ms = badge.sys.ms() - t0
-  if now - win_start >= 1000 then
-    gf_rate = floor(gf_count * 1000 / (now - win_start) / 2)
-    gf_count, win_start = 0, now
-    ui.gf:set_text("giant fibre  " .. gf_rate .. " Hz")
-    local st = badge.sys.stats()
-    ui.perf:set_text(tick_ms .. " ms/tick   " .. floor(tick_ms / STEPS_PER_TICK) .. " ms/step   heap "
-      .. floor(st.lua_used / 1024) .. "k   gain " .. gain)
-  end
-end
-
-function on_button(button, kind)
-  if kind ~= badge.input.KIND.PRESSED then return end
-  local B = badge.input.BUTTON
-  if button == B.B then
-    lesion = true
-    ui.state:set_text("LC4 + LPLC2 LESIONED")
-    ui.state:style({ text_color = 0xFF4444 })
-  elseif button == B.A then
-    lesion = false
-    ui.state:set_text("INTACT")
-    ui.state:style({ text_color = 0x44DD88 })
-  elseif button == B.UP then
-    gain = math.min(40, gain + 1)
-  elseif button == B.DOWN then
-    gain = math.max(1, gain - 1)
-  elseif button == B.START then
-    reset_brain()
-    loom = 0
-  end
-end
-
-function on_exit()
-  badge.store.set_int("gain", gain)
-  badge.led.clear()
-  badge.led.show()
-  if radio_ok then badge.radio.on_recv(nil); badge.radio.disable() end
-end
-
--- Test hook. badge/test_lua.lua runs this exact step() against badge/sim_fixed.py to confirm the
--- integer arithmetic agrees spike for spike. Nothing on the badge ever reads it.
-_G.__flybadge_test = {
-  C = C,
-  step = function(cur, flirt) return step(cur, flirt) end,
-  reset = reset_brain,
-  spikes = function() return spk, spk_n end,
-  set_lesion = function(v) lesion = v end,
-}
-</script>
 <script>
-const DATA = {"n":150,"n_lc4":54,"n_lplc2":55,"n_lc10a":12,"eye_last":109,"lc10a_first":110,"lc10a_last":121,"gf_first":149,"gf_last":150,"n_edges":900,"colptr":[0,9,16,25,29,38,43,50,55,60,66,75,81,88,96,102,107,114,119,129,136,145,152,157,166,173,180,183,191,200,204,208,214,222,231,236,242,249,257,263,270,277,283,289,294,299,306,310,316,322,330,337,342,348,354,364,370,379,388,399,405,415,421,425,432,440,446,451,457,462,472,480,486,493,499,504,508,511,522,528,531,536,538,544,552,559,564,572,575,582,590,593,596,601,610,620,627,631,634,638,647,653,659,664,667,677,677,679,683,688,688,689,689,689,689,689,689,689,689,689,689,689,702,711,719,728,735,740,752,760,766,776,787,796,806,809,817,823,832,841,844,848,855,864,870,880,885,889,892,895,900],"post":"AwsVGHyEipCWEjV8hIqNlgEVGCl8hIqQlnyEipYHEyc0hIqLjZYkfISKlgUchIqLjZaAhpOUlX+AhpSVE4SKi42WARUYM3yEipCWGYSKi42WDi0wf4CGlQ0PHix/gIaVCSF/gIaVM3yEipYEGDV8hIqWfISKi5YFCiInfISKi42WFoCGkpOUlQMLGB8pfISQlhQogIaTlJUbfISKlgEDCxEzfISKlgwyfISKi5YdK4CGk5SVhIqWBxMihIqLjZYUFhorNoCGk5UOgIaVfISKliEsf4CGlQkPIDB/gIaVBQocMnyEi42WBHyEipYGF3yEipYcfISKi42WHSiAhpKTlJUFEyWEipYdJoCGk5SVAwt8hIqQln+AhpOUlR0ogIaSlSB/gIaVDX+AhpUvf4CGk5SVf4CUlQ0Pf4CGlQp8hIqNlgwZHHyEi42WCxASNXyKlgV8hIqWEXyEipCWKH+AhpSVPUFCQ0pOYGmGlUNHZnuGlQ9ITl5jZ4aMlUBGT1ZXZYqQlj9GSVNZX2RlipCWSVFaX5CWNzlDR05QUl6GlUJHSFSGlQRtkJY6RldiZZCWN0JDR1BmhpU+QUOGjpU3OGZplUJHW2mGlThKYGeVO0BXWV9kZYeQljg+RE5phoyVOT5nhoyVO1ZZXYGKlj1FS2mGlUpVbIaVLT5glW2Qljc5PURHTF5jZ4yVOkZXZJCWho6VV2SHkJaGlTpaX4qQljk+Ul5gbIaVR0hLXmGGlUlZaIqWOjtARk9RkJZaX5ZWWF2BipCWPFNYXF9lh5ZEUJUCEpBJWYqQljc5QkRVYGyGlTxGTVFYWl2KkJY5REtUXoyVQ1WGlUCQljlOhpU7PEZNT1FlkJY6RmSKkJY4QUNphpU5SIaMlVaQlkJDREdKS2FmhpUWlUJLjpUBFTs8kHF7fH6BhIWKjY6QkZWWen+AgYaIjpWWeoKEh4qQkZZ6e36BiIqOlZZ6e4GIjpWWe4CGj5UIent/g4SFho6PlZZ6e4OFio6Vlnp7fI+Vlnp7gIGEio6RlZZ6e3yAgYOFio6Vlnp7gIGEjpGVlnp7f4CBhI6PlZZ8jJZ6e32Bio6VlgyEio2Qlnp7fICBhI6VlgoSJTEyNIqNln+FlQeJi5Z6e4GDhpWWent/goaOk5WWA3p8gYKWent8gYSFio6VloCGk5SVCJKUlZKTlXp7jnp8gYKK","w":"AgICAgcFAwMJAgIDBwIDCwICAgIIBQIDDgMEBAkDAwICBwQDAg4DAwQDCgMDAwMEBAkJBAICDAMHBQMIAgQDBAMLAgICAgQFBAIPAwUCAQIIAwIDCAcECwMBAgEGBwUJAQICCAYIAgIEAwsCAgIHAwIOAwICAgkCAgICAgQDAgQLAgUEAgQCCgEBAgICBwMCCQICBQMEAwoCAgIDCwMCAgICBwICCgICAwMBAwkCAgMDAwMGAwMGAwMCBAMDAgcCAgICAgUCAgoCBQQJBQICBgICBAUDCwECAwIFBAMGAgICAgICAgQHAgUDAggDAgQEAgcDAwUCAQMKAgIGBAIDAgcCAgIFAwwCAgQDBQQKAgEFAgICBwICAgIDCAICBgICCAEEBAMHAgUCAQgCAwMCAgIGBAMDBwIBBAICBgIEAwQCDQICAgICAwEJAQICAgQDBwICBAMLAgUCBAILAgIEBAIJAgQCAwICAgICBwICAgEEBQEDAgICAwIDBgQCAgICAgIHBwIEAgICAQICAQMIAgICAQQKAwEBAgIBAgIBBwICAwMDCAICBAIDAgICAgUGAgMBAgIBAwYCAgICAgcDAQMCCAICAgICBQICAgIHAwMDAQICAgIDCAICAgICAwIJAwIDAwIGAgICAwICBgICAgICCAICAgIKAwECAgIFAwIDAgICAgECAgMIAgECBAUHAgIFAgICAwUCBAICAgECCQECAgICAgIIAgICAgICCAICAgIFAgICAgICBQcCAgsDAgECAgIIAgICAgICAggCAggCAgIBAQICBQIBAgICAgICBQIDAgICAgIEAwkBAgICAgIFAgICBQEDBQICAwYCAgICAwIDBAYCAgMCAggCAgICAgYDAgICAwIBBgICAgICAgECAggCAgICAgYCAgICAwEDBwMIAgISAQQGAwp/BAYCAxMEBVwO+fv9/vz5/bn6+v79/v775eT6+/n+/uve+P38+80CBg0CCwULCAMBMAMLBQIDAgINJQQCBwUJKPv85u7i/u/47OUMBAIHAwkNBQECLP384ere7/Lr6AUQAwsEBgYCKAXq/NT8+/39/vzu6QECAgICKQsIAwUFCAMCJgICAgICAgIDJer92wICBCUHCQMCAhgLAgMHAwIDAhsI//v8/v7gBQIEBAICAgICHgMCAgYgAgIDIAMCHwECAgMDAwIB"};
-(function(){
-  const b64=s=>{const bin=atob(s);const a=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)a[i]=bin.charCodeAt(i);return a;};
-  const POST=b64(DATA.post), WB=b64(DATA.w), CP=DATA.colptr, N=DATA.n;
-  const W=new Int8Array(WB.length); for(let i=0;i<WB.length;i++)W[i]=WB[i]>127?WB[i]-256:WB[i];
-  const V_REST=-13312, V_TH=-11520, SYN_DECAY=35, GAIN_Q=75, REFRAC=1, CUR_MAX=4000;
-  const V=new Int32Array(N+1), G=new Int32Array(N+1), REF=new Int32Array(N+1), SYN=new Int32Array(N+1);
-  let spk=new Int32Array(N+1), spkN=0, nxt=new Int32Array(N+1);
-  let lesion=false, loom=0, escapes=0, gfWin=0, gfRate=0, winT=0;
-  for(let i=1;i<=N;i++)V[i]=V_REST;
-  function step(cur){
-    SYN.fill(0);
-    for(let k=0;k<spkN;k++){const i=spk[k]; if(lesion&&i<=DATA.eye_last)continue;
-      for(let e=CP[i-1];e<CP[i];e++)SYN[POST[e]]+=W[e]*GAIN_Q;}
-    let n=0,gf=0;
-    for(let i=1;i<=N;i++){
-      const g=Math.floor(G[i]*SYN_DECAY/256)+SYN[i]; G[i]=g;
-      if(REF[i]>0){REF[i]--;V[i]=V_REST;continue;}
-      const inj=i<=DATA.eye_last?cur:0;
-      const v=V[i]+Math.floor((V_REST-V[i]+g+inj)/2);
-      if(v>=V_TH){V[i]=V_REST;REF[i]=REFRAC;nxt[n++]=i;if(i>=DATA.gf_first)gf++;} else V[i]=v;
-    }
-    const t=spk;spk=nxt;nxt=t;spkN=n; return gf;
-  }
-  const cv=document.getElementById('raster'),cx=cv.getContext('2d');
-  cx.fillStyle='#050505';cx.fillRect(0,0,cv.width,cv.height);
-  const $=id=>document.getElementById(id);
-  const gfTxt=$('gfTxt'),stTxt=$('stTxt'),fly=$('fly'),bar=$('bar'),rGf=$('rGf'),rEsc=$('rEsc'),rDrv=$('rDrv');
-  const leds=[],POS=[[1,'r',0],[2,'r',1],[3,'r',2],[4,'l',2],[5,'l',1],[6,'l',0]],badge=$('badge');
-  POS.forEach(([,side,row])=>{const d=document.createElement('div');d.className='led';
-    d.style[side==='l'?'left':'right']='13px';d.style.top=(22+row*44)+'%';badge.appendChild(d);leds.push(d);});
-  function setLeds(c){for(const d of leds){d.style.background=c;d.style.boxShadow=c==='#1a1512'?'none':'0 0 9px '+c;}}
-  setLeds('#1a1512');
-  let col=0,flashUntil=0,jumpUntil=0;
-  function draw(){
-    const x=col%cv.width; cx.fillStyle='#050505';cx.fillRect(x,0,3,cv.height); const h=cv.height/N;
-    for(let k=0;k<spkN;k++){const i=spk[k];
-      cx.fillStyle=i>=DATA.gf_first?'#ffffff':(i>=DATA.lc10a_first&&i<=DATA.lc10a_last)?'#5aa9ff':i<=DATA.eye_last?'#FF715B':'#8a8580';
-      cx.fillRect(x,(i-1)*h,i>=DATA.gf_first?2.5:1.6,i>=DATA.gf_first?3.5:Math.max(1.2,h));}
-    col+=1.6;
-  }
-  let acc=0,last=performance.now();
-  function frame(now){
-    const dt=Math.min(100,now-last);last=now;acc+=dt;let gfTick=0;
-    while(acc>=10){loom=Math.floor(loom*3/4);const cur=Math.min(CUR_MAX,loom*3);gfTick+=step(cur);acc-=10;draw();}
-    gfWin+=gfTick; if(gfTick>0){flashUntil=now+170;jumpUntil=now+280;escapes+=gfTick;}
-    setLeds(now<flashUntil?'#ffffff':(lesion?'#3a0f0c':'#1a1512'));
-    fly.style.top=now<jumpUntil?'26%':'47%';
-    const drive=Math.min(CUR_MAX,loom*3); bar.style.width=(100*drive/CUR_MAX)+'%';
-    if(now-winT>=1000){gfRate=Math.round(gfWin/2);gfWin=0;winT=now;
-      gfTxt.textContent='giant fibre  '+gfRate+' Hz';gfTxt.style.color=gfRate>0?'#FF715B':'#e8e6e4';
-      rGf.textContent=gfRate;rGf.style.color=gfRate>0?'#FF715B':'#e8e6e4';rEsc.textContent=escapes;rDrv.textContent=drive;}
-    requestAnimationFrame(frame);
-  }
-  requestAnimationFrame(frame);
-  function swat(){loom+=900;}
-  $('swat').addEventListener('click',swat);
-  $('bLes').addEventListener('click',()=>{lesion=true;stTxt.textContent='EYE WIRING CUT';stTxt.style.color='#FF4444';});
-  $('aRes').addEventListener('click',()=>{lesion=false;stTxt.textContent='INTACT';stTxt.style.color='#44DD88';});
-  document.addEventListener('keydown',e=>{const k=e.key.toLowerCase();
-    if(k===' '&&e.target===document.body){e.preventDefault();swat();}
-    if(k==='b')$('bLes').click(); if(k==='a')$('aRes').click();});
-  setTimeout(swat,700);
+"use strict";
+const HFOV = 98.43 * Math.PI / 180, NCOL = 24;
+const GROUP_META = {
+  LC10a_L:["LC10a L","eye"], LC10a_R:["LC10a R","eye"],
+  LC4_L:["LC4 L","eye"], LC4_R:["LC4 R","eye"],
+  LPLC2_L:["LPLC2 L","eye"], LPLC2_R:["LPLC2 R","eye"],
+  DNa02_L:["DNa02 L","mot"], DNa02_R:["DNa02 R","mot"],
+  DNa01_L:["DNa01 L","mot"], DNa01_R:["DNa01 R","mot"],
+  DNp09:["DNp09","mot"], GF:["giant fibre","mot"],
+  PAM:["PAM","dop"], PPL1:["PPL1","dop"],
+};
+const BAR_MAX = 340;      // real peaks reach 335 Hz; nothing should peg the bar
+const SATURATED = 200;    // above this a cell is saturated and its rate stops meaning much
 
-  // the install: copy the badge app, header included, to the clipboard
-  const src=$('app').textContent;
-  $('copy').addEventListener('click',async()=>{
-    try{await navigator.clipboard.writeText(src);}
-    catch(e){const t=document.createElement('textarea');t.value=src;document.body.appendChild(t);t.select();document.execCommand('copy');t.remove();}
-    const c=$('copied');c.classList.add('on');setTimeout(()=>c.classList.remove('on'),2600);
+const $ = id => document.getElementById(id);
+const arena = $("arena"), actx = arena.getContext("2d");
+const raster = $("raster"), rctx = raster.getContext("2d");
+
+let ep = null, idx = 0, playing = false, speed = 1, acc = 0, last = 0;
+let decay = null, trail = [], barEls = {}, catalogue = [], current = -1;
+
+/* ---------- data ---------- */
+function unb64(s){
+  const bin = atob(s), a = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) a[i] = bin.charCodeAt(i);
+  return a;
+}
+
+async function loadEpisode(i){
+  const item = catalogue[i];
+  if (!item) return;
+  current = i;
+  [...$("episodes").children].forEach((b, j) => b.setAttribute("aria-pressed", String(j === i)));
+  $("ep-blurb").textContent = item.blurb;
+
+  const d = await (await fetch("data/" + item.file)).json();
+  d.presB = unb64(d.pres); d.spkB = unb64(d.spk);
+  const rb = unb64(d.rates), sc = d.rate_scale || 10;
+  d.ratesHz = new Float32Array(rb.length >> 1);
+  for (let k = 0; k < d.ratesHz.length; k++)
+    d.ratesHz[k] = (rb[k * 2] | (rb[k * 2 + 1] << 8)) / sc;
+  d.stride = (d.nviz + 7) >> 3;
+  ep = d;
+  decay = new Float32Array(d.nviz);
+  trail = [];
+  idx = 0; acc = 0;
+  $("scrub").max = String(d.n - 1);
+  $("scrub").value = "0";
+  buildBars();
+  fitCanvas();
+  $("arena-tag").textContent = d.lesion.length ? d.lesion.join(" + ") + " removed" : "intact wiring";
+  $("raster-tag").textContent = d.nviz + " of " + d.neurons.toLocaleString();
+  draw();
+}
+
+/* ---------- bars ---------- */
+function buildBars(){
+  const host = $("bars");
+  host.textContent = "";
+  barEls = {};
+  for (const g of ep.groups){
+    const [label, kind] = GROUP_META[g] || [g, "eye"];
+    const row = document.createElement("div");
+    row.className = "bar " + kind;
+    row.innerHTML = '<span class="nm"></span><span class="tr"><i></i></span><span class="hz">0</span>';
+    row.querySelector(".nm").textContent = label;
+    host.appendChild(row);
+    barEls[g] = {row, fill: row.querySelector("i"), hz: row.querySelector(".hz")};
+  }
+}
+
+/* ---------- drawing ---------- */
+function world(x, y, W, H, L){
+  return [ (x + L / 2) / L * W, (1 - (y + L / 2) / L) * H ];
+}
+
+function draw(){
+  if (!ep) return;
+  const i = Math.min(idx | 0, ep.n - 1);
+  const W = arena.width, H = arena.height, L = ep.L;
+  const px = Math.min(W, H) / L;               // pixels per metre
+  const ox = (W - L * px) / 2, oy = (H - L * px) / 2;
+  const toS = (x, y) => [ ox + (x + L / 2) * px, oy + (L / 2 - y) * px ];
+
+  actx.fillStyle = "#0d0c0b"; actx.fillRect(0, 0, W, H);
+
+  /* floor grid, one metre */
+  actx.strokeStyle = "#171412"; actx.lineWidth = 1;
+  for (let m = Math.ceil(-L / 2); m <= L / 2; m++){
+    const [gx] = toS(m, 0), [, gy] = toS(0, m);
+    actx.beginPath(); actx.moveTo(gx, oy); actx.lineTo(gx, oy + L * px); actx.stroke();
+    actx.beginPath(); actx.moveTo(ox, gy); actx.lineTo(ox + L * px, gy); actx.stroke();
+  }
+  actx.strokeStyle = "#2b2724"; actx.lineWidth = 2;
+  actx.strokeRect(ox, oy, L * px, L * px);
+
+  const rx = ep.rx[i] / 1000, ry = ep.ry[i] / 1000, yaw = ep.yaw[i] / 1000;
+  const [sx, sy] = toS(rx, ry);
+
+  /* field of view, one wedge per retina column, lit by presence.
+     clipped to the floor: the wedge reaches further than the arena from a corner. */
+  const base = i * NCOL;
+  actx.save();
+  actx.beginPath(); actx.rect(ox, oy, L * px, L * px); actx.clip();
+  const reach = L * 0.72 * px;
+  for (let c = 0; c < NCOL; c++){
+    const v = ep.presB[base + c] / 255;
+    const a0 = yaw - (-HFOV / 2 + (c) / NCOL * HFOV);
+    const a1 = yaw - (-HFOV / 2 + (c + 1) / NCOL * HFOV);
+    actx.beginPath();
+    actx.moveTo(sx, sy);
+    actx.lineTo(sx + Math.cos(-a0) * reach, sy + Math.sin(-a0) * reach);
+    actx.lineTo(sx + Math.cos(-a1) * reach, sy + Math.sin(-a1) * reach);
+    actx.closePath();
+    actx.fillStyle = v > 0.001
+      ? "rgba(90,169,255," + (0.10 + 0.62 * Math.min(1, v * 2.4)).toFixed(3) + ")"
+      : "rgba(90,169,255,0.030)";
+    actx.fill();
+  }
+  actx.strokeStyle = "rgba(90,169,255,0.22)"; actx.lineWidth = 1;
+  for (const s of [-1, 1]){
+    const a = yaw - s * HFOV / 2;
+    actx.beginPath(); actx.moveTo(sx, sy);
+    actx.lineTo(sx + Math.cos(-a) * reach, sy + Math.sin(-a) * reach); actx.stroke();
+  }
+  actx.restore();
+
+  /* people */
+  for (let h = 0; h < ep.nh; h++){
+    const hxv = ep.hx[h][i];
+    if (hxv === -32768) continue;
+    const [px2, py2] = toS(hxv / 1000, ep.hy[h][i] / 1000);
+    const r = (ep.hr[h] || 0.3) * px;
+    actx.beginPath(); actx.arc(px2, py2, r, 0, Math.PI * 2);
+    actx.fillStyle = "rgba(68,221,136,0.16)"; actx.fill();
+    actx.strokeStyle = "#44DD88"; actx.lineWidth = 2; actx.stroke();
+  }
+
+  /* trail */
+  trail.push([sx, sy]);
+  if (trail.length > 220) trail.shift();
+  if (trail.length > 1){
+    actx.lineWidth = 2; actx.lineCap = "round";
+    for (let t = 1; t < trail.length; t++){
+      actx.strokeStyle = "rgba(255,113,91," + (0.42 * t / trail.length).toFixed(3) + ")";
+      actx.beginPath(); actx.moveTo(trail[t - 1][0], trail[t - 1][1]);
+      actx.lineTo(trail[t][0], trail[t][1]); actx.stroke();
+    }
+  }
+
+  /* the rover */
+  const [bl, bw] = ep.lw;
+  actx.save(); actx.translate(sx, sy); actx.rotate(-yaw);
+  actx.fillStyle = "#FF715B";
+  actx.fillRect(-bl / 2 * px, -bw / 2 * px, bl * px, bw * px);
+  actx.fillStyle = "#ffd2c8";
+  actx.fillRect((bl / 2 - 0.06) * px, -bw / 2 * px, 0.06 * px, bw * px);
+  actx.restore();
+
+  /* read-outs: DOM, so they stay crisp at any width */
+  const fwd = ep.fwd[i] / 1000, trn = ep.trn[i] / 1000;
+  $("ro-fwd").textContent = fwd.toFixed(3);
+  $("ro-turn").textContent = (trn >= 0 ? "+" : "") + trn.toFixed(3);
+
+  /* which retina column is brightest, and how far the nearest visible person is */
+  let best = -1, bestv = 0, sum = 0, cen = 0;
+  for (let c = 0; c < NCOL; c++){
+    const v = ep.presB[base + c];
+    if (v > bestv){ bestv = v; best = c; }
+    sum += v; cen += c * v;
+  }
+  if (bestv > 8){
+    const col = cen / sum;
+    const az = (-HFOV / 2 + (col + 0.5) / NCOL * HFOV) * 180 / Math.PI;
+    $("ro-eye").textContent = (az >= 0 ? "+" : "") + az.toFixed(1) + "\u00b0";
+  } else {
+    $("ro-eye").textContent = "nobody in view";
+  }
+  let near = Infinity;
+  for (let h = 0; h < ep.nh; h++){
+    const hxv = ep.hx[h][i];
+    if (hxv === -32768) continue;
+    near = Math.min(near, Math.hypot(hxv / 1000 - rx, ep.hy[h][i] / 1000 - ry));
+  }
+  $("ro-range").textContent = isFinite(near) ? near.toFixed(2) + " m" : "\u2014";
+
+  drawRaster(i);
+  drawRates(i);
+
+  $("scrub").value = String(i);
+  $("clock").textContent = (i * ep.dt).toFixed(2) + " / " + ((ep.n - 1) * ep.dt).toFixed(2) + " s";
+}
+
+function drawRaster(i){
+  const W = raster.width, H = raster.height, n = ep.nviz;
+  const cols = 32, rows = Math.ceil(n / cols);
+  const cw = W / cols, ch = H / rows;
+  const base = i * ep.stride;
+  for (let k = 0; k < n; k++){
+    const lit = (ep.spkB[base + (k >> 3)] >> (k & 7)) & 1;
+    decay[k] = lit ? 1 : decay[k] * 0.80;
+  }
+  rctx.fillStyle = "#121110"; rctx.fillRect(0, 0, W, H);
+  for (let k = 0; k < n; k++){
+    const v = decay[k];
+    if (v < 0.03) continue;
+    const cx = (k % cols) * cw + cw / 2, cy = ((k / cols) | 0) * ch + ch / 2;
+    rctx.fillStyle = "rgba(90,169,255," + v.toFixed(3) + ")";
+    rctx.beginPath(); rctx.arc(cx, cy, Math.min(cw, ch) * 0.28, 0, Math.PI * 2); rctx.fill();
+  }
+}
+
+function drawRates(i){
+  const base = i * ep.groups.length;
+  let l = 0, r = 0;
+  ep.groups.forEach((g, k) => {
+    const hz = ep.ratesHz[base + k];
+    const b = barEls[g];
+    if (!b) return;
+    b.fill.style.width = Math.min(100, hz / BAR_MAX * 100).toFixed(1) + "%";
+    b.hz.textContent = hz.toFixed(0);
+    b.row.classList.toggle("on", hz > 2);
+    b.row.classList.toggle("dead", hz === 0);
+    b.row.classList.toggle("sat", hz >= SATURATED);
+    if (g === "DNa02_L") l = hz;
+    if (g === "DNa02_R") r = hz;
   });
+  $("dl").style.width = Math.min(100, l / BAR_MAX * 100).toFixed(1) + "%";
+  $("dr").style.width = Math.min(100, r / BAR_MAX * 100).toFixed(1) + "%";
+  $("dln").textContent = l.toFixed(0); $("drn").textContent = r.toFixed(0);
+  const d = l - r;
+  $("steer-tag").textContent = Math.abs(d) < 4 ? "balanced"
+    : (d > 0 ? "← turning left" : "turning right →");
+}
+
+/* ---------- responsive canvas ---------- */
+const STACKED = matchMedia("(max-width: 880px)");
+function fitCanvas(){
+  const [w, h] = STACKED.matches ? [1000, 1000] : [1280, 800];
+  if (arena.width !== w || arena.height !== h){ arena.width = w; arena.height = h; }
+}
+STACKED.addEventListener("change", () => { fitCanvas(); draw(); });
+addEventListener("resize", () => { fitCanvas(); draw(); });
+
+/* ---------- transport ---------- */
+function setPlaying(p){
+  playing = p;
+  $("play").textContent = p ? "Pause" : "Play";
+  $("play").setAttribute("aria-pressed", String(p));
+  if (p){ last = performance.now(); requestAnimationFrame(tick); }
+}
+
+function tick(now){
+  if (!playing) return;
+  const dtms = Math.min(120, now - last); last = now;
+  if (ep){
+    acc += dtms * speed / 1000;
+    const step = ep.dt;
+    let moved = false;
+    while (acc >= step){ acc -= step; idx++; moved = true; }
+    if (idx >= ep.n){ idx = 0; trail = []; }
+    if (moved) draw();
+  }
+  requestAnimationFrame(tick);
+}
+
+$("play").onclick = () => setPlaying(!playing);
+$("scrub").oninput = e => { idx = +e.target.value; trail = []; acc = 0; draw(); };
+document.querySelectorAll(".speeds button").forEach(b => {
+  b.onclick = () => {
+    speed = parseFloat(b.dataset.speed);
+    document.querySelectorAll(".speeds button")
+      .forEach(o => o.setAttribute("aria-pressed", String(o === b)));
+  };
+});
+addEventListener("keydown", e => {
+  if (e.target.matches("input,button") && e.key !== " ") return;
+  if (e.key === " "){ e.preventDefault(); setPlaying(!playing); }
+  else if (e.key === "ArrowRight"){ setPlaying(false); idx = Math.min(ep.n - 1, idx + 1); draw(); }
+  else if (e.key === "ArrowLeft"){ setPlaying(false); idx = Math.max(0, idx - 1); draw(); }
+  else if (e.key >= "1" && e.key <= "4"){ loadEpisode(+e.key - 1); }
+});
+
+/* ---------- boot ---------- */
+(async () => {
+  catalogue = await (await fetch("data/index.json")).json();
+  const host = $("episodes");
+  catalogue.forEach((item, i) => {
+    const b = document.createElement("button");
+    b.className = "ep" + (item.lesion.length ? " cut" : "");
+    b.type = "button";
+    b.textContent = item.label;
+    b.setAttribute("aria-pressed", "false");
+    b.onclick = () => loadEpisode(i);
+    host.appendChild(b);
+  });
+  await loadEpisode(0);
+  if (!matchMedia("(prefers-reduced-motion: reduce)").matches) setPlaying(true);
 })();
 </script>
 </body>
