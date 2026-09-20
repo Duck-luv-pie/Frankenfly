@@ -19,9 +19,17 @@ s1 = ["pyserial>=3.5"]
 gpu = [
     "torch>=2.2",
 ]
+# The relay and the outbound publisher import `websockets` lazily, inside serve_forever / the publish
+# thread, so every test passes with it absent (they inject fakes). Nothing declared it, which meant the
+# first person to actually run the relay would hit ImportError with no clue where to look. Optional, not
+# required: neither the sim nor the robot needs it.
+relay = ["websockets>=12"]
 
 [project.scripts]
 companion = "companion_brain.main:main"
+# relay/server.py's argparse already calls itself "companion-relay"; it just was not installable under
+# that name, so the only way to start it was `python -m companion_brain.relay.server`.
+companion-relay = "companion_brain.relay.server:main"
 
 [dependency-groups]
 dev = ["pytest>=8", "hypothesis>=6"]
