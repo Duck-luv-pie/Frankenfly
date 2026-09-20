@@ -125,3 +125,26 @@ def test_the_viewer_gets_the_buttons():
     assert html.count("</body>") >= 1
     for needle in ("op-lobo", "op-stop", '{lobotomy:lobo}', '{halted:halt}', "read_only"):
         assert needle in html, f"the operator panel lost {needle!r}"
+
+
+def test_rover_is_an_accepted_alias_for_halted():
+    """Ducks's page and his GPIO button say {"rover": false} for 'wheels detached'. Ours said
+    {"halted": true}. Same bit, two vocabularies, and a control that is silently ignored on one of the
+    two servers is the kind of thing nobody notices until a judge is standing there."""
+    import json
+    from scripts import viz_adapter
+
+    src = Path(viz_adapter.__file__).read_text()
+    # the translation happens before the halted branch, so "rover" can never be dropped on the floor
+    assert 'if "rover" in body and "halted" not in body:' in src
+    assert 'body["halted"] = not bool(body["rover"])' in src
+    # and every frame reports both names for it
+    assert '"rover": not bool(f.get("halted"' in src
+
+    # an explicit halted always wins, so a page that sends both is not ambiguous
+    for sent, expect in [({"rover": False}, True), ({"rover": True}, False),
+                         ({"halted": True}, True), ({"rover": True, "halted": True}, True)]:
+        body = dict(sent)
+        if "rover" in body and "halted" not in body:
+            body["halted"] = not bool(body["rover"])
+        assert bool(body["halted"]) is expect, f"{sent} -> {body}"

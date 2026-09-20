@@ -145,7 +145,10 @@ def k_wake(brain, rover):
 
 def k_halt(brain, rover):
     """Stop and resume. The wheels go to zero; the brain keeps running, so the spike feed and the
-    viewer stay live and you can see it still thinking while the body is still."""
+    viewer stay live and you can see it still thinking while the body is still.
+
+    This is the same bit Ducks's page calls `rover: on|off` and his GPIO button toggles. Same meaning,
+    same demo moment; the two stacks just reached it from different directions."""
     brain.halted = not brain.halted
     print("STOPPED (brain still running)" if brain.halted else "resumed", flush=True)
 

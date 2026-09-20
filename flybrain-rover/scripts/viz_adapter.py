@@ -288,7 +288,9 @@ class Adapter:
               "heat": [round(float(heat[0]), 3), round(float(heat[1]), 3)] if self.heat_on else [0.0, 0.0],
               "vis": [round(float(v), 2) for v in f.get("pres", [0.0] * 24)], "motion": [round(abs(float(v)), 2) for v in f.get("mot", [0.0] * 24)],
               "drive": [round(fwd, 3), round(turn, 3)], "reward": round(reward, 3), "total": round(self.total, 2), "done": False,
-              "lobotomized": bool(f.get("blind", self.lobotomized)), "halted": bool(f.get("halted", self.halted)), "heat_on": self.heat_on, "see_m": 6.0, "fov_deg": round(self.fov, 1),
+              "lobotomized": bool(f.get("blind", self.lobotomized)),
+              "halted": bool(f.get("halted", self.halted)),
+              "rover": not bool(f.get("halted", self.halted)),   # Ducks's name for the same bit "heat_on": self.heat_on, "see_m": 6.0, "fov_deg": round(self.fov, 1),
               "brain": brain, "stats": {}, "history": []}
         if self.live:
             st["heading_deg"] = round(math.degrees(_wrap(yaw - math.pi / 2)), 1)   # HUD: heading 0 = his +z
@@ -362,6 +364,11 @@ def serve(ad: Adapter, brain_json: bytes, ui_dir: Path, asset_dirs: list[Path], 
                         _s.socket(_s.AF_INET, _s.SOCK_DGRAM).sendto(b"8" if ad.lobotomized else b"9", ("127.0.0.1", 9600))
                     except OSError:
                         pass
+            # Ducks's page and his GPIO button already say {"rover": false} for "wheels detached", and
+            # his /status reports it, so that is the word. "halted" stays as an accepted alias because
+            # the operator panel and scripts/talk.py were already sending it.
+            if "rover" in body and "halted" not in body:
+                body["halted"] = not bool(body["rover"])
             if "halted" in body:
                 ad.halted = bool(body["halted"])
                 if ad.live:
@@ -429,12 +436,30 @@ export function demonstrationPose() { return {}; }
 """
 
 
+def default_ui_dir():
+    """Where Ducks's viewer is, without making anyone remember.
+
+    Checked in order: beside us in the merged team repo (flybrain-rover/ and brain/ are siblings there),
+    then the sim-mirror worktree, then the s1 one, then a plain clone. Returns the first that actually
+    holds hunt_gpu.html, else the merged-repo path so the error message names the likeliest place.
+    """
+    here = Path(__file__).resolve().parent.parent
+    tail = "brain/companion_brain/ui"
+    for cand in (here.parent / tail,                       # merged repo: ../brain/companion_brain/ui
+                 here.parent / "hunting-fly-mirror" / tail,
+                 here.parent / "hunting-fly-s1" / tail,
+                 here.parent / "hunting-fly" / tail):
+        if (cand / "hunt_gpu.html").is_file():
+            return str(cand)
+    return str(here.parent / tail)
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--ui", default="../hunting-fly-mirror/brain/companion_brain/ui",
-                    help="directory holding hunt_gpu.html (+ fly.js, vendor/, models/). The copy on the team's main "
-                         "branch is only the HTML and renders black; use a worktree of sim-mirror-webapp (newest, has "
-                         "camera modes and the spectator config) or s1-fly-brain.")
+    ap.add_argument("--ui", default=default_ui_dir(),
+                    help="directory holding hunt_gpu.html (+ fly.js, vendor/, models/). Found automatically in the "
+                         "merged team repo or in a sibling worktree. The copy on the old main branch is only the "
+                         "HTML and renders black, so prefer the merged repo or a sim-mirror-webapp worktree.")
     ap.add_argument("--assets", default="replay/assets", help="extra static dir for .glb models")
     ap.add_argument("--replay", default=None); ap.add_argument("--live", default=None)
     ap.add_argument("--brain", default="data/brain.npz"); ap.add_argument("--positions", default="data/neuron_positions.json")
