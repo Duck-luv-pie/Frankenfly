@@ -141,22 +141,22 @@ class RealHunt:
         yaw_dps = -self.wmax_dps * float(self.arena.turn_sign) * tu          # arena heading rate = turn_sign*wmax*tu (+ve left); yaw_dps +ve = clockwise
         self.prev_drive[:] = (f, tu)
         self.t += self.arena.dt
+        # the eyes: angry with the pupils on the person while someone is in view, searching (saccades) after 1.5 s of nobody
+        if boxes:
+            self.last_seen_t = self.t
+            bx, by, bw, bh = max(boxes, key=lambda b: b[2] * b[3])
+            gaze_x = max(-1.0, min(1.0, ((bx + bw / 2) - 160.0) / 160.0))          # +1 = the far right of the frame
+            gaze_y = max(-1.0, min(1.0, ((by + bh / 2) - 120.0) / 120.0)) * 0.4
+        else:
+            gaze_x = gaze_y = 0.0
+        self.expression = "angry" if self.t - self.last_seen_t < 1.5 else "searching"
+        eyes = eyes_for(Decoded(state=self.expression), gaze_x, gaze_y, expression=self.expression, now=self.t)
         if self.body is not None:
             if self.rover_on:
                 motor = {"forward": max(0.0, f), "backward": 0.0, "turn": tu, "yaw_dps": yaw_dps, "speed_mps": self.speed}
             else:                                                # stopped: keep the S-Bus alive with the sticks centred (the remote's STOP is immediate,
                 motor = {"forward": 0.0, "backward": 0.0, "turn": 0.0, "yaw_dps": 0.0, "speed_mps": 0.0}   # not "the signal dropped, then the body centred")
                 self.speed = 0.0
-            # the eyes: angry with the pupils on the person while someone is in view, searching (saccades) after 1.5 s of nobody
-            if boxes:
-                self.last_seen_t = self.t
-                bx, by, bw, bh = max(boxes, key=lambda b: b[2] * b[3])
-                gaze_x = max(-1.0, min(1.0, ((bx + bw / 2) - 160.0) / 160.0))      # +1 = the far right of the frame
-                gaze_y = max(-1.0, min(1.0, ((by + bh / 2) - 120.0) / 120.0)) * 0.4
-            else:
-                gaze_x = gaze_y = 0.0
-            self.expression = "angry" if self.t - self.last_seen_t < 1.5 else "searching"
-            eyes = eyes_for(Decoded(state=self.expression), gaze_x, gaze_y, expression=self.expression, now=self.t)
             self.body.send({"t": int((time.time() - self.t0) * 1000), "state": self.expression, "eyes": eyes,
                             "blink": False, "sound": {"track": 0, "vol": 0}, "motor": motor})
         spk = hunter.spikes if hunter is not None else np.zeros(1, dtype=np.int32)
