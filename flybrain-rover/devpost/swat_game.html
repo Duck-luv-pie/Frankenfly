@@ -79,7 +79,7 @@
         <li><b>the dodge</b><span>a mosquito bolts when its giant fibre fires. Nothing else can make it leave.</span></li>
         <li><b>shake late</b><span>a fly is faster than your hand. Shake while it is still approaching and
           it gets out from under the swatter. Wait until it is dead centre.</span></li>
-        <li><b>the bar</b><span>the mosquito's own eye. Full means it is about to go.</span></li>
+        <li><b>the bar</b><span>how hard the looming is driving its eye. Full is the firing threshold.</span></li>
       </ul>
       <p>A swatter sitting still is not a threat, so the approach alone never trips anything. <b>The shake
       is the looming stimulus</b>: the head jumps and the mosquito sees it expand, harder the nearer it is.
@@ -227,7 +227,7 @@ const DATA = {"n":150,"n_lc4":59,"n_lplc2":60,"eye_last":119,"gf_first":149,"gf_
     const lunging = now<lungeUntil;
 
     if(running && !over){
-      if(now>spawnAt && bugs.filter(b=>!b.gone).length<2){ spawn(now); spawnAt=now+700+Math.random()*600; }
+      if(now>spawnAt && !bugs.some(b=>!b.gone)){ spawn(now); spawnAt=now+700+Math.random()*600; }
 
       acc+=dtms; steps=Math.floor(acc/10); acc-=steps*10; steps=Math.min(steps,6);
       for(const b of bugs){
@@ -259,7 +259,10 @@ const DATA = {"n":150,"n_lc4":59,"n_lplc2":60,"eye_last":119,"gf_first":149,"gf_
 
         let gf=0, eye=0;
         for(let k=0;k<steps;k++){const r=b.brain.step(cur); gf+=r[0]; eye+=r[1];}
-        b.alarm = b.alarm*0.55 + Math.min(1,(eye/Math.max(1,steps))/30)*0.45;
+        // The bar shows the DRIVE, not the spike count. Below about 1793 units this circuit fires
+        // nothing at all, so a spike-count bar reads zero for the whole approach and then slams to
+        // full, which tells a player nothing. 1793 is measured, not chosen.
+        b.alarm = b.alarm*0.5 + Math.min(1, cur/1793)*0.5;
         if(gf>0 && b.bolt===0){ b.bolt = b.y<HT/2?-1:1; b.vx*=1.5; }
       }
       bugs=bugs.filter(b=>!b.gone||now-b.born<4000);
@@ -270,14 +273,19 @@ const DATA = {"n":150,"n_lc4":59,"n_lplc2":60,"eye_last":119,"gf_first":149,"gf_
         let got=null;
         for(const b of bugs){ if(b.gone||b.dead) continue;
           if(Math.hypot(SWAT_X-b.x,SWAT_Y-b.y) < SWAT_R + (b.kind==="chicken"?14:12)){ got=b; break; } }
-        if(!got){ say("miss","shook at nothing"); }
+        if(!got){
+          // Nothing under the head. Whether that is your timing or its reflex is the whole lesson,
+          // so look for a mosquito that bolted out of reach and name it.
+          const fled = bugs.find(b => !b.gone && !b.dead && b.kind==="mosquito" && b.bolt!==0 &&
+                                      Math.hypot(SWAT_X-b.x,SWAT_Y-b.y) < SWAT_R + 46);
+          say(fled?"esc":"miss", fled ? "it got out from under it" : "shook at nothing");
+        }
         else if(got.kind==="chicken"){ got.dead=true; got.gone=true; lives--; shakeUntil=now+260;
           splats.push({x:got.x,y:got.y,t:now,bad:true});
           say("foul","that was a chicken   ·   -1 life");
           if(lives<=0){ over=true; running=false;
             if(score>best){best=score; try{localStorage.setItem("swat_best",String(best));}catch(e){}}
             say("foul","game over   ·   "+score); } }
-        else if(got.bolt!==0 && Math.abs(got.dodge)>14){ say("esc","it got out from under it"); }
         else { got.dead=true; got.gone=true; score++;
           splats.push({x:got.x,y:got.y,t:now,bad:false}); say("hit","got it   ·   "+score); }
       }
@@ -294,7 +302,12 @@ const DATA = {"n":150,"n_lc4":59,"n_lplc2":60,"eye_last":119,"gf_first":149,"gf_
       if(b.kind==="chicken") drawChicken(b.x,b.y,b.dir,tSec+b.ph);
       else { drawMosquito(b.x,b.y,b.dir,b.alarm,b.bolt!==0); worst=Math.max(worst,b.alarm); } }
 
-    x.strokeStyle="#1B2E24"; x.lineWidth=2*S; x.setLineDash([5*S,5*S]);
+    // lit exactly when something is close enough for a strike to reach it: the "now" cue
+    const inReach = bugs.some(b => !b.gone && !b.dead &&
+      Math.hypot(SWAT_X-b.x,SWAT_Y-b.y) < SWAT_R + (b.kind==="chicken"?14:12));
+    x.strokeStyle = inReach ? "#FFC24A" : "#1B2E24";
+    x.lineWidth = (inReach?4:2)*S;
+    if(!inReach) x.setLineDash([5*S,5*S]);
     x.beginPath(); x.arc(SWAT_X*S,SWAT_Y*S,(SWAT_R+9)*S,0,6.283); x.stroke(); x.setLineDash([]);
     splats=splats.filter(sp=>now-sp.t<320);
     for(const sp of splats){ const k=(now-sp.t)/320;
@@ -338,8 +351,13 @@ const DATA = {"n":150,"n_lc4":59,"n_lplc2":60,"eye_last":119,"gf_first":149,"gf_
   requestAnimationFrame(frame);
 
   // ---------- input ----------
-  function begin(){ bugs=[];splats=[];score=0;lives=3;spawned=0;sinceChicken=0;over=false;running=true;
-    spawnAt=performance.now()+350; logEl.textContent=""; say("miss","go"); }
+  function begin(){
+    bugs=[];splats=[];score=0;lives=3;spawned=0;sinceChicken=0;over=false;running=true;
+    // a fresh run owns the clock: a lungeUntil left over from the last one silently eats the first
+    // swings, which looks exactly like a broken button
+    lungeUntil=0; strikeAt=0; struck=false; flashUntil=0; shakeUntil=0;
+    spawnAt=performance.now()+350; logEl.textContent=""; say("miss","go");
+  }
   function swing(){
     const now=performance.now();
     if(!running){ begin(); return; }
@@ -352,9 +370,10 @@ const DATA = {"n":150,"n_lc4":59,"n_lplc2":60,"eye_last":119,"gf_first":149,"gf_
 
   // The badge reads badge.sensor.accel() every tick and a hard enough jerk is the swat. Same verb here,
   // so the phone version plays the way the hardware will.
-  let motionOn=false,lastMag=null,lastSwing=0;
+  let motionOn=false,lastMag=null,lastSwing=0,gotMotion=false;
   function onMotion(ev){
     const a=ev.accelerationIncludingGravity; if(!a) return;
+    gotMotion=true;
     const mag=Math.hypot(a.x||0,a.y||0,a.z||0);
     if(lastMag!==null){
       const now=performance.now();
@@ -372,8 +391,19 @@ const DATA = {"n":150,"n_lc4":59,"n_lplc2":60,"eye_last":119,"gf_first":149,"gf_
         if(r!=="granted"){$("tip").textContent="motion refused, so click or space it is.";return;}
       }
       window.addEventListener("devicemotion",onMotion);motionOn=true;
-      $("motion").classList.add("on");$("motion").textContent="motion on";
-      $("tip").textContent="drag to aim the swatter, then swat the phone itself. That is what the badge does.";
+      $("motion").textContent="waiting for motion...";
+      $("tip").textContent="shake the device now.";
+      // Desktop browsers define DeviceMotionEvent and then never fire it. Prove the sensor is real
+      // before claiming the button did anything.
+      gotMotion=false;
+      setTimeout(function(){
+        if(!motionOn) return;
+        if(gotMotion){ $("motion").classList.add("on"); $("motion").textContent="motion on";
+          $("tip").textContent="now shake the device itself. That is exactly what the badge does."; }
+        else { window.removeEventListener("devicemotion",onMotion); motionOn=false;
+          $("motion").textContent="use motion";
+          $("tip").textContent="no motion sensor is reporting here, so it is click or space. Open this on a phone to shake it."; }
+      }, 1400);
     }catch(e){$("tip").textContent="motion unavailable here, so click or space it is.";}
   });
 
