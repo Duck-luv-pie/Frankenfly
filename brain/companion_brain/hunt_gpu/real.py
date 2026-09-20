@@ -110,11 +110,17 @@ class RealHunt:
                 self.speed = 0.0
             self.body.send({"t": int((time.time() - self.t0) * 1000), "state": "hunt", "motor": motor})
         spk = hunter.spikes
-        lit = spk.nonzero()[0]
-        types: dict[str, int] = {}
-        for i in lit:
-            t = str(self.cell_type[i]); types[t] = types.get(t, 0) + int(spk[i])
-        rates = hunter.runner.rates(300)
+        self.ticks = getattr(self, "ticks", 0) + 1
+        now_t = time.time()
+        self.tick_times = [t for t in getattr(self, "tick_times", []) if now_t - t < 2.0] + [now_t]
+        if self.ticks % 5 == 1 or not hasattr(self, "_brain_summary"):       # the neuron summary is for the page: every 5th tick is plenty
+            lit = spk.nonzero()[0]
+            types: dict[str, int] = {}
+            for i in lit:
+                t = str(self.cell_type[i]); types[t] = types.get(t, 0) + int(spk[i])
+            rates = hunter.runner.rates(300)
+            self._brain_summary = {"n_spikes": int(spk.sum()), "top": sorted(types.items(), key=lambda kv: -kv[1])[:8],
+                                   "rates": {g: [round(rates[g]["left"], 1), round(rates[g]["right"], 1)] for g in ("DNa02", "DNa01", "DN_all", "MDN", "DNp09")}}
         st = {"t": round(self.t, 2), "heat": [round(float(heat[0]), 3), round(float(heat[1]), 3)],
               "vis": [round(float(v), 2) for v in vis[:, 0]], "motion": [round(float(v), 2) for v in vis[:, 1]],
               "boxes": [[int(v) for v in b] for b in boxes], "drive": [round(f, 3), round(tu, 3)],
@@ -122,8 +128,7 @@ class RealHunt:
               "rover": (self.body.status() if self.body is not None and hasattr(self.body, "status") else None), "rover_on": self.rover_on,
               "paused": self.paused, "heat_on": self.heat_on, "camera_ok": camera_ok, "lobotomized": self.lobotomized,
               "ready": bool(camera_ok) and self.body is not None,       # the remote's READY light: brain up, camera streaming, legs attached
-              "brain": {"n_spikes": int(spk.sum()), "top": sorted(types.items(), key=lambda kv: -kv[1])[:8],
-                        "rates": {g: [round(rates[g]["left"], 1), round(rates[g]["right"], 1)] for g in ("DNa02", "DNa01", "DN_all", "MDN", "DNp09")}}}
+              "tick_hz": round(len(self.tick_times) / 2.0, 1), "brain": self._brain_summary}
         with self.lock:
             self.last = st
         return st

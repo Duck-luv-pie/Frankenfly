@@ -7,5 +7,5 @@ echo "== fly service";     systemctl is-active companion-hunt; journalctl -u com
 echo "== devices on companion (leases)"; cat /var/lib/NetworkManager/dnsmasq-wlan0.leases 2>/dev/null || echo "(none)"
 echo "== body ESP32 by name"; getent hosts companion-body.local || echo "companion-body.local: NOT resolving (the ESP32 is not on this network)"
 echo "== what the fly is telling the rover right now"
-curl -s -m 3 http://localhost:8601/status | python3 -c "import json,sys; d=json.load(sys.stdin); print(\"rover_on\", d[\"rover_on\"], \"| rover\", d[\"rover\"], \"| drive\", d[\"drive\"], \"| people in view\", len(d[\"boxes\"]), \"| camera_ok\", d[\"camera_ok\"], \"| lobotomized\", d[\"lobotomized\"])" 2>/dev/null || echo "(fly not answering on :8601 yet)"
+curl -s -m 3 http://localhost:8601/status | python3 -c "import json,sys; d=json.load(sys.stdin); print(\"tick_hz\", d.get(\"tick_hz\"), \"(20 = trained pace) | rover_on\", d[\"rover_on\"], \"| rover\", d[\"rover\"], \"| drive\", d[\"drive\"], \"| people in view\", len(d[\"boxes\"]), \"| camera_ok\", d[\"camera_ok\"], \"| lobotomized\", d[\"lobotomized\"])" 2>/dev/null || echo "(fly not answering on :8601 yet)"
 '
