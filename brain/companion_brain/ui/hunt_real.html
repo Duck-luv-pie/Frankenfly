@@ -34,7 +34,7 @@
     <div class="row"><span class="dim">heat L</span><div class="bar h"><i id="hl"></i></div><span class="dim">heat R</span><div class="bar h"><i id="hr"></i></div></div>
   </div>
   <div class="panel">
-    <h1>The fly's answer</h1>
+    <h1 id="answer">The fly's answer</h1>
     <div class="row"><span>forward</span><div class="bar"><i id="fwd"></i></div><span id="fwdv" class="dim">0</span></div>
     <div class="row"><span>turn</span><div class="bar c"><i id="turn"></i></div><span id="turnv" class="dim">0</span></div>
     <div class="row dim"><span>would-be speed / yaw</span><span id="motion">–</span></div>
@@ -72,6 +72,7 @@ es.onmessage = ev => {
   $('heat').textContent = st.heat_on ? 'heat: on' : 'heat: off'; $('heat').classList.toggle('off', !st.heat_on);
   lobotomized = !!st.lobotomized; $('lobo').textContent = lobotomized ? 'restore the trained fly' : 'lobotomize'; $('lobo').style.background = lobotomized ? '#7a2a3a' : '';
   document.querySelector('h1').style.color = lobotomized ? '#ff8aa0' : '';
+  $('answer').textContent = st.mode === 'scripted' ? `The scripted chaser's answer (no neurons)${st.bearing_deg !== null ? ' · person at ' + (st.bearing_deg > 0 ? '+' : '') + st.bearing_deg + '°' : ''}` : "The fly's answer";
   $('spk').textContent = st.brain.n_spikes; $('hz').textContent = st.tick_hz !== undefined ? st.tick_hz : '–'; $('dna').textContent = `${st.brain.rates.DNa02[0]} / ${st.brain.rates.DNa02[1]} Hz`;
   $('top').innerHTML = st.brain.top.map(([t, n]) => `<li>${t} <span class="dim">${n}</span></li>`).join('');
   $('fov').textContent = st.fov_deg; $('camstate').textContent = st.camera_ok ? `· ${st.boxes.length} ${st.boxes.length === 1 ? 'person' : 'people'} in view` : '· waiting for the camera';

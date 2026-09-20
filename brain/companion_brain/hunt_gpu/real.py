@@ -27,12 +27,37 @@ from .arena import BatchArena
 HTML = UI_DIR / "hunt_real.html"
 
 
+class ScriptedChaser:
+    """No neurons: pick the nearest person (the biggest box), steer at them, drive until contact. Out of view, spin
+    toward the side they were last seen on. Deterministic and boring, which is the point: the reliability baseline."""
+
+    def __init__(self, cam_fov_deg: float, turn_gain: float = 1.6, face_deg: float = 20.0, search_turn: float = 0.5):
+        self.cam_fov, self.turn_gain, self.face_deg, self.search_turn = float(cam_fov_deg), float(turn_gain), float(face_deg), float(search_turn)
+        self.last_side = 1.0            # +1 = they went right
+        self.bearing_deg = 0.0
+
+    def act(self, boxes, frame_w: int) -> tuple[float, float]:
+        if boxes:
+            x, y, w, h = max(boxes, key=lambda b: b[2] * b[3])
+            cx = x + w / 2
+            self.bearing_deg = (cx - frame_w / 2) / frame_w * self.cam_fov          # +ve = the person is to the right
+            if abs(self.bearing_deg) > 3.0:
+                self.last_side = 1.0 if self.bearing_deg > 0 else -1.0
+            turn = max(-1.0, min(1.0, self.turn_gain * self.bearing_deg / (self.cam_fov / 2)))
+            forward = 1.0 if abs(self.bearing_deg) < self.face_deg else 0.5     # face them first, then floor it
+            return forward, turn
+        return 0.0, self.search_turn * self.last_side                             # lost: spin toward where they went
+
+
 class RealHunt:
-    def __init__(self, cfg, spiking, camera: str, cam_fov_deg: float = 62.0, body=None, pir=None, rover_on: bool = True):
+    def __init__(self, cfg, spiking, camera: str, cam_fov_deg: float = 62.0, body=None, pir=None, rover_on: bool = True, scripted: bool = False):
         self.cfg, self.spiking, self.body, self.pir = cfg, spiking, body, pir
         g = {**dict(cfg.hunt_gpu), "obs_noise": 0.0}
         self.arena = BatchArena(cfg.hunt, g, 1, "cpu", seed=0)      # only for its sensor geometry and observation layout
-        spiking.bind_arena(self.arena)
+        self.scripted = scripted
+        self.chaser = ScriptedChaser(cam_fov_deg) if scripted else None
+        if spiking is not None:
+            spiking.bind_arena(self.arena)
         self.cam = CameraStream(camera, 320, 240)
         self.sense = PeopleSense(self.arena.spec.bins, math.degrees(self.arena.fov), cam_fov_deg, tick_s=self.arena.dt,
                                  hold_s=float(dict(cfg.hunt_gpu).get("real", {}).get("hold_s", 1.0)))   # a missed detection keeps the person on the retina this long
@@ -42,17 +67,19 @@ class RealHunt:
         self.t0 = time.time()
         self.t = 0.0
         self.episode_s = float(self.arena.episode_s)
-        self.cell_type = spiking.hc.circuit.cell_type
+        self.cell_type = spiking.hc.circuit.cell_type if spiking is not None else None
         self.paused = False
         self.rover_on = body is not None and rover_on        # --rover-off: attached but not driving until the page enables it
         # the lobotomy: a second, untrained brain with every synapse out of its sensory neurons cut (as in the viewer);
         # the switch decides which brain drives the body. Toggled from the page, or from the remote Pi (tools/pi/remote_button.py:
         # START = trained brain + rover on, STOP = rover off, LOBOTOMY = this spare brain; its READY light follows "ready" in /status).
-        from .brain_train import SpikingHunter
-        self.dumb = SpikingHunter(cfg, spiking.hc, None, verbose=False)
-        self.dumb.bind_arena(self.arena)
-        cut = self.dumb.sever_senses()
-        print(f"[hunt-real] lobotomy ready: {cut:,} synapses out of the sensory neurons cut in the spare brain", flush=True)
+        self.dumb = None
+        if spiking is not None:
+            from .brain_train import SpikingHunter
+            self.dumb = SpikingHunter(cfg, spiking.hc, None, verbose=False)
+            self.dumb.bind_arena(self.arena)
+            cut = self.dumb.sever_senses()
+            print(f"[hunt-real] lobotomy ready: {cut:,} synapses out of the sensory neurons cut in the spare brain", flush=True)
         self.lobotomized = False
         self.lock = threading.Lock()
         self.last: dict = {}
@@ -94,9 +121,16 @@ class RealHunt:
                 heat[:] = min(1.0, float(self.arena.heat_gain))             # the HC-SR501: one bit into both hot cells (as in the arena's pir model)
         body = np.array([self.speed / self.vmax, self.prev_drive[0], self.prev_drive[1], (self.t % self.episode_s) / self.episode_s], dtype=np.float32)
         obs = torch.from_numpy(np.concatenate([heat, vis.reshape(-1), body]))[None]
-        hunter = self.dumb if self.lobotomized else self.spiking
-        drive, _decoded = hunter(obs)                            # the spiking hunter returns (drive, decoded motor channels)
-        f, tu = float(drive[0, 0]), float(drive[0, 1])
+        if self.scripted:
+            hunter = None
+            if self.lobotomized:                                 # "lobotomized" scripted chaser: a slow aimless wander
+                f, tu = 0.3, 0.6 * math.sin(self.t * 0.8)
+            else:
+                f, tu = self.chaser.act(boxes, 320)
+        else:
+            hunter = self.dumb if self.lobotomized else self.spiking
+            drive, _decoded = hunter(obs)                        # the spiking hunter returns (drive, decoded motor channels)
+            f, tu = float(drive[0, 0]), float(drive[0, 1])
         # the fly's would-be motion, as the arena would integrate it (the S1 driver turns these into sticks)
         target = self.vmax * max(0.0, f)
         self.speed += (target - self.speed) * min(1.0, self.arena.dt / 0.3)
@@ -110,11 +144,13 @@ class RealHunt:
                 motor = {"forward": 0.0, "backward": 0.0, "turn": 0.0, "yaw_dps": 0.0, "speed_mps": 0.0}   # not "the signal dropped, then the body centred")
                 self.speed = 0.0
             self.body.send({"t": int((time.time() - self.t0) * 1000), "state": "hunt", "motor": motor})
-        spk = hunter.spikes
+        spk = hunter.spikes if hunter is not None else np.zeros(1, dtype=np.int32)
         self.ticks = getattr(self, "ticks", 0) + 1
         now_t = time.time()
         self.tick_times = [t for t in getattr(self, "tick_times", []) if now_t - t < 2.0] + [now_t]
-        if self.ticks % 5 == 1 or not hasattr(self, "_brain_summary"):       # the neuron summary is for the page: every 5th tick is plenty
+        if hunter is None:
+            self._brain_summary = {"n_spikes": 0, "top": [["scripted chaser", 0]], "rates": {g: [0, 0] for g in ("DNa02", "DNa01", "DN_all", "MDN", "DNp09")}}
+        elif self.ticks % 5 == 1 or not hasattr(self, "_brain_summary"):     # the neuron summary is for the page: every 5th tick is plenty
             lit = spk.nonzero()[0]
             types: dict[str, int] = {}
             for i in lit:
@@ -129,7 +165,8 @@ class RealHunt:
               "rover": (self.body.status() if self.body is not None and hasattr(self.body, "status") else None), "rover_on": self.rover_on,
               "paused": self.paused, "heat_on": self.heat_on, "camera_ok": camera_ok, "lobotomized": self.lobotomized,
               "ready": bool(camera_ok) and self.body is not None,       # the remote's READY light: brain up, camera streaming, legs attached
-              "tick_hz": round(len(self.tick_times) / 2.0, 1), "brain": self._brain_summary}
+              "tick_hz": round(len(self.tick_times) / 2.0, 1), "brain": self._brain_summary,
+              "mode": "scripted" if self.scripted else "fly", "bearing_deg": round(self.chaser.bearing_deg, 1) if self.chaser else None}
         with self.lock:
             self.last = st
         return st
@@ -141,8 +178,8 @@ class RealHunt:
             self.body.close()
 
 
-def serve(cfg, spiking, camera: str, cam_fov_deg: float = 62.0, body=None, pir=None, port: int = 8601, open_browser: bool = False, rover_on: bool = True) -> None:
-    hunt = RealHunt(cfg, spiking, camera, cam_fov_deg, body=body, pir=pir, rover_on=rover_on)
+def serve(cfg, spiking, camera: str, cam_fov_deg: float = 62.0, body=None, pir=None, port: int = 8601, open_browser: bool = False, rover_on: bool = True, scripted: bool = False) -> None:
+    hunt = RealHunt(cfg, spiking, camera, cam_fov_deg, body=body, pir=pir, rover_on=rover_on, scripted=scripted)
     cond = threading.Condition()
     box = {"version": 0, "payload": b"{}"}
 
@@ -216,7 +253,7 @@ def serve(cfg, spiking, camera: str, cam_fov_deg: float = 62.0, body=None, pir=N
     server.daemon_threads = True
     threading.Thread(target=server.serve_forever, daemon=True).start()
     url = f"http://localhost:{port}"
-    print(f"[hunt-real] the spiking fly ({spiking.hc.n:,} neurons) hunting through {camera} at {url}; rover {'on' if hunt.rover_on else ('attached, off until the page enables it' if body is not None else 'not attached')} (Ctrl-C to stop)", flush=True)
+    print(f"[hunt-real] {'the SCRIPTED chaser (no neurons)' if scripted else f'the spiking fly ({spiking.hc.n:,} neurons)'} hunting through {camera} at {url}; rover {'on' if hunt.rover_on else ('attached, off until the page enables it' if body is not None else 'not attached')} (Ctrl-C to stop)", flush=True)
     if open_browser:
         webbrowser.open(url)
     dt = hunt.arena.dt

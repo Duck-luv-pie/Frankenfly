@@ -385,13 +385,13 @@ def cmd_hunt_brain(args, cfg):
         return
     if args.real:
         from .hunt_gpu.real import serve as serve_real
-        hunter = SpikingHunter(cfg, hc, args.load)
+        hunter = None if args.scripted else SpikingHunter(cfg, hc, args.load)
         pir = None
         if args.pir:
             from .body.link import BodyLink
             pir = BodyLink(cfg.body.host, cfg.body.port, cfg.body.listen_port)
         serve_real(cfg, hunter, camera=args.camera or str(cfg.senses.camera.url), cam_fov_deg=float(args.cam_fov), body=_s1_body(args, cfg), pir=pir,
-                   port=args.port, open_browser=args.open, rover_on=not args.rover_off)
+                   port=args.port, open_browser=args.open, rover_on=not args.rover_off, scripted=args.scripted)
         return
     if args.watch:
         from .hunt_gpu.viewer import serve
@@ -753,6 +753,7 @@ def main(argv=None):
     p.add_argument("--cam-fov", type=float, default=62.0, help="with --real: the camera's horizontal field of view in degrees (ESP32-CAM OV2640 ~62)")
     p.add_argument("--pir", action="store_true", help="with --real: read the body ESP32's PIR over UDP as the hot cells")
     p.add_argument("--rover-off", action="store_true", help="with --real --s1: attach the S1 but do not drive it until the page's rover button is pressed (safe autostart)")
+    p.add_argument("--scripted", action="store_true", help="with --real: no neurons; a plain OpenCV chaser steers at the nearest person and drives into them (the reliability baseline)")
     p.add_argument("--port", type=int, default=8601); p.add_argument("--open", action="store_true"); p.add_argument("--speed", type=float, default=1.0)
     p.add_argument("--device", default="auto"); p.add_argument("--save-every", type=int, default=5); p.add_argument("--out", default=None)
     p.set_defaults(fn=cmd_hunt_brain)

@@ -43,3 +43,16 @@ def test_lost_detection_is_held_briefly_then_cleared():
     s.observe(f)
     assert s.observe(f)[0][:, 0].max() == 0
     assert s.observe(None)[0].shape == (24, 2)          # no frame at all is fine
+
+
+def test_scripted_chaser_steers_at_the_nearest_person_and_searches_when_lost():
+    from companion_brain.hunt_gpu.real import ScriptedChaser
+    c = ScriptedChaser(cam_fov_deg=60.0)
+    f, t = c.act([(275, 60, 40, 120), (100, 90, 20, 40)], 320)     # the big box on the far right wins
+    assert t > 0 and f == 0.5 and c.bearing_deg > 20                 # far right: turn first, half throttle
+    f, t = c.act([(150, 60, 20, 120)], 320)                          # dead ahead
+    assert abs(t) < 0.1 and f == 1.0
+    f, t = c.act([], 320)                                            # lost after seeing them on the right: spin right
+    assert f == 0.0 and t > 0
+    c.act([(10, 60, 40, 120)], 320); f, t = c.act([], 320)           # last seen on the left: spin left
+    assert t < 0
