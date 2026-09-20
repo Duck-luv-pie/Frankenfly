@@ -19,6 +19,7 @@
   ],
   "read_only": false,
   "title": "FlyBrain Rover \u00b7 the simulation",
+  "voice": true,
   "who": "a recording of the 15,000-neuron male-CNS brain (flybrain-rover), played back in your browser \u2014 the poses and every firing rate came out of the simulation",
   "links": [
     {

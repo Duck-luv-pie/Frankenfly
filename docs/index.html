@@ -414,6 +414,20 @@ function replayTick() {
   }
   replay.timer = setTimeout(replayTick, (replay.dt * 1000) / Math.max(0.05, replay.speed));
 }
+// The fly says what is being done to it -- the same cached ElevenLabs lines the laptop demo
+// speaks, shipped as two mp3s. Only on a click: browsers block audio until the user acts, and a
+// page that talks at you unprompted is worse than one that does not talk at all.
+let voiceEl = null;
+function replayVoice(ep) {
+  if (!replay.voice) return;
+  const key = (ep.lesion && ep.lesion.length) ? 'searching' : 'contact';
+  try {
+    if (!voiceEl) voiceEl = new Audio();
+    voiceEl.pause();
+    voiceEl.src = 'voice/' + key + '.mp3';
+    voiceEl.play().catch(() => {});
+  } catch (e) { /* no audio here; the page is still the point */ }
+}
 async function replayLoad(k) {
   const ep = replay.episodes[k];
   if (!ep) return;
@@ -442,7 +456,7 @@ function replayEpisodeBar() {
     const b = document.createElement('button');
     b.textContent = ep.label || ep.name;
     b.dataset.k = String(k);
-    b.onclick = () => replayLoad(k);
+    b.onclick = () => { replayVoice(ep); replayLoad(k); };
     host.appendChild(b);
   });
   const ctl = document.getElementById('lobo');
@@ -451,6 +465,7 @@ function replayEpisodeBar() {
 }
 function startReplay(cfg) {
   replay.on = true;
+  replay.voice = cfg.voice !== false;
   WHO_STATIC = cfg.who || '';
   if (cfg.title) document.title = cfg.title;
   if (WHO_STATIC) { const w = $('who'); if (w) w.textContent = WHO_STATIC; }
@@ -461,6 +476,14 @@ function startReplay(cfg) {
   // no brain to lesion, no heat sensor to toggle, no camera range to change: those are bridge controls
   for (const id of ['lobo', 'heat', 'range']) { const el = $(id); if (el) el.style.display = 'none'; }
   replayEpisodeBar();
+  if (replay.voice) {
+    const n = document.createElement('div');
+    n.className = 'dim';
+    n.style.cssText = 'margin:7px 0 0;font-size:10.5px';
+    n.textContent = 'sound on: the fly says what is being done to it';
+    const host = $('episodes');
+    if (host && host.parentNode) host.parentNode.insertBefore(n, host.nextSibling);
+  }
   if (cfg.links && cfg.links.length) {
     const bar = document.createElement('div');
     bar.className = 'dim';
