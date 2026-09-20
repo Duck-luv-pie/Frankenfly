@@ -1,0 +1,552 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%3E%3Ctext%20y%3D%2252%22%20font-size%3D%2252%22%3E%F0%9F%AA%B0%3C%2Ftext%3E%3C%2Fsvg%3E">
+<title>FlyBrain Rover</title>
+<meta name="description" content="15,000 neurons of a real fruit fly connectome, running. Watch it find a person, then cut its tracking cells and watch it fail.">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500&display=swap">
+<style>
+  :root{
+    --ground:#0a0a0a; --panel:#151312; --panel2:#1c1917; --rule:#2b2724;
+    --text:#e8e6e4; --dim:#8a8580; --faint:#5c5854;
+    --coral:#FF715B; --blue:#5aa9ff; --good:#44DD88; --dope:#e8c34d;
+    --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+    --sans:"IBM Plex Sans",system-ui,-apple-system,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{background:var(--ground);color:var(--text);font-family:var(--sans);line-height:1.6;
+       -webkit-font-smoothing:antialiased}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 20px}
+
+  /* ---- masthead ---- */
+  header{padding:40px 0 20px}
+  .eyebrow{font-family:var(--mono);font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;
+           color:var(--coral);margin:0 0 14px}
+  h1{font-family:var(--mono);font-size:clamp(28px,5.2vw,46px);font-weight:600;letter-spacing:-.03em;
+     line-height:1.08;margin:0;text-wrap:balance}
+  .lede{max-width:62ch;color:var(--dim);margin:16px 0 0;font-size:15.5px}
+  .lede b{color:var(--text);font-weight:500}
+
+  /* ---- episode tabs ---- */
+  .episodes{display:flex;flex-wrap:wrap;gap:8px;margin:24px 0 0}
+  .ep{font-family:var(--mono);font-size:12px;font-weight:500;padding:9px 14px;cursor:pointer;
+      background:var(--panel);color:var(--dim);border:1px solid var(--rule);border-radius:2px;
+      transition:color .12s,border-color .12s,background .12s;text-align:left}
+  .ep:hover{color:var(--text);border-color:#3a3430}
+  .ep[aria-pressed="true"]{color:var(--ground);background:var(--coral);border-color:var(--coral);font-weight:600}
+  .ep.cut[aria-pressed="true"]{background:var(--blue);border-color:var(--blue)}
+  .ep-blurb{font-family:var(--sans);font-size:13.5px;color:var(--faint);margin:12px 0 0;min-height:1.6em}
+
+  /* ---- the instrument ---- */
+  .rig{display:grid;grid-template-columns:minmax(0,1fr) 316px;gap:14px;margin:16px 0 0;align-items:start}
+  @media (max-width:880px){ .rig{grid-template-columns:minmax(0,1fr)} }
+  .cell{background:var(--panel);border:1px solid var(--rule);border-radius:2px}
+  .cap{font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;
+       color:var(--faint);padding:10px 12px 0;display:flex;justify-content:space-between;gap:10px}
+  .cap em{font-style:normal;color:var(--dim)}
+  #arena{display:block;width:100%;height:auto}
+  .readout{display:flex;gap:18px;flex-wrap:wrap;padding:9px 12px 11px;border-top:1px solid var(--rule);
+           font-family:var(--mono);font-size:11px;color:var(--faint);font-variant-numeric:tabular-nums}
+  .readout b{color:var(--text);font-weight:500}
+  .readout span{white-space:nowrap}
+  .rail{display:flex;flex-direction:column;gap:14px}
+
+  /* steering gauge */
+  .steer{padding:10px 12px 14px}
+  .steer-row{display:grid;grid-template-columns:1fr 46px 1fr;align-items:center;gap:6px;margin-top:9px}
+  .tube{height:15px;background:var(--panel2);border:1px solid var(--rule);position:relative;overflow:hidden}
+  .tube i{position:absolute;top:0;bottom:0;display:block;width:0%}
+  .tube.l i{right:0;background:var(--coral)}
+  .tube.r i{left:0;background:var(--blue)}
+  .steer-mid{font-family:var(--mono);font-size:9.5px;color:var(--faint);text-align:center;letter-spacing:.06em}
+  .steer-num{font-family:var(--mono);font-size:11px;font-variant-numeric:tabular-nums;color:var(--dim);
+             display:flex;justify-content:space-between;margin-top:6px}
+  .steer-num b{font-weight:500;color:var(--text)}
+
+  /* rate bars */
+  .bars{padding:8px 12px 13px;display:grid;gap:3px}
+  .bar{display:grid;grid-template-columns:74px 1fr 40px;align-items:center;gap:8px;
+       font-family:var(--mono);font-size:10.5px}
+  .bar .nm{color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .bar .tr{height:9px;background:var(--panel2);border:1px solid var(--rule)}
+  .bar .tr i{display:block;height:100%;width:0%;background:var(--blue)}
+  .bar.mot .tr i{background:var(--coral)}
+  .bar.dop .tr i{background:var(--dope)}
+  .bar .hz{color:var(--faint);text-align:right;font-variant-numeric:tabular-nums}
+  .bar.on .nm,.bar.on .hz{color:var(--text)}
+  .bar.dead .nm,.bar.dead .hz{color:#4a4440}
+  .bar.sat .hz{color:var(--coral)}
+  .legend{font-family:var(--mono);font-size:9.5px;color:var(--faint);padding:2px 12px 11px;
+          letter-spacing:.03em}
+  .legend b{color:var(--coral);font-weight:500}
+
+  #raster{display:block;width:100%;height:auto}
+
+  /* ---- transport ---- */
+  .transport{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:14px 0 0;
+             background:var(--panel);border:1px solid var(--rule);border-radius:2px;padding:11px 13px}
+  button{font-family:var(--mono);font-size:12px;font-weight:500;padding:8px 13px;cursor:pointer;
+         background:var(--panel2);color:var(--text);border:1px solid var(--rule);border-radius:2px;
+         transition:border-color .12s,color .12s}
+  button:hover{border-color:#453e39}
+  button:focus-visible,.ep:focus-visible,input:focus-visible{outline:2px solid var(--coral);outline-offset:2px}
+  #play{min-width:78px;color:var(--coral);border-color:#4a2a24}
+  #play:hover{border-color:var(--coral)}
+  .speeds{display:flex;gap:4px;margin-left:auto}
+  .speeds button{padding:8px 10px;color:var(--faint);min-width:44px}
+  .speeds button[aria-pressed="true"]{color:var(--ground);background:var(--text);border-color:var(--text);font-weight:600}
+  #scrub{flex:1 1 200px;min-width:140px;accent-color:var(--coral);height:20px;cursor:pointer;background:transparent}
+  .clock{font-family:var(--mono);font-size:11.5px;color:var(--dim);font-variant-numeric:tabular-nums;
+         white-space:nowrap;min-width:88px}
+  .hint{font-family:var(--mono);font-size:10.5px;color:var(--faint);margin:9px 0 0}
+
+  /* ---- prose ---- */
+  section{padding:56px 0 0}
+  h2{font-family:var(--mono);font-size:19px;font-weight:600;letter-spacing:-.01em;margin:0 0 14px}
+  p{max-width:66ch;margin:0 0 15px;color:var(--dim);font-size:15px}
+  p b{color:var(--text);font-weight:500}
+  .cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(248px,1fr));gap:26px;margin-top:6px}
+  .cols p{margin:0}
+  .ladder{display:grid;gap:1px;background:var(--rule);border:1px solid var(--rule);border-radius:2px;
+          margin:0 0 26px;max-width:640px}
+  .rung{background:var(--panel);padding:14px 16px;display:grid;grid-template-columns:132px 1fr;
+        gap:14px;align-items:baseline}
+  @media (max-width:520px){ .rung{grid-template-columns:1fr;gap:2px} }
+  .rung .n{font-family:var(--mono);font-size:22px;font-weight:600;letter-spacing:-.02em;
+           color:var(--text);font-variant-numeric:tabular-nums}
+  .rung:last-child .n{color:var(--coral)}
+  .rung .d{color:var(--dim);font-size:14px}
+  .note{border-left:2px solid var(--rule);padding-left:15px;color:var(--faint);font-size:13.5px;max-width:62ch}
+  .note b{color:var(--dim);font-weight:500}
+  a{color:var(--coral);text-decoration:none;border-bottom:1px solid #4a2a24}
+  a:hover{border-bottom-color:var(--coral)}
+  footer{margin-top:64px;padding:22px 0 44px;border-top:1px solid var(--rule);
+         font-family:var(--mono);font-size:11px;color:var(--faint);
+         display:flex;gap:18px;flex-wrap:wrap;justify-content:space-between}
+  footer a{border-bottom:none;color:var(--dim)}
+  footer a:hover{color:var(--coral)}
+  .loading{font-family:var(--mono);font-size:11.5px;color:var(--faint);padding:14px 12px}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+<header>
+  <p class="eyebrow">Male <i>Drosophila</i> CNS &middot; neuPrint male-cns:v1.0</p>
+  <h1>A fly brain, running.</h1>
+  <p class="lede">Fifteen thousand neurons from a real fruit fly connectome, wired the way the electron
+    microscope found them. A camera is its eye, its descending neurons are the wheels, and
+    <b>nothing in between is programmed</b>. Cut its tracking cells and watch it fail.</p>
+
+  <div class="episodes" id="episodes" role="group" aria-label="Choose an episode"></div>
+  <p class="ep-blurb" id="ep-blurb">&nbsp;</p>
+</header>
+
+<div class="rig">
+  <div class="cell">
+    <div class="cap"><span>Arena &middot; top view</span><em id="arena-tag">&nbsp;</em></div>
+    <canvas id="arena" width="1280" height="800" role="img"
+            aria-label="Top view of the arena: the rover, its field of view, and the people it can see"></canvas>
+    <div class="readout">
+      <span>forward <b id="ro-fwd">0.000</b></span>
+      <span>turn <b id="ro-turn">+0.000</b></span>
+      <span>eye <b id="ro-eye">&mdash;</b></span>
+      <span>range <b id="ro-range">&mdash;</b></span>
+    </div>
+  </div>
+
+  <div class="rail">
+    <div class="cell steer">
+      <div class="cap"><span>DNa02 &middot; steering</span><em id="steer-tag">&nbsp;</em></div>
+      <div class="steer-row">
+        <div class="tube l"><i id="dl"></i></div>
+        <div class="steer-mid">L &middot; R</div>
+        <div class="tube r"><i id="dr"></i></div>
+      </div>
+      <div class="steer-num"><span>left <b id="dln">0</b> Hz</span><span><b id="drn">0</b> Hz right</span></div>
+    </div>
+
+    <div class="cell">
+      <div class="cap"><span>Firing rate</span><em>Hz</em></div>
+      <div class="bars" id="bars"></div>
+      <p class="legend">scaled to 340 Hz &middot; <b>coral</b> = saturated, above 200</p>
+    </div>
+
+    <div class="cell">
+      <div class="cap"><span>Spike raster</span><em id="raster-tag">512 sampled</em></div>
+      <canvas id="raster" width="1120" height="336" role="img"
+              aria-label="A raster of 512 sampled neurons flashing as they spike"></canvas>
+    </div>
+  </div>
+</div>
+
+<div class="transport">
+  <button id="play" aria-keyshortcuts="Space">Play</button>
+  <input type="range" id="scrub" min="0" max="0" value="0" step="1" aria-label="Scrub through the episode">
+  <span class="clock" id="clock">0.00 / 0.00 s</span>
+  <div class="speeds" role="group" aria-label="Playback speed">
+    <button data-speed="0.25">0.25&times;</button>
+    <button data-speed="0.5">0.5&times;</button>
+    <button data-speed="1" aria-pressed="true">1&times;</button>
+    <button data-speed="2">2&times;</button>
+    <button data-speed="4">4&times;</button>
+  </div>
+</div>
+<p class="hint">space play/pause &middot; &larr; &rarr; step one frame &middot; 1&ndash;4 switch episode</p>
+
+<section>
+  <h2>Three numbers, each smaller than the last</h2>
+  <div class="ladder">
+    <div class="rung"><div class="n">166,700</div><div class="d">every neuron in a male fruit fly, from the connectome published this month</div></div>
+    <div class="rung"><div class="n">15,000</div><div class="d">the ones on a path from eye to leg. That is what runs above, at 2,334,959 signed synapses</div></div>
+    <div class="rung"><div class="n">275</div><div class="d">the LC10a tracking cells. Under two percent. Pull them and it goes blind to people</div></div>
+  </div>
+  <p>Switch to <b>LC10a cut</b> above. Every other neuron, every synapse and every weight is identical;
+    all that changes is that every synapse onto and out of those 275 cells is set to zero. Watch what
+    that does, because it is not what most people expect: <b>LC10a still fires</b> whenever somebody is in
+    view, peaking at seventy hertz, because the retina injects current into it directly and the eye is
+    not what we cut. It simply has nowhere to send it. DNa02 sits at zero on both sides for the whole
+    fifteen seconds, and the rover wanders.</p>
+</section>
+
+<section>
+  <h2>What you are looking at</h2>
+  <div class="cols">
+    <p><b>The wedge</b> is the fly's field of view, 98.4&deg; wide, split into the 24 retina columns the
+      brain actually reads. Each one lights with the fraction of it a person covers. That is the entire
+      sensory input &mdash; the brain never sees a pixel.</p>
+    <p><b>DNa02</b> is the steering cell. There is one per side, and the difference between them is the
+      turn command. Watch the two tubes trade places as a person crosses the field of view. Left eye,
+      left steering neuron, and no line of code in between. On the lesioned run both sit at zero for
+      the whole fifteen seconds.</p>
+    <p><b>The raster</b> is 512 neurons sampled at random out of the fifteen thousand, flashing when they
+      spike. It is a 20&nbsp;millisecond window, so a dot means at least one spike in that step.</p>
+  </div>
+</section>
+
+<section>
+  <h2>What is the fly's and what is ours</h2>
+  <p>The steering is the claim, and it is untouched wiring: connection for connection, sign for sign,
+    strength for strength, straight out of neuPrint. Three things are ours and we label them everywhere.
+    <b>The encoder</b> that turns a camera into current on the eye neurons. <b>The read-out</b> that turns
+    descending-neuron firing rates into wheel commands. <b>The search behaviour</b> for when nobody is in
+    view, which is a state we wrote, not a circuit we found.</p>
+  <p class="note"><b>And one caveat worth saying out loud.</b> This page is a recording, not a live
+    simulation &mdash; fifteen thousand leaky integrate-and-fire neurons will not run in a browser tab. It
+    was produced by the same code in the repository, at 50&nbsp;Hz, and the replay files are checked in so
+    you can regenerate them yourself.</p>
+</section>
+
+<footer>
+  <span>Berg et&nbsp;al., <i>Cell</i>, 2026 &middot; neuPrint male-cns:v1.0 &middot; Shiu et&nbsp;al. 2024 LIF constants</span>
+  <span><a href="./">The 3D view</a> &middot; <a href="badge.html">Put it on your badge</a> &middot; <a href="https://github.com/Duck-luv-pie/Frankenfly">Source</a></span>
+</footer>
+</div>
+
+<script>
+"use strict";
+const HFOV = 98.43 * Math.PI / 180, NCOL = 24;
+const GROUP_META = {
+  LC10a_L:["LC10a L","eye"], LC10a_R:["LC10a R","eye"],
+  LC4_L:["LC4 L","eye"], LC4_R:["LC4 R","eye"],
+  LPLC2_L:["LPLC2 L","eye"], LPLC2_R:["LPLC2 R","eye"],
+  DNa02_L:["DNa02 L","mot"], DNa02_R:["DNa02 R","mot"],
+  DNa01_L:["DNa01 L","mot"], DNa01_R:["DNa01 R","mot"],
+  DNp09:["DNp09","mot"], GF:["giant fibre","mot"],
+  PAM:["PAM","dop"], PPL1:["PPL1","dop"],
+};
+const BAR_MAX = 340;      // real peaks reach 335 Hz; nothing should peg the bar
+const SATURATED = 200;    // above this a cell is saturated and its rate stops meaning much
+
+const $ = id => document.getElementById(id);
+const arena = $("arena"), actx = arena.getContext("2d");
+const raster = $("raster"), rctx = raster.getContext("2d");
+
+let ep = null, idx = 0, playing = false, speed = 1, acc = 0, last = 0;
+let decay = null, trail = [], barEls = {}, catalogue = [], current = -1;
+
+/* ---------- data ---------- */
+function unb64(s){
+  const bin = atob(s), a = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) a[i] = bin.charCodeAt(i);
+  return a;
+}
+
+async function loadEpisode(i){
+  const item = catalogue[i];
+  if (!item) return;
+  current = i;
+  [...$("episodes").children].forEach((b, j) => b.setAttribute("aria-pressed", String(j === i)));
+  $("ep-blurb").textContent = item.blurb;
+
+  const d = await (await fetch("data/" + item.file)).json();
+  d.presB = unb64(d.pres); d.spkB = unb64(d.spk);
+  const rb = unb64(d.rates), sc = d.rate_scale || 10;
+  d.ratesHz = new Float32Array(rb.length >> 1);
+  for (let k = 0; k < d.ratesHz.length; k++)
+    d.ratesHz[k] = (rb[k * 2] | (rb[k * 2 + 1] << 8)) / sc;
+  d.stride = (d.nviz + 7) >> 3;
+  ep = d;
+  decay = new Float32Array(d.nviz);
+  trail = [];
+  idx = 0; acc = 0;
+  $("scrub").max = String(d.n - 1);
+  $("scrub").value = "0";
+  buildBars();
+  fitCanvas();
+  $("arena-tag").textContent = d.lesion.length ? d.lesion.join(" + ") + " removed" : "intact wiring";
+  $("raster-tag").textContent = d.nviz + " of " + d.neurons.toLocaleString();
+  draw();
+}
+
+/* ---------- bars ---------- */
+function buildBars(){
+  const host = $("bars");
+  host.textContent = "";
+  barEls = {};
+  for (const g of ep.groups){
+    const [label, kind] = GROUP_META[g] || [g, "eye"];
+    const row = document.createElement("div");
+    row.className = "bar " + kind;
+    row.innerHTML = '<span class="nm"></span><span class="tr"><i></i></span><span class="hz">0</span>';
+    row.querySelector(".nm").textContent = label;
+    host.appendChild(row);
+    barEls[g] = {row, fill: row.querySelector("i"), hz: row.querySelector(".hz")};
+  }
+}
+
+/* ---------- drawing ---------- */
+function world(x, y, W, H, L){
+  return [ (x + L / 2) / L * W, (1 - (y + L / 2) / L) * H ];
+}
+
+function draw(){
+  if (!ep) return;
+  const i = Math.min(idx | 0, ep.n - 1);
+  const W = arena.width, H = arena.height, L = ep.L;
+  const px = Math.min(W, H) / L;               // pixels per metre
+  const ox = (W - L * px) / 2, oy = (H - L * px) / 2;
+  const toS = (x, y) => [ ox + (x + L / 2) * px, oy + (L / 2 - y) * px ];
+
+  actx.fillStyle = "#0d0c0b"; actx.fillRect(0, 0, W, H);
+
+  /* floor grid, one metre */
+  actx.strokeStyle = "#171412"; actx.lineWidth = 1;
+  for (let m = Math.ceil(-L / 2); m <= L / 2; m++){
+    const [gx] = toS(m, 0), [, gy] = toS(0, m);
+    actx.beginPath(); actx.moveTo(gx, oy); actx.lineTo(gx, oy + L * px); actx.stroke();
+    actx.beginPath(); actx.moveTo(ox, gy); actx.lineTo(ox + L * px, gy); actx.stroke();
+  }
+  actx.strokeStyle = "#2b2724"; actx.lineWidth = 2;
+  actx.strokeRect(ox, oy, L * px, L * px);
+
+  const rx = ep.rx[i] / 1000, ry = ep.ry[i] / 1000, yaw = ep.yaw[i] / 1000;
+  const [sx, sy] = toS(rx, ry);
+
+  /* field of view, one wedge per retina column, lit by presence.
+     clipped to the floor: the wedge reaches further than the arena from a corner. */
+  const base = i * NCOL;
+  actx.save();
+  actx.beginPath(); actx.rect(ox, oy, L * px, L * px); actx.clip();
+  const reach = L * 0.72 * px;
+  for (let c = 0; c < NCOL; c++){
+    const v = ep.presB[base + c] / 255;
+    const a0 = yaw - (-HFOV / 2 + (c) / NCOL * HFOV);
+    const a1 = yaw - (-HFOV / 2 + (c + 1) / NCOL * HFOV);
+    actx.beginPath();
+    actx.moveTo(sx, sy);
+    actx.lineTo(sx + Math.cos(-a0) * reach, sy + Math.sin(-a0) * reach);
+    actx.lineTo(sx + Math.cos(-a1) * reach, sy + Math.sin(-a1) * reach);
+    actx.closePath();
+    actx.fillStyle = v > 0.001
+      ? "rgba(90,169,255," + (0.10 + 0.62 * Math.min(1, v * 2.4)).toFixed(3) + ")"
+      : "rgba(90,169,255,0.030)";
+    actx.fill();
+  }
+  actx.strokeStyle = "rgba(90,169,255,0.22)"; actx.lineWidth = 1;
+  for (const s of [-1, 1]){
+    const a = yaw - s * HFOV / 2;
+    actx.beginPath(); actx.moveTo(sx, sy);
+    actx.lineTo(sx + Math.cos(-a) * reach, sy + Math.sin(-a) * reach); actx.stroke();
+  }
+  actx.restore();
+
+  /* people */
+  for (let h = 0; h < ep.nh; h++){
+    const hxv = ep.hx[h][i];
+    if (hxv === -32768) continue;
+    const [px2, py2] = toS(hxv / 1000, ep.hy[h][i] / 1000);
+    const r = (ep.hr[h] || 0.3) * px;
+    actx.beginPath(); actx.arc(px2, py2, r, 0, Math.PI * 2);
+    actx.fillStyle = "rgba(68,221,136,0.16)"; actx.fill();
+    actx.strokeStyle = "#44DD88"; actx.lineWidth = 2; actx.stroke();
+  }
+
+  /* trail */
+  trail.push([sx, sy]);
+  if (trail.length > 220) trail.shift();
+  if (trail.length > 1){
+    actx.lineWidth = 2; actx.lineCap = "round";
+    for (let t = 1; t < trail.length; t++){
+      actx.strokeStyle = "rgba(255,113,91," + (0.42 * t / trail.length).toFixed(3) + ")";
+      actx.beginPath(); actx.moveTo(trail[t - 1][0], trail[t - 1][1]);
+      actx.lineTo(trail[t][0], trail[t][1]); actx.stroke();
+    }
+  }
+
+  /* the rover */
+  const [bl, bw] = ep.lw;
+  actx.save(); actx.translate(sx, sy); actx.rotate(-yaw);
+  actx.fillStyle = "#FF715B";
+  actx.fillRect(-bl / 2 * px, -bw / 2 * px, bl * px, bw * px);
+  actx.fillStyle = "#ffd2c8";
+  actx.fillRect((bl / 2 - 0.06) * px, -bw / 2 * px, 0.06 * px, bw * px);
+  actx.restore();
+
+  /* read-outs: DOM, so they stay crisp at any width */
+  const fwd = ep.fwd[i] / 1000, trn = ep.trn[i] / 1000;
+  $("ro-fwd").textContent = fwd.toFixed(3);
+  $("ro-turn").textContent = (trn >= 0 ? "+" : "") + trn.toFixed(3);
+
+  /* which retina column is brightest, and how far the nearest visible person is */
+  let best = -1, bestv = 0, sum = 0, cen = 0;
+  for (let c = 0; c < NCOL; c++){
+    const v = ep.presB[base + c];
+    if (v > bestv){ bestv = v; best = c; }
+    sum += v; cen += c * v;
+  }
+  if (bestv > 8){
+    const col = cen / sum;
+    const az = (-HFOV / 2 + (col + 0.5) / NCOL * HFOV) * 180 / Math.PI;
+    $("ro-eye").textContent = (az >= 0 ? "+" : "") + az.toFixed(1) + "\u00b0";
+  } else {
+    $("ro-eye").textContent = "nobody in view";
+  }
+  let near = Infinity;
+  for (let h = 0; h < ep.nh; h++){
+    const hxv = ep.hx[h][i];
+    if (hxv === -32768) continue;
+    near = Math.min(near, Math.hypot(hxv / 1000 - rx, ep.hy[h][i] / 1000 - ry));
+  }
+  $("ro-range").textContent = isFinite(near) ? near.toFixed(2) + " m" : "\u2014";
+
+  drawRaster(i);
+  drawRates(i);
+
+  $("scrub").value = String(i);
+  $("clock").textContent = (i * ep.dt).toFixed(2) + " / " + ((ep.n - 1) * ep.dt).toFixed(2) + " s";
+}
+
+function drawRaster(i){
+  const W = raster.width, H = raster.height, n = ep.nviz;
+  const cols = 32, rows = Math.ceil(n / cols);
+  const cw = W / cols, ch = H / rows;
+  const base = i * ep.stride;
+  for (let k = 0; k < n; k++){
+    const lit = (ep.spkB[base + (k >> 3)] >> (k & 7)) & 1;
+    decay[k] = lit ? 1 : decay[k] * 0.80;
+  }
+  rctx.fillStyle = "#121110"; rctx.fillRect(0, 0, W, H);
+  for (let k = 0; k < n; k++){
+    const v = decay[k];
+    if (v < 0.03) continue;
+    const cx = (k % cols) * cw + cw / 2, cy = ((k / cols) | 0) * ch + ch / 2;
+    rctx.fillStyle = "rgba(90,169,255," + v.toFixed(3) + ")";
+    rctx.beginPath(); rctx.arc(cx, cy, Math.min(cw, ch) * 0.28, 0, Math.PI * 2); rctx.fill();
+  }
+}
+
+function drawRates(i){
+  const base = i * ep.groups.length;
+  let l = 0, r = 0;
+  ep.groups.forEach((g, k) => {
+    const hz = ep.ratesHz[base + k];
+    const b = barEls[g];
+    if (!b) return;
+    b.fill.style.width = Math.min(100, hz / BAR_MAX * 100).toFixed(1) + "%";
+    b.hz.textContent = hz.toFixed(0);
+    b.row.classList.toggle("on", hz > 2);
+    b.row.classList.toggle("dead", hz === 0);
+    b.row.classList.toggle("sat", hz >= SATURATED);
+    if (g === "DNa02_L") l = hz;
+    if (g === "DNa02_R") r = hz;
+  });
+  $("dl").style.width = Math.min(100, l / BAR_MAX * 100).toFixed(1) + "%";
+  $("dr").style.width = Math.min(100, r / BAR_MAX * 100).toFixed(1) + "%";
+  $("dln").textContent = l.toFixed(0); $("drn").textContent = r.toFixed(0);
+  const d = l - r;
+  $("steer-tag").textContent = Math.abs(d) < 4 ? "balanced"
+    : (d > 0 ? "← turning left" : "turning right →");
+}
+
+/* ---------- responsive canvas ---------- */
+const STACKED = matchMedia("(max-width: 880px)");
+function fitCanvas(){
+  const [w, h] = STACKED.matches ? [1000, 1000] : [1280, 800];
+  if (arena.width !== w || arena.height !== h){ arena.width = w; arena.height = h; }
+}
+STACKED.addEventListener("change", () => { fitCanvas(); draw(); });
+addEventListener("resize", () => { fitCanvas(); draw(); });
+
+/* ---------- transport ---------- */
+function setPlaying(p){
+  playing = p;
+  $("play").textContent = p ? "Pause" : "Play";
+  $("play").setAttribute("aria-pressed", String(p));
+  if (p){ last = performance.now(); requestAnimationFrame(tick); }
+}
+
+function tick(now){
+  if (!playing) return;
+  const dtms = Math.min(120, now - last); last = now;
+  if (ep){
+    acc += dtms * speed / 1000;
+    const step = ep.dt;
+    let moved = false;
+    while (acc >= step){ acc -= step; idx++; moved = true; }
+    if (idx >= ep.n){ idx = 0; trail = []; }
+    if (moved) draw();
+  }
+  requestAnimationFrame(tick);
+}
+
+$("play").onclick = () => setPlaying(!playing);
+$("scrub").oninput = e => { idx = +e.target.value; trail = []; acc = 0; draw(); };
+document.querySelectorAll(".speeds button").forEach(b => {
+  b.onclick = () => {
+    speed = parseFloat(b.dataset.speed);
+    document.querySelectorAll(".speeds button")
+      .forEach(o => o.setAttribute("aria-pressed", String(o === b)));
+  };
+});
+addEventListener("keydown", e => {
+  if (e.target.matches("input,button") && e.key !== " ") return;
+  if (e.key === " "){ e.preventDefault(); setPlaying(!playing); }
+  else if (e.key === "ArrowRight"){ setPlaying(false); idx = Math.min(ep.n - 1, idx + 1); draw(); }
+  else if (e.key === "ArrowLeft"){ setPlaying(false); idx = Math.max(0, idx - 1); draw(); }
+  else if (e.key >= "1" && e.key <= "4"){ loadEpisode(+e.key - 1); }
+});
+
+/* ---------- boot ---------- */
+(async () => {
+  catalogue = await (await fetch("data/index.json")).json();
+  const host = $("episodes");
+  catalogue.forEach((item, i) => {
+    const b = document.createElement("button");
+    b.className = "ep" + (item.lesion.length ? " cut" : "");
+    b.type = "button";
+    b.textContent = item.label;
+    b.setAttribute("aria-pressed", "false");
+    b.onclick = () => loadEpisode(i);
+    host.appendChild(b);
+  });
+  await loadEpisode(0);
+  if (!matchMedia("(prefers-reduced-motion: reduce)").matches) setPlaying(true);
+})();
+</script>
+</body>
+</html>

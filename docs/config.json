@@ -1,0 +1,33 @@
+{
+  "feed": "replay",
+  "episodes": [
+    {
+      "name": "episode_7_trained",
+      "file": "states_episode_7_trained.json",
+      "n": 750,
+      "lesion": []
+    },
+    {
+      "name": "episode_7_lesioned",
+      "file": "states_episode_7_lesioned.json",
+      "n": 750,
+      "lesion": [
+        "LC10a_L",
+        "LC10a_R"
+      ]
+    }
+  ],
+  "read_only": false,
+  "title": "FlyBrain Rover \u00b7 the simulation",
+  "who": "a recording of the 15,000-neuron male-CNS brain (flybrain-rover), played back in your browser \u2014 the poses and every firing rate came out of the simulation",
+  "links": [
+    {
+      "href": "arena.html",
+      "text": "top-down view, with the retina and the rate bars"
+    },
+    {
+      "href": "badge.html",
+      "text": "put the escape reflex on your own badge"
+    }
+  ]
+}
