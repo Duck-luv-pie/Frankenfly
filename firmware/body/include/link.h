@@ -37,4 +37,5 @@ class Link {
   char sbuf_[1024];
   size_t slen_ = 0;
   uint32_t lastWifiTry_ = 0;
+  uint32_t serialOk_ = 0;
 };

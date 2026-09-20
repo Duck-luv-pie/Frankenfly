@@ -81,7 +81,13 @@ bool Link::pollSerial(BrainPacket &out) {
   while (Serial.available()) {
     char c = (char)Serial.read();
     if (c == '\n' || c == '\r') {
-      if (slen_ > 0 && sbuf_[0] == '{') { sbuf_[slen_] = 0; if (parse(sbuf_, slen_, out)) got = true; }
+      if (slen_ > 0 && sbuf_[0] == '{') {
+        sbuf_[slen_] = 0;
+        if (parse(sbuf_, slen_, out)) { got = true; if (++serialOk_ % 100 == 1) Serial.printf("[link] serial packet #%lu ok (%u bytes)\n", (unsigned long)serialOk_, (unsigned)slen_); }
+        else { Serial.printf("[link] serial packet rejected (%u bytes): %.40s\n", (unsigned)slen_, sbuf_); }
+      } else if (slen_ > 0) {
+        Serial.printf("[link] serial line ignored (%u bytes, starts '%c')\n", (unsigned)slen_, sbuf_[0]);
+      }
       slen_ = 0;
     } else if (slen_ < sizeof(sbuf_) - 1) {
       sbuf_[slen_++] = c;
