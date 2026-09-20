@@ -45,7 +45,8 @@ class RealHunt:
         self.paused = False
         self.rover_on = body is not None and rover_on        # --rover-off: attached but not driving until the page enables it
         # the lobotomy: a second, untrained brain with every synapse out of its sensory neurons cut (as in the viewer);
-        # the switch decides which brain drives the body. Toggled from the page, or by a remote button (tools/pi/remote_button.py).
+        # the switch decides which brain drives the body. Toggled from the page, or from the remote Pi (tools/pi/remote_button.py:
+        # START = trained brain + rover on, STOP = rover off, LOBOTOMY = this spare brain; its READY light follows "ready" in /status).
         from .brain_train import SpikingHunter
         self.dumb = SpikingHunter(cfg, spiking.hc, None, verbose=False)
         self.dumb.bind_arena(self.arena)
@@ -101,9 +102,13 @@ class RealHunt:
         yaw_dps = -self.wmax_dps * float(self.arena.turn_sign) * tu          # arena heading rate = turn_sign*wmax*tu (+ve left); yaw_dps +ve = clockwise
         self.prev_drive[:] = (f, tu)
         self.t += self.arena.dt
-        if self.body is not None and self.rover_on:
-            self.body.send({"t": int((time.time() - self.t0) * 1000), "state": "hunt",
-                            "motor": {"forward": max(0.0, f), "backward": 0.0, "turn": tu, "yaw_dps": yaw_dps, "speed_mps": self.speed}})
+        if self.body is not None:
+            if self.rover_on:
+                motor = {"forward": max(0.0, f), "backward": 0.0, "turn": tu, "yaw_dps": yaw_dps, "speed_mps": self.speed}
+            else:                                                # stopped: keep the S-Bus alive with the sticks centred (the remote's STOP is immediate,
+                motor = {"forward": 0.0, "backward": 0.0, "turn": 0.0, "yaw_dps": 0.0, "speed_mps": 0.0}   # not "the signal dropped, then the body centred")
+                self.speed = 0.0
+            self.body.send({"t": int((time.time() - self.t0) * 1000), "state": "hunt", "motor": motor})
         spk = hunter.spikes
         lit = spk.nonzero()[0]
         types: dict[str, int] = {}
@@ -116,6 +121,7 @@ class RealHunt:
               "speed_mps": round(self.speed, 2), "yaw_dps": round(yaw_dps, 1), "fov_deg": self.sense.cam_fov,
               "rover": (self.body.status() if self.body is not None and hasattr(self.body, "status") else None), "rover_on": self.rover_on,
               "paused": self.paused, "heat_on": self.heat_on, "camera_ok": camera_ok, "lobotomized": self.lobotomized,
+              "ready": bool(camera_ok) and self.body is not None,       # the remote's READY light: brain up, camera streaming, legs attached
               "brain": {"n_spikes": int(spk.sum()), "top": sorted(types.items(), key=lambda kv: -kv[1])[:8],
                         "rates": {g: [round(rates[g]["left"], 1), round(rates[g]["right"], 1)] for g in ("DNa02", "DNa01", "DN_all", "MDN", "DNp09")}}}
         with self.lock:
@@ -148,7 +154,7 @@ def serve(cfg, spiking, camera: str, cam_fov_deg: float = 62.0, body=None, pir=N
                 self._send(204, "text/plain", b"")
             elif path == "/frame.jpg":
                 self._send(200, "image/jpeg", hunt.frame_jpg or b"")
-            elif path == "/status":                                  # one JSON snapshot (the remote button polls this)
+            elif path == "/status":                                  # one JSON snapshot (the remote polls this; {} until the first tick)
                 with hunt.lock:
                     snap = dict(hunt.last)
                 snap.pop("brain", None)
@@ -168,7 +174,7 @@ def serve(cfg, spiking, camera: str, cam_fov_deg: float = 62.0, body=None, pir=N
                 hunt.paused = bool(req["paused"])
             if "rover" in req:
                 hunt.rover_on = bool(req["rover"]) and body is not None
-                print(f"[hunt-real] rover {'on' if hunt.rover_on else 'off (the fly only watches)'}", flush=True)
+                print(f"[hunt-real] rover {'on' if hunt.rover_on else 'off (the fly only watches; sticks centred)'}", flush=True)
             if "heat" in req:
                 hunt.heat_on = bool(req["heat"])
             if "lobotomy" in req:

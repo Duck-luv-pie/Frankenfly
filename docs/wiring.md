@@ -190,23 +190,47 @@ time; the hunt subcircuit (8,503 spiking neurons, `hunt-brain --spiking`) at **1
 The ESP32 S-Bus bridge is `/dev/ttyUSB0` on the Pi; `hunt-brain --watch --s1 /dev/ttyUSB0` there drives
 the S1 with the dashboard at `http://<pi>:8601` from any machine on the same network.
 
-## The lobotomy remote (a second Pi with a button)
+## The remote (a second Pi: three buttons, three lights)
 
-The robot Pi's real-world mode keeps a spare brain, the same 8,503 neurons untrained with every synapse
-out of its sensory neurons cut, and a switch decides which brain drives the body (the page's "lobotomize"
-button, `POST /control {"lobotomy": true|false}`, `GET /status` reports it). The remote is any Pi on the
-robot's Wi-Fi `companion` running `tools/pi/remote_button.py`: each press toggles, an LED shows the state.
+Two Pis: the **robot Pi** (slave) runs the fly and the S1; the **remote Pi** (master) is a breadboard controller
+on the robot's Wi-Fi `companion` running `tools/pi/remote_button.py`. The robot's real-world mode keeps a spare
+brain, the same 8,503 neurons untrained with every synapse out of its sensory neurons cut, and a switch decides
+which brain drives the body. The remote polls `GET /status` four times a second for the lights and the
+buttons `POST /control` (the same calls as the page at `:8601`, so the page and the remote always agree):
+
+| Button | What it sends | Effect |
+|---|---|---|
+| START | `{"rover": true, "lobotomy": false, "paused": false}` | the trained (GPU-evolved) fly drives the rover |
+| STOP | `{"rover": false}` | no movement: the fly keeps watching, the S-Bus keeps running with the sticks centred |
+| LOBOTOMY | `{"lobotomy": true}` | the untrained, senseless brain takes over (still moving if it was); START brings the trained fly back |
+
+| Light | Meaning |
+|---|---|
+| READY | lit: the robot answers, the brain has loaded (~80 s after boot), the camera streams, the body is attached (`"ready"` in `/status`). Slow blink: brain up but the camera or the body is missing. Off: the robot is not answering |
+| RUNNING | lit while the rover is driving |
+| LOBOTOMY | lit while the spare brain drives |
 
 | Remote Pi header | Part |
 |---|---|
-| GPIO 17 (pin 11) and GND (pin 9) | the button, between the two |
-| GPIO 27 (pin 13) -> 330 ohm -> LED -> GND (pin 14) | optional: lit while lobotomized, blinks when the robot is unreachable |
+| GPIO 5 (pin 29) to GND (pin 30) | START button |
+| GPIO 6 (pin 31) to GND (pin 30) | STOP button |
+| GPIO 17 (pin 11) to GND (pin 9) | LOBOTOMY button |
+| GPIO 22 (pin 15) -> 330 ohm -> LED -> GND (pin 14) | READY light (green) |
+| GPIO 23 (pin 16) -> 330 ohm -> LED -> GND (pin 14) | RUNNING light (blue) |
+| GPIO 27 (pin 13) -> 330 ohm -> LED -> GND (pin 14) | LOBOTOMY light (red) |
 
-Setup: image its card like the robot's (`tools/pi_image.md`) with hostname `companion-remote` and the Wi-Fi
-`companion` / `hunting-fly` in `network-config`; then `sudo apt install python3-gpiozero`, copy `tools/pi/`
-over, and `sudo cp remote-button.service /etc/systemd/system/ && sudo systemctl enable --now remote-button`.
-The robot Pi is `10.42.0.1` on its own network. Verified 2026-09-19 (the HTTP side, on the Mac): trained
-fly drive 1.0 toward the people in view; lobotomized, 0.3 and wandering.
+Buttons use the Pi's internal pull-ups (no resistor); any GPIO can be swapped with `--start/--stop/--lobotomy`
+and `--led-ready/--led-running/--led-lobotomy` (-1 leaves one out). Long LED leg to the resistor.
+
+Setup: image its card as in `tools/pi_image.md`, then with the boot partition mounted run `tools/remote_card.sh`:
+it writes `user-data` (hostname `companion-remote`, user `companion`, the script and its service embedded, so
+the remote runs from first boot with no ssh or clone) and `network-config` (the robot's `companion` / `hunting-fly`;
+extra networks from the git-ignored `tools/pi/extra-wifi.yaml`). Later changes: `tools/remote_push.sh` copies
+the script over and restarts the service; `journalctl -u remote-button -f` on the remote shows every press
+and what the robot reports. Without a breadboard, `python3 tools/pi/remote_button.py --keys --robot http://10.42.0.1:8601`
+from a laptop presses the buttons from the keyboard and prints the lights. The robot Pi is `10.42.0.1` on its
+own network. Verified 2026-09-19 (the HTTP side): trained fly drive 1.0 toward the people in view; lobotomized,
+0.3 and wandering. The remote is not a dead-man switch: if it goes out of range the robot keeps doing what it was told.
 
 ## Bring-up order
 

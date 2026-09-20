@@ -26,13 +26,18 @@ if baud == 115200: print("== NOTE: the board answers at 115200: it is still runn
 eye = {"px": 0, "py": 0, "pr": 0.3, "ut": 0.4, "lt": 0.4, "tint": [255, 120, 40], "tilt": 0.3}
 pkt = {"t": 1, "state": "angry", "eyes": {"l": eye, "r": eye}, "blink": False, "sound": {"track": 0, "vol": 0}, "s1": {"ch": [1024, 1024, 1024, 1024, 352, 352, 1696]}}
 line = (json.dumps(pkt, separators=(",", ":")) + "\n").encode()
-print(f"== sending 3 test packets of {len(line)} bytes")
-for i in range(3): s.write(line); time.sleep(0.3)
-t = time.time(); buf = b""
-while time.time() - t < 3:
+print(f"== feeding test packets of {len(line)} bytes at 20 Hz for 20 s (the board joins Wi-Fi first, then reports)")
+t = time.time(); buf = b""; nxt = t
+while time.time() - t < 20:
+    if time.time() >= nxt:
+        try: s.write(line)
+        except serial.SerialException as e: print("write failed:", e); break
+        nxt += 0.05
     try: buf += s.read(4096)
     except serial.SerialException: time.sleep(0.05)
-print("== board says:"); print(buf.decode(errors="replace").strip() or "(nothing)")
+txt = buf.decode(errors="replace")
+print("== board says:"); print("\n".join(l for l in txt.splitlines() if l.strip())[-1500:] or "(nothing)")
+print("== verdict:", "S-BUS FRAMES GOING OUT" if "[sbus] GPIO" in txt and "frames" in txt else ("packets parsed but no S-Bus report yet" if "serial packet" in txt else "no packets parsed"))
 s.close()
 EOF
 echo "== restarting the fly"; sudo systemctl start companion-hunt

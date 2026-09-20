@@ -1,11 +1,12 @@
-# The lobotomy remote at boot. Install on the REMOTE Pi:
-#   sudo apt install python3-gpiozero && sudo cp remote-button.service /etc/systemd/system/ && sudo systemctl enable --now remote-button
+# The remote at boot. On the REMOTE Pi (the card from tools/remote_card.sh installs this by itself; by hand:)
+#   sudo apt install python3-gpiozero python3-lgpio && sudo cp remote-button.service /etc/systemd/system/ && sudo systemctl enable --now remote-button
+# journalctl -u remote-button -f  shows every press and what the robot reports.
 [Unit]
-Description=Companion remote: a button that lobotomizes the fly on the robot
+Description=Companion remote: START / STOP / LOBOTOMY buttons and lights for the fly on the robot
 After=network-online.target
 
 [Service]
-ExecStart=/usr/bin/python3 /home/companion/companion/tools/pi/remote_button.py
+ExecStart=/usr/bin/python3 /home/companion/remote_button.py
 Restart=always
 RestartSec=3
 

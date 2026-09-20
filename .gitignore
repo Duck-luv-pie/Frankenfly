@@ -25,3 +25,4 @@ assets/sounds/*.wav
 
 # Person detector weights (downloaded on first use by senses/people.py)
 brain/data/models/
+tools/pi/extra-wifi.yaml
