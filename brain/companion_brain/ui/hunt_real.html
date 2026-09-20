@@ -42,7 +42,7 @@
     <div class="row dim"><span>spikes this tick</span><span id="spk">–</span></div>
     <div class="row dim"><span>DNa02 L / R (pursuit)</span><span id="dna">–</span></div>
     <ul id="top"></ul>
-    <div style="margin-top:10px"><button id="pause">pause</button><button id="rov">rover: on</button><button id="heat">heat: on</button></div>
+    <div style="margin-top:10px"><button id="pause">pause</button><button id="rov">rover: on</button><button id="heat">heat: on</button><button id="lobo">lobotomize</button></div>
     <div class="dim" style="margin-top:8px">The person detector is NanoDet (COCO) through OpenCV: it finds people whole or partly in view. Step back so your body is in the frame, then walk.</div>
   </div>
 </div>
@@ -56,6 +56,8 @@ const post = o => fetch('/control', { method: 'POST', headers: { 'Content-Type':
 $('pause').onclick = () => { paused = !paused; $('pause').textContent = paused ? 'resume' : 'pause'; post({ paused }); };
 $('rov').onclick = () => { rover = !rover; post({ rover }); };
 $('heat').onclick = () => { heat = !heat; post({ heat }); };
+let lobotomized = false;
+$('lobo').onclick = () => { post({ lobotomy: !lobotomized }); };
 const es = new EventSource('/events');
 es.onmessage = ev => {
   const st = JSON.parse(ev.data);
@@ -67,6 +69,8 @@ es.onmessage = ev => {
   $('rover').textContent = st.rover ? `sticks fwd ${(st.rover.sticks.forward * 100).toFixed(0)}% yaw ${(st.rover.sticks.yaw * 100).toFixed(0)}%${st.rover.saturated ? ' (maxed)' : ''}${st.rover_on ? '' : ' · off'}` : 'not attached';
   $('rov').textContent = st.rover_on ? 'rover: on' : 'rover: off'; $('rov').classList.toggle('off', !st.rover_on); rover = st.rover_on;
   $('heat').textContent = st.heat_on ? 'heat: on' : 'heat: off'; $('heat').classList.toggle('off', !st.heat_on);
+  lobotomized = !!st.lobotomized; $('lobo').textContent = lobotomized ? 'restore the trained fly' : 'lobotomize'; $('lobo').style.background = lobotomized ? '#7a2a3a' : '';
+  document.querySelector('h1').style.color = lobotomized ? '#ff8aa0' : '';
   $('spk').textContent = st.brain.n_spikes; $('dna').textContent = `${st.brain.rates.DNa02[0]} / ${st.brain.rates.DNa02[1]} Hz`;
   $('top').innerHTML = st.brain.top.map(([t, n]) => `<li>${t} <span class="dim">${n}</span></li>`).join('');
   $('fov').textContent = st.fov_deg; $('camstate').textContent = st.camera_ok ? `· ${st.boxes.length} ${st.boxes.length === 1 ? 'person' : 'people'} in view` : '· waiting for the camera';

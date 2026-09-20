@@ -44,6 +44,14 @@ class RealHunt:
         self.cell_type = spiking.hc.circuit.cell_type
         self.paused = False
         self.rover_on = body is not None and rover_on        # --rover-off: attached but not driving until the page enables it
+        # the lobotomy: a second, untrained brain with every synapse out of its sensory neurons cut (as in the viewer);
+        # the switch decides which brain drives the body. Toggled from the page, or by a remote button (tools/pi/remote_button.py).
+        from .brain_train import SpikingHunter
+        self.dumb = SpikingHunter(cfg, spiking.hc, None, verbose=False)
+        self.dumb.bind_arena(self.arena)
+        cut = self.dumb.sever_senses()
+        print(f"[hunt-real] lobotomy ready: {cut:,} synapses out of the sensory neurons cut in the spare brain", flush=True)
+        self.lobotomized = False
         self.lock = threading.Lock()
         self.last: dict = {}
         self.frame_jpg = b""
@@ -84,7 +92,8 @@ class RealHunt:
                 heat[:] = min(1.0, float(self.arena.heat_gain))             # the HC-SR501: one bit into both hot cells (as in the arena's pir model)
         body = np.array([self.speed / self.vmax, self.prev_drive[0], self.prev_drive[1], (self.t % self.episode_s) / self.episode_s], dtype=np.float32)
         obs = torch.from_numpy(np.concatenate([heat, vis.reshape(-1), body]))[None]
-        drive, _decoded = self.spiking(obs)                      # the spiking hunter returns (drive, decoded motor channels)
+        hunter = self.dumb if self.lobotomized else self.spiking
+        drive, _decoded = hunter(obs)                            # the spiking hunter returns (drive, decoded motor channels)
         f, tu = float(drive[0, 0]), float(drive[0, 1])
         # the fly's would-be motion, as the arena would integrate it (the S1 driver turns these into sticks)
         target = self.vmax * max(0.0, f)
@@ -95,18 +104,18 @@ class RealHunt:
         if self.body is not None and self.rover_on:
             self.body.send({"t": int((time.time() - self.t0) * 1000), "state": "hunt",
                             "motor": {"forward": max(0.0, f), "backward": 0.0, "turn": tu, "yaw_dps": yaw_dps, "speed_mps": self.speed}})
-        spk = self.spiking.spikes
+        spk = hunter.spikes
         lit = spk.nonzero()[0]
         types: dict[str, int] = {}
         for i in lit:
             t = str(self.cell_type[i]); types[t] = types.get(t, 0) + int(spk[i])
-        rates = self.spiking.runner.rates(300)
+        rates = hunter.runner.rates(300)
         st = {"t": round(self.t, 2), "heat": [round(float(heat[0]), 3), round(float(heat[1]), 3)],
               "vis": [round(float(v), 2) for v in vis[:, 0]], "motion": [round(float(v), 2) for v in vis[:, 1]],
               "boxes": [[int(v) for v in b] for b in boxes], "drive": [round(f, 3), round(tu, 3)],
               "speed_mps": round(self.speed, 2), "yaw_dps": round(yaw_dps, 1), "fov_deg": self.sense.cam_fov,
               "rover": (self.body.status() if self.body is not None and hasattr(self.body, "status") else None), "rover_on": self.rover_on,
-              "paused": self.paused, "heat_on": self.heat_on, "camera_ok": camera_ok,
+              "paused": self.paused, "heat_on": self.heat_on, "camera_ok": camera_ok, "lobotomized": self.lobotomized,
               "brain": {"n_spikes": int(spk.sum()), "top": sorted(types.items(), key=lambda kv: -kv[1])[:8],
                         "rates": {g: [round(rates[g]["left"], 1), round(rates[g]["right"], 1)] for g in ("DNa02", "DNa01", "DN_all", "MDN", "DNp09")}}}
         with self.lock:
@@ -139,6 +148,11 @@ def serve(cfg, spiking, camera: str, cam_fov_deg: float = 62.0, body=None, pir=N
                 self._send(204, "text/plain", b"")
             elif path == "/frame.jpg":
                 self._send(200, "image/jpeg", hunt.frame_jpg or b"")
+            elif path == "/status":                                  # one JSON snapshot (the remote button polls this)
+                with hunt.lock:
+                    snap = dict(hunt.last)
+                snap.pop("brain", None)
+                self._send(200, "application/json", json.dumps(snap, separators=(",", ":")).encode())
             else:
                 rel = path.lstrip("/")
                 target = (UI_DIR / rel).resolve()
@@ -157,6 +171,9 @@ def serve(cfg, spiking, camera: str, cam_fov_deg: float = 62.0, body=None, pir=N
                 print(f"[hunt-real] rover {'on' if hunt.rover_on else 'off (the fly only watches)'}", flush=True)
             if "heat" in req:
                 hunt.heat_on = bool(req["heat"])
+            if "lobotomy" in req:
+                hunt.lobotomized = bool(req["lobotomy"])
+                print(f"[hunt-real] {'LOBOTOMIZED: the untrained, senseless brain drives now' if hunt.lobotomized else 'the trained brain is back'}", flush=True)
             self._send(204, "text/plain", b"")
 
         def _send(self, code, ctype, payload):

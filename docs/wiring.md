@@ -190,6 +190,24 @@ time; the hunt subcircuit (8,503 spiking neurons, `hunt-brain --spiking`) at **1
 The ESP32 S-Bus bridge is `/dev/ttyUSB0` on the Pi; `hunt-brain --watch --s1 /dev/ttyUSB0` there drives
 the S1 with the dashboard at `http://<pi>:8601` from any machine on the same network.
 
+## The lobotomy remote (a second Pi with a button)
+
+The robot Pi's real-world mode keeps a spare brain, the same 8,503 neurons untrained with every synapse
+out of its sensory neurons cut, and a switch decides which brain drives the body (the page's "lobotomize"
+button, `POST /control {"lobotomy": true|false}`, `GET /status` reports it). The remote is any Pi on the
+robot's Wi-Fi `companion` running `tools/pi/remote_button.py`: each press toggles, an LED shows the state.
+
+| Remote Pi header | Part |
+|---|---|
+| GPIO 17 (pin 11) and GND (pin 9) | the button, between the two |
+| GPIO 27 (pin 13) -> 330 ohm -> LED -> GND (pin 14) | optional: lit while lobotomized, blinks when the robot is unreachable |
+
+Setup: image its card like the robot's (`tools/pi_image.md`) with hostname `companion-remote` and the Wi-Fi
+`companion` / `hunting-fly` in `network-config`; then `sudo apt install python3-gpiozero`, copy `tools/pi/`
+over, and `sudo cp remote-button.service /etc/systemd/system/ && sudo systemctl enable --now remote-button`.
+The robot Pi is `10.42.0.1` on its own network. Verified 2026-09-19 (the HTTP side, on the Mac): trained
+fly drive 1.0 toward the people in view; lobotomized, 0.3 and wandering.
+
 ## Bring-up order
 
 1. **Cam first, nothing wired.** Flash, open `http://companion-cam.local:81/stream` in a
