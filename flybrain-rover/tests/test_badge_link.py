@@ -139,3 +139,35 @@ def test_the_badge_never_enables_the_radio():
     """This link exists over serial precisely because BLE panics the device."""
     lua = (Path(__file__).resolve().parents[1] / "badge" / "swatgame_app.lua").read_text()
     assert "badge.radio" not in lua
+
+
+def test_a_debounced_transition_lands_late_rather_than_vanishing(link):
+    """The debounce may delay a press, never swallow it.
+
+    The badge prints only on a press and never repeats itself, so a dropped transition would leave the
+    rover lobotomised for ever with the badge convinced it had turned it back off.
+    """
+    lk, sent, clk = link
+    assert lk.feed("@FLY LOBO 1") == [KEY_LOBO_ON]
+    clk.t += 0.05
+    assert lk.feed("@FLY LOBO 0") == [], "the bounce window should hold it back"
+    assert lk.tick() == [], "and not release it early"
+    clk.t += 1.0
+    assert lk.tick() == [KEY_LOBO_OFF], "the held transition never landed"
+    assert lk.lobo is False
+    assert lk.tick() == [], "and it must not repeat"
+    assert sent == [KEY_LOBO_ON, KEY_LOBO_OFF]
+
+
+def test_only_the_latest_held_state_is_applied(link):
+    """Flapping inside the window must settle on where the button actually ended up."""
+    lk, sent, clk = link
+    lk.feed("@FLY STOP 1")
+    for _ in range(4):
+        clk.t += 0.02
+        lk.feed("@FLY STOP 0")
+        clk.t += 0.02
+        lk.feed("@FLY STOP 1")
+    clk.t += 1.0
+    lk.tick()
+    assert lk.stopped is True, "the badge ended up stopped, so the rover must be stopped"

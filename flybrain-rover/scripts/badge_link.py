@@ -62,8 +62,12 @@ class Link:
         # The badge sends absolute state ("STOP 1"); the rover's hotkey 0 is a toggle. So a datagram
         # goes out only on a CHANGE, and the two stay in step as long as they start in step. Pressing
         # 0 on the keyboard behind its back is what would desynchronise them.
+        # What the rover currently is, and what the badge last said it should be. Keeping the target
+        # rather than a queue of transitions is what makes a button that flaps and settles back where
+        # it started do nothing at all, instead of firing a stale press half a second later.
         self.lobo = False
         self.stopped = False
+        self.want = {"LOBO": False, "STOP": False}
 
     def _debounced(self, key: str) -> bool:
         t = self.now()
@@ -71,6 +75,28 @@ class Link:
             return False
         self.last_fire[key] = t
         return True
+
+    def _flush(self) -> list[bytes]:
+        """Send whatever is needed to make the rover match what the badge last asked for.
+
+        Called on every line and on every read. The debounce can only ever DELAY this, because the
+        badge prints on a press and never repeats itself: a swallowed transition would leave the rover
+        lobotomised for ever with the badge convinced it had turned it back off.
+        """
+        out: list[bytes] = []
+        if self.want["LOBO"] != self.lobo and self._debounced("LOBO"):
+            self.lobo = self.want["LOBO"]
+            out.append(KEY_LOBO_ON if self.lobo else KEY_LOBO_OFF)
+        if self.want["STOP"] != self.stopped and self._debounced("STOP"):
+            self.stopped = self.want["STOP"]
+            out.append(KEY_STOP)
+        for b in out:
+            self.send(b)
+        return out
+
+    def tick(self) -> list[bytes]:
+        """Let a held-back press land. main() calls this every read."""
+        return self._flush()
 
     def feed(self, line: str) -> list[bytes]:
         """One console line in, the bytes actually sent out. Anything without the marker is ignored,
@@ -83,19 +109,10 @@ class Link:
         what, arg = tail[0].upper(), tail[1]
         if arg not in ("0", "1"):
             return []
-        on = arg == "1"
-        out: list[bytes] = []
-
-        if what == "LOBO" and on != self.lobo and self._debounced("LOBO"):
-            self.lobo = on
-            out.append(KEY_LOBO_ON if on else KEY_LOBO_OFF)
-        elif what == "STOP" and on != self.stopped and self._debounced("STOP"):
-            self.stopped = on
-            out.append(KEY_STOP)
-
-        for b in out:
-            self.send(b)
-        return out
+        if what not in self.want:
+            return []
+        self.want[what] = arg == "1"
+        return self._flush()
 
 
 def main(argv=None) -> int:
@@ -155,6 +172,7 @@ def main(argv=None) -> int:
                 while b"\n" in buf:
                     raw, buf = buf.split(b"\n", 1)
                     link.feed(raw.decode("utf-8", "replace").strip())
+            link.tick()                # let any debounced press land rather than vanish
             if len(buf) > 4096:        # a console that never sends a newline must not grow without end
                 buf = buf[-512:]
     except KeyboardInterrupt:

@@ -25,3 +25,14 @@ assets/sounds/*.wav
 
 # Person detector weights (downloaded on first use by senses/people.py)
 brain/data/models/
+
+# Secrets. A .env reached this repo once already; the root and brain/ were never covered, only
+# flybrain-rover/. Every variant, at any depth.
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+*.key
+*.pem
+secrets.ini

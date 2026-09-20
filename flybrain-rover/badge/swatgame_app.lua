@@ -282,6 +282,8 @@ end
 local function go_idle()
   if score > best then best = score; badge.store.set_int("swat_best", best); ui.best:set_text("best " .. best) end
   state = "idle"; bug_kind = nil
+  pending, strike_at = false, 0
+  ui.mesh:style(SMESH)          -- a run that ended on a strike left the head flashed white
   dress(MOS, 0)
   say("SHAKE TO SWAT", 0)
   ui.hint:set_text("mosquitoes yes, chickens no")
@@ -347,6 +349,7 @@ function on_tick()
   if state == "card" then
     if now_ms >= card_until then
       ui.mesh:style(SMESH)
+      pending, strike_at = false, 0
       state = "play"; spawn()
       dress(bug_kind == "hen" and HEN or MOS, bug_kind == "hen" and 8 or 6)
     end

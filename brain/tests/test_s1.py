@@ -139,3 +139,65 @@ def test_serial_body_link_writes_packets_as_lines():
     m.send({"state": "hunt", "motor": {"forward": 1.0, "turn": 0.0}})
     line = ser.frames[0]
     assert line.endswith(b"\n") and b'"s1":{"ch":[' in line
+
+
+# ---------------------------------------------------------------- merge regressions
+# Both of these were introduced by the sim-mirror-webapp merge and found by review, not by a test.
+
+def test_physical_unit_packets_saturate_instead_of_being_rejected():
+    """hunt_gpu/real.py sends the fly's would-be motion, up to 1.6 m/s and 200 deg/s, against an S1
+    calibrated at 0.85 and 90. It has always relied on motor_to_sticks saturating. The R7.4 range
+    reject that arrived with the merge turned every committed chase into a dropped packet, and
+    silently: send()'s bool has no caller, so the only symptom is the failsafe centring the sticks.
+    """
+    from companion_brain.body.s1 import DEFAULTS, S1Body
+
+    body = S1Body(cfg=dict(DEFAULTS), ser=object(), start=False)
+    pkt = {"motor": {"speed_mps": 1.6, "yaw_dps": -200.5}}       # what a full-tilt chase looks like
+    assert body.send(pkt) is True, "a chase packet was rejected; the hardware demo is dead"
+    st = body.status()
+    assert st["rejects"] == 0
+    assert st["saturations"] >= 1, "it should record that it saturated"
+    assert abs(st["sticks"]["forward"]) <= 1.0 and abs(st["sticks"]["yaw"]) <= 1.0
+
+
+def test_the_unitless_path_is_still_guarded():
+    """The guard still has to do its job where it can: forward is clipped before its gain, so only
+    turn can leave the range on this path."""
+    from companion_brain.body.s1 import DEFAULTS, S1Body
+
+    body = S1Body(cfg=dict(DEFAULTS), ser=object(), start=False)
+    assert body.send({"motor": {"forward": 0.5, "turn": 9.0}}) is False
+    assert body.send({"motor": {"speed_mps": float("nan")}}) is False
+    assert body.status()["rejects"] == 2
+
+
+def test_multibody_exposes_the_s1_config():
+    """Mirror configures the body through `body.cfg`. A MultiBody that did not forward it meant
+    --s1 udp and --s1 usb ran on DEFAULTS, with v_max, w_max and sign_yaw never reaching the S1."""
+    from companion_brain.body.s1 import DEFAULTS, MultiBody, S1Body
+
+    class FakeLink:
+        addr, pir, busy, last_rx = ("fake", 0), 0, 0, 0.0
+        def send(self, packet): return True
+        def poll(self): return None
+
+    s1 = S1Body(cfg=dict(DEFAULTS), ser=object(), start=False)
+    mb = MultiBody(s1, FakeLink())
+    assert mb.cfg is s1.cfg
+    mb.cfg["rotation_only"] = False
+    assert s1.cfg["rotation_only"] is False, "configuring the MultiBody did not reach the S1"
+
+
+def test_multibody_send_reports_a_rejection():
+    from companion_brain.body.s1 import DEFAULTS, MultiBody, S1Body
+
+    class FakeLink:
+        addr, pir, busy, last_rx = ("fake", 0), 0, 0, 0.0
+        def send(self, packet): return True
+        def poll(self): return None
+
+    s1 = S1Body(cfg=dict(DEFAULTS), ser=object(), start=False)
+    mb = MultiBody(s1, FakeLink())
+    assert mb.send({"motor": {"forward": 0.2, "turn": 0.2}}) is True
+    assert mb.send({"motor": {"forward": 0.0, "turn": 42.0}}) is False

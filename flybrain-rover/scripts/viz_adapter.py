@@ -290,7 +290,9 @@ class Adapter:
               "drive": [round(fwd, 3), round(turn, 3)], "reward": round(reward, 3), "total": round(self.total, 2), "done": False,
               "lobotomized": bool(f.get("blind", self.lobotomized)),
               "halted": bool(f.get("halted", self.halted)),
-              "rover": not bool(f.get("halted", self.halted)),   # Ducks's name for the same bit "heat_on": self.heat_on, "see_m": 6.0, "fov_deg": round(self.fov, 1),
+              # "rover" is Ducks's name for the same bit as "halted"; both ship so either page works
+              "rover": not bool(f.get("halted", self.halted)),
+              "heat_on": self.heat_on, "see_m": 6.0, "fov_deg": round(self.fov, 1),
               "brain": brain, "stats": {}, "history": []}
         if self.live:
             st["heading_deg"] = round(math.degrees(_wrap(yaw - math.pi / 2)), 1)   # HUD: heading 0 = his +z

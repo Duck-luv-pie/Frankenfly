@@ -149,6 +149,7 @@ class S1Body:
         self.released = False
         self.last_packet = 0.0
         self.rejects = 0                   # out-of-range packets rejected by send (R7.4)
+        self.saturations = 0               # physical-unit packets asking for more than the S1 can do
         self.last_valid = True             # False after the most recent send was rejected
         self.link_ok = True                # the last S-Bus write succeeded (an S1 link check for the E-stop, R6.5)
         # heading tracking (the hunt viewer sends the fly's absolute heading): the rover's heading is estimated from what
@@ -176,13 +177,37 @@ class S1Body:
         motor = packet.get("motor") or {}
         # R7.4: reject a command whose stick axes fall outside [-1, 1] (or are non-finite) before it is
         # clamped in, keeping the last good state, so a bad per-tick command cannot move the robot.
+        #
+        # But only on the unitless drive path. The two branches that met here had different producers:
+        # Mirror pre-clamps and converts back through speed_mps_full / yaw_dps_full, so it never exceeds
+        # 1.0 and the reject is a no-op for it. hunt_gpu/real.py deliberately sends the fly's *would-be*
+        # physical motion, up to 1.6 m/s and 200 deg/s against an S1 calibrated at 0.85 and 90, and has
+        # always relied on motor_to_sticks saturating -- configs/default.yaml calls that "the robot
+        # traces the fly's path at ~45% of its pace". Rejecting those packets stops the chase demo dead
+        # the moment the fly commits to a turn, and silently: send()'s bool has no caller, so the only
+        # symptom is the failsafe centring the sticks half a second later.
+        #
+        # So: a physical-unit packet saturates, as it always did. A unitless one is still rejected, and
+        # a non-finite value is rejected either way.
         raw = motor_to_sticks(motor, self.cfg, clip_axes=False)
-        if not all(math.isfinite(v) and -1.0 - 1e-9 <= v <= 1.0 + 1e-9 for v in raw.values()):
+        physical = ("speed_mps" in motor) or ("yaw_dps" in motor)
+        if not all(math.isfinite(v) for v in raw.values()):
             with self._lock:
                 self.rejects += 1
                 self.last_valid = False
-            print(f"[s1] rejected out-of-range stick command {raw}, holding last safe state", flush=True)
+            print(f"[s1] rejected non-finite stick command {raw}, holding last safe state", flush=True)
             return False
+        if not all(-1.0 - 1e-9 <= v <= 1.0 + 1e-9 for v in raw.values()):
+            if not physical:
+                with self._lock:
+                    self.rejects += 1
+                    self.last_valid = False
+                print(f"[s1] rejected out-of-range stick command {raw}, holding last safe state", flush=True)
+                return False
+            self.saturations += 1
+            if self.saturations == 1 or self.saturations % 200 == 0:
+                print(f"[s1] saturating: the fly asked for more than the S1 can do {raw} "
+                      f"({self.saturations} so far)", flush=True)
         st = motor_to_sticks(motor, self.cfg)
         asleep = packet.get("state") == "sleep" and bool(self.cfg.get("release_asleep", True))
         with self._lock:
@@ -212,7 +237,8 @@ class S1Body:
         out = {"sticks": {k: round(v, 3) for k, v in st.items()}, "yaw_dps": round(st["yaw"] * full, 1),
                "saturated": abs(st["yaw"]) >= 0.999,
                "rotation_only": bool(self.cfg.get("rotation_only", DEFAULTS["rotation_only"])), "frames": self.frames,
-               "valid": self.last_valid, "rejects": self.rejects, "link_ok": self.link_ok}
+               "valid": self.last_valid, "rejects": self.rejects, "saturations": self.saturations,
+               "link_ok": self.link_ok}
         if self.est_heading is not None and self.target_heading is not None:
             out["heading_deg"] = round(self.est_heading, 1)
             out["error_deg"] = round(wrap_deg(self.target_heading - self.est_heading), 1)
@@ -269,6 +295,22 @@ class MultiBody:
         self.addr = self.bodies[0].addr if self.bodies else None
 
     @property
+    def cfg(self) -> dict | None:
+        """The S1's config, so callers that configure the body reach the real one.
+
+        Mirror does `if getattr(body, "cfg", None) is not None: body.cfg["rotation_only"] = False; ...`
+        to push its calibration down. Without this property a MultiBody answered None, Mirror silently
+        skipped the whole block, and --s1 udp / --s1 usb ran on DEFAULTS with v_max, w_max and sign_yaw
+        never reaching the S1 at all. It failed quietly, which is the worst way for a calibration to
+        fail: the robot moves, just not at the speed or in the direction you asked for.
+        """
+        for b in self.bodies:
+            c = getattr(b, "cfg", None)
+            if c is not None:
+                return c
+        return None
+
+    @property
     def pir(self) -> int:
         return max((int(getattr(b, "pir", 0)) for b in self.bodies), default=0)
 
@@ -286,9 +328,14 @@ class MultiBody:
                 return b.status()
         return None
 
-    def send(self, packet: dict) -> None:
+    def send(self, packet: dict) -> bool:
+        """Every body gets the packet. False if any of them rejected it, so a caller that checks the
+        bool (S1Body.send's R7.4 contract) is not told True when the S1 in fact refused."""
+        ok = True
         for b in self.bodies:
-            b.send(packet)
+            if b.send(packet) is False:
+                ok = False
+        return ok
 
     def poll(self) -> dict | None:
         last = None

@@ -57,9 +57,12 @@ COUNT=$(wc -l < /tmp/fbr_export_manifest.txt | tr -d ' ')
 # A deny-list is only as good as the person maintaining it, so this checks the actual payload rather
 # than trusting the rules above. It has caught a real mistake before.
 FAIL=0
-if grep -qE '(^|/)\.env$|\.(key|pem|p12|pfx)$|(^|/)id_rsa|credentials\.json$' /tmp/fbr_export_manifest.txt; then
+# .env, and every variant of it: .env.local, .env.prod, env.backup. .env.example is the documented
+# placeholder and is the one thing allowed through.
+SECRET_PATHS='(^|/)\.?env(\.|$)|\.(key|pem|p12|pfx)$|(^|/)id_rsa|credentials\.json$|secrets\.(ini|ya?ml|json)$'
+if grep -vE '(^|/)\.env\.example$' /tmp/fbr_export_manifest.txt | grep -qE "$SECRET_PATHS"; then
   echo "REFUSING: a secret-shaped file is in the manifest:" >&2
-  grep -E '(^|/)\.env$|\.(key|pem|p12|pfx)$|(^|/)id_rsa|credentials\.json$' /tmp/fbr_export_manifest.txt >&2
+  grep -vE '(^|/)\.env\.example$' /tmp/fbr_export_manifest.txt | grep -E "$SECRET_PATHS" >&2
   FAIL=1
 fi
 # and the contents, for a key pasted into a tracked file.
@@ -67,8 +70,13 @@ fi
 # carries the patterns below as literal text, so scanning itself is a guaranteed false positive. It
 # fired on exactly that the first time it ran.
 SCAN=$(grep -vE '^\.env\.example$|^scripts/export_to_hunting_fly\.sh$' /tmp/fbr_export_manifest.txt | tr '\n' ' ')
-SECRETS=$(grep -lE 'sk-[A-Za-z0-9]{20,}|xoxb-|postgres(ql)?://[^ ]*:[^ @]{8,}@|AKIA[0-9A-Z]{16}' \
-            $SCAN 2>/dev/null || true)
+# These are the shapes this project actually holds, not a generic list:
+#   sk_...   ElevenLabs (underscore, NOT the sk- of OpenAI, which is what this used to match)
+#   eyJ...   the neuPrint token, a JWT
+#   postgres(ql)://user:pass@host   the Tiger Cloud DSN
+# plus the usual suspects, because the next key added will not ask permission first.
+SECRET_CONTENT='sk[-_][A-Za-z0-9]{20,}|eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}|xox[baprs]-|postgres(ql)?://[^ ]*:[^ @]{8,}@|AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{20,}|-----BEGIN [A-Z ]*PRIVATE KEY-----'
+SECRETS=$(grep -lE "$SECRET_CONTENT" $SCAN 2>/dev/null || true)
 if [ -n "$SECRETS" ]; then
   echo "REFUSING: these tracked files look like they contain a live credential:" >&2
   printf '  %s\n' $SECRETS >&2

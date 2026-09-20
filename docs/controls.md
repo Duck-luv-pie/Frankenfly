@@ -59,7 +59,7 @@ Do not "unify" these to one default. They are different jobs and the difference 
 | `7` | remove another quarter of LC10a |
 | `8` / `9` | **lobotomize / wake up** |
 | `0` | **stop / resume the wheels** (`rover` off/on) |
-| `w` | badge swat, if `scripts/badge_link.py` is built (it was hotkey `8` until 8 became the lobotomy) |
+| — | the badge does not use a keyboard hotkey. `scripts/badge_link.py` presses `8`/`9`/`0` over UDP when you press **B** or **RIGHT** on the badge itself. An earlier plan bound `w` for this; nothing binds it now. |
 | `l` | silence the brain entirely |
 | `r` / `p` | reward / punish (PAM / PPL1 burst) |
 | `space` | E-stop |

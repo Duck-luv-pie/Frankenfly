@@ -148,15 +148,15 @@ Pushing the badge app is the five-step IDE flow in `badge/SDK_NOTES.md`, with **
 
 ## 8. What is real, and what is not
 
-**Real, verified, reproducible.** The brain and its controls: the wiring shuffle, the LC10a lesion (78% to 0%, 256 arenas, seed 2000, 2 s, RESULTS 3), the graded quarter-removal. The pruned circuit that still works: 2,211 neurons, 10,387 synapses, 81% turn-toward (RESULTS 4). The voice agent reading live brain state and pressing the demo's hotkeys. Tiger Data live ingest, a continuous aggregate, 92 to 93% compression (`export_timeseries.py --report`, HANDOFF_mlh). Two viewers. 212 tests (`pytest -q`).
+**Real, verified, reproducible.** The brain and its controls: the wiring shuffle, the LC10a lesion (78% to 0%, 256 arenas, seed 2000, 2 s, RESULTS 3), the graded quarter-removal. The pruned circuit that still works: 2,211 neurons, 10,387 synapses, 81% turn-toward (RESULTS 4). The voice agent reading live brain state and pressing the demo's hotkeys. Tiger Data live ingest, a continuous aggregate, 92 to 93% compression (`export_timeseries.py --report`, HANDOFF_mlh). Two viewers. 248 tests (`pytest -q`).
 
 **Real, but ours and labelled as ours.** Forward speed is the mean rate across all 241 descending neurons, because the eye never drives the two textbook forward-walking neurons even after forcing every neuron on the shortest anatomical path into the circuit (RESULTS 6). Also the search state, and the badge trigger if it ships. Say so unprompted.
 
 **Not a bottleneck, whatever the figure looks like.** AOTU and LAL carry 80.6% of the bottleneck weight between eye and steering (RESULTS 4b), which reads as load-bearing and is not: lesion the tubercle and tracking is still at 61% against 71% for the same number of random cells (128 arenas, one seed, stage A, untrained, RESULTS 4b). A connectome says where the wiring went, a lesion says what it is for, and here the two disagree. Never call it load-bearing.
 
-**Does not exist.** The robot has never been driven by this brain on a real chassis, so every motion figure here is dry run or simulation. No video. SWATTER specified, not built. The badge link not built. The domain not registered, the site not deployed. The name in section 9 is a default, not a team decision.
+**Does not exist.** The robot has never been driven by this brain on a real chassis, so every motion figure here is dry run or simulation. No video. SWATTER (the go/no-go design) specified, not built, and superseded: **Swat** (`badge/swatgame_*.lua`) is the badge game that shipped, and **the badge link is built** (`scripts/badge_link.py`, B and RIGHT over USB serial into the hotkey port). Neither has run on real hardware: the game is verified in a desktop harness and the link over a pty. The domain not registered, the site not deployed. The name in section 9 is a default, not a team decision.
 
-**Stale numbers.** The test count is 197; `CLAUDE.md` and `README.md` say 183, `RESULTS.md` 8 says 125, `devpost/runbook.html` says 138. Publish 197 everywhere or none. The runbook also still points the DNS at the replay viewer or the Devpost; it points at the install page.
+**Stale numbers.** The test count is 248. `CLAUDE.md`, `README.md` and section 7 now all say 248; `RESULTS.md` 8 and `devpost/runbook.html` still carry older figures and are the two left to fix. Publish one number everywhere or none. The runbook also still points the DNS at the replay viewer or the Devpost; it points at the install page.
 
 ---
 

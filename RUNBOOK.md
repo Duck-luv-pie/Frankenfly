@@ -30,8 +30,11 @@ viewer is read-only and POSTs return 403.
 **Our brain in the same viewer**, which is what the lesion demo uses:
 ```bash
 cd flybrain-rover
-.venv/bin/python scripts/viz_adapter.py --ui ../brain/companion_brain/ui
+# --live or --replay is required; with neither it prints usage and exits
+.venv/bin/python scripts/viz_adapter.py --live logs/demo_live.jsonl --ui ../brain/companion_brain/ui
 ```
+`--live` follows the feed `scripts/demo.py` writes, so start the demo first. `--replay replay/<file>.json`
+plays a recording instead and needs nothing else running.
 The LOBOTOMIZE and STOP buttons in the bottom left are added as the page is served, so Ducks's file is
 never edited. They grey out for spectators.
 
@@ -62,7 +65,9 @@ that matter:
 ## 3. The robot
 
 **Do not skip the bench test.** Prop the S1 up with the wheels off the ground for any first run, and
-check the turn direction before it can drive into anything. `--sign-yaw inverted` flips it.
+check the turn direction before it can drive into anything. On the `brain/` stack `--sign-yaw inverted`
+flips it; on the `flybrain-rover/` stack that flag does not exist, and the sign lives in
+`body.s1.sign_yaw` in the config the Pi relay loads.
 
 ### 3a. Neutral check, no brain
 ```bash
@@ -141,10 +146,10 @@ not deployed, and `websockets` is an optional extra (`uv sync --extra relay`) if
 
 ```bash
 # our tests
-cd flybrain-rover && .venv/bin/python -m pytest tests -q          # 246 passed
+cd flybrain-rover && .venv/bin/python -m pytest tests -q          # 248 passed
 
 # Ducks's and Senthil's
-cd brain && uv run pytest -q                                      # 76 passed, 11 skipped
+cd brain && uv run pytest -q                                      # 80 passed, 11 skipped
                                                                   # (skips are torch/connectome/numba, all environmental)
 
 # the cross-stack coupling: robot_bridge imports this at runtime
