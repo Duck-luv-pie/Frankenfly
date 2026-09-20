@@ -83,6 +83,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { createFly, demonstrationPose } from './fly.js';
 
 const $ = id => document.getElementById(id);
@@ -114,6 +115,74 @@ for (const s of [-1, 1]) {
   const rail = new THREE.Mesh(new THREE.BoxGeometry(.16, .22, 2 * ARENA.z + 2), railMat); rail.position.set(s * (ARENA.x + .6), .11, 0); rail.castShadow = true; scene.add(rail);
   const back = new THREE.Mesh(new THREE.BoxGeometry(2 * ARENA.x + 2, .22, .16), railMat); back.position.set(0, .11, s * (ARENA.z + .6)); back.castShadow = true; scene.add(back);
 }
+// ---- the world outside the arena ------------------------------------------------------------
+// The floor stops at 8.4 x 7.1 m and then there is nothing but fog, which reads as the fly walking
+// on a table in a void and gives the eye no sense of its size. A ring of trees and some cloud fix
+// both. Everything here is static, merged into four draw calls, sits outside the sun's shadow
+// camera (+/-10) and casts nothing, so the per-frame cost is four draws and no shadow work.
+let cloudLayer = null;
+{
+  let seed = 20260920;                                    // fixed: the same view every time it loads
+  const rnd = () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296;
+  const between = (a, b) => a + (b - a) * rnd();
+
+  // ground out to the fog, so the arena floor rests on something instead of floating
+  const grass = new THREE.Mesh(new THREE.CircleGeometry(72, 56), mat('#a9b68c', .98));
+  grass.rotation.x = -Math.PI / 2; grass.position.y = -.02; scene.add(grass);
+
+  const TRUNK = new THREE.CylinderGeometry(.13, .2, 1, 6);
+  const LEAF = new THREE.IcosahedronGeometry(1, 0);        // flat-shaded: low-poly, reads at distance
+  const PUFF = new THREE.SphereGeometry(1, 7, 5);
+  const trunks = [], canopy = [], understory = [], puffs = [];
+  const V = (x, y, z) => new THREE.Vector3(x, y, z);
+  const put = (into, geo, pos, scl, ry = 0) => into.push(geo.clone().applyMatrix4(
+    new THREE.Matrix4().compose(pos, new THREE.Quaternion().setFromEuler(new THREE.Euler(0, ry, 0)), scl)));
+
+  // trees, kept off the arena and outside the follow camera's usual arc behind the fly
+  for (let i = 0; i < 52; i++) {
+    const a = between(0, Math.PI * 2), r = between(12.5, 33);
+    const x = Math.cos(a) * r, z = Math.sin(a) * r, h = between(2.3, 5.2);
+    put(trunks, TRUNK, V(x, h / 2, z), V(1, h, 1));
+    const crown = between(.8, 1.4);
+    for (let k = 0; k < 3; k++)
+      put(k === 1 ? understory : canopy, LEAF,
+          V(x + between(-.55, .55), h + between(-.35, .7), z + between(-.55, .55)),
+          V(crown, crown * between(.72, 1.05), crown), between(0, 3));
+  }
+  // low planting, closer in, to break the line where the floor meets the grass
+  for (let i = 0; i < 90; i++) {
+    const a = between(0, Math.PI * 2), r = between(9.6, 36);
+    const x = Math.cos(a) * r, z = Math.sin(a) * r, sc = between(.22, .6);
+    put(understory, LEAF, V(x, sc * .62, z), V(sc, sc * .8, sc), between(0, 3));
+  }
+  // Cloud. The follow camera sits at about y=3 looking level at the fly, so anything much above
+  // 16 is out of frame forever: these sit low and far, near the horizon, where that camera can
+  // actually see them. Far enough out that they never come between you and the fly.
+  for (let i = 0; i < 26; i++) {
+    const a = between(0, Math.PI * 2), r = between(30, 58);
+    const x = Math.cos(a) * r, y = between(8, 15), z = Math.sin(a) * r, big = between(2.2, 4.8);
+    for (let k = 0; k < 5; k++)
+      put(puffs, PUFF, V(x + between(-big, big), y + between(-.3, .3), z + between(-big, big)),
+          V(big * between(.55, 1), big * between(.26, .42), big * between(.55, 1)));
+  }
+
+  const merged = (list, material) => {
+    const m = new THREE.Mesh(mergeGeometries(list, false), material);
+    m.castShadow = false; m.receiveShadow = false;
+    return m;
+  };
+  scene.add(merged(trunks, mat('#8a7256', .95, { flatShading: true })));
+  scene.add(merged(canopy, mat('#7f9463', .92, { flatShading: true })));
+  scene.add(merged(understory, mat('#93a672', .92, { flatShading: true })));
+  cloudLayer = new THREE.Group();
+  // Lit from above by a single sun, a sphere shows you its shadowed underside -- which is exactly
+  // the side you see from down here, so plain shading turns cloud into dark grey lumps. Emissive
+  // carries the base brightness and the light only adds the modelling on top.
+  cloudLayer.add(merged(puffs, mat('#ffffff', 1, {
+    emissive: '#e4ecf6', emissiveIntensity: 1, flatShading: true, fog: false })));
+  scene.add(cloudLayer);
+}
+
 // the fly: the Body Lab rig, scaled to a 32 cm vehicle, resting pose (legs tucked, wings folded: it is an RC car here)
 const fly = createFly(); fly.root.scale.setScalar(.135); scene.add(fly.root);
 const beam = new THREE.Mesh(new THREE.CircleGeometry(1, 32, -Math.PI / 2 - 75 * Math.PI / 180, 150 * Math.PI / 180), mat('#5aa9ff', 1, { transparent: true, opacity: .12, depthWrite: false, side: THREE.DoubleSide }));
@@ -160,7 +229,7 @@ function drawBrain() {
     const g = glow[i]; glow[i] *= .82;
     const px = 12 + x * (W - 24), py = 12 + y * (H - 24);
     if (g > .05) { ctx.fillStyle = GROUP_COLOR[BRAIN.group[i]] || '#ffffff'; ctx.globalAlpha = Math.min(1, g); ctx.beginPath(); ctx.arc(px, py, 1.2 + 2.8 * Math.min(1, g), 0, 6.283); ctx.fill(); }
-    else { ctx.fillStyle = CLASS_COLOR[BRAIN.cls[i]] || '#6b7385'; ctx.globalAlpha = .35; ctx.fillRect(px, py, 1.5, 1.5); }
+    else { ctx.fillStyle = CLASS_COLOR[BRAIN.cls[i]] || '#8f9bb3'; ctx.globalAlpha = .62; ctx.fillRect(px, py, 2.4, 2.4); }
   }
   ctx.globalAlpha = 1;
 }
@@ -480,14 +549,37 @@ function showHeat(on) { heatOn = on; $('heat').textContent = on ? 'heat: on' : '
 function showLobotomy(on) { lobotomized = on; $('title').textContent = on ? 'The lobotomized fly, twitching' : 'The GPU fly, hunting'; $('lobo').textContent = on ? 'restore the smart fly' : 'lobotomize'; $('lobo').classList.toggle('on', on); $('hud').classList.toggle('lobotomized', on); }
 
 // ---- draw -----------------------------------------------------------------------------------
+// Pause and the speed slider are the FLY's controls and nothing else's. Its stride clock runs at
+// this rate, so it slows with the slider and freezes mid-step when you pause. The people keep
+// walking at their own cadence and the cloud keeps drifting, both on the wall clock, so holding
+// the fly still leaves a world around it instead of a freeze-frame.
+function simRate() { return replay.on ? (replay.paused ? 0 : replay.speed) : 1; }
 const clock = new THREE.Clock(); const pos = new THREE.Vector3(); let heading = 0, t = 0;
+const prevPos = new THREE.Vector3();
+let gait = 0;                     // the fly's stride clock, in the same seconds demonstrationPose wants
 function frame() {
   const dt = Math.min(.1, clock.getDelta()); t += dt; fit();
+  const rate = simRate();
+  if (cloudLayer) cloudLayer.rotation.y += dt * .0035;
   if (S) {
+    prevPos.copy(pos);
     pos.lerp(new THREE.Vector3(S.fly[0], 0, S.fly[1]), .5);
     heading += Math.atan2(Math.sin(S.fly[2] - heading), Math.cos(S.fly[2] - heading)) * .5;
     fly.root.position.copy(pos); fly.root.rotation.y = heading; fly.root.rotation.z = -.15 * S.drive[1]; fly.root.rotation.x = -.05 * (S.fly[3] / 1.6);
-    fly.setPose(demonstrationPose(fly, 'rest', t, 25));
+    // It used to be posed 'rest', which is why it glided: six legs tucked, nothing moving. fly.js
+    // already shipped a working alternating-tripod gait under mode 'walk' -- it was simply never
+    // asked for. Driven exactly the way the rig's own demonstration drives it, a seconds clock
+    // straight into demonstrationPose, so the cadence is the reference one and not something
+    // invented here. The only difference is that the clock is the fly's, not the wall's: it scales
+    // with the speed slider and stops when you pause.
+    const step = pos.distanceTo(prevPos);
+    const walking = step > 2e-4 || Math.abs(S.drive[0]) > .02;
+    if (rate > 0) {
+      if (walking) gait += dt * rate;
+      fly.setPose(demonstrationPose(fly, walking ? 'walk' : 'rest', walking ? gait : t, 25));
+    }
+    // rate === 0 (paused): leave the pose exactly where it was, so it holds mid-stride rather
+    // than snapping its legs back to rest.
     beam.position.set(pos.x, .008, pos.z); beam.rotation.z = heading;
     if (S.body && S.body.heading_deg !== undefined) { roverBeam.visible = true; roverBeam.position.set(pos.x, .009, pos.z); roverBeam.rotation.z = -S.body.heading_deg * Math.PI / 180; } else roverBeam.visible = false;
     for (const p of people) { if (p.model) { p.model.position.set(p.x, 0, p.z); p.model.rotation.y = p.yaw; } if (p.mixer) p.mixer.timeScale = Math.min(2.4, p.speed / .9); p.glow.position.set(p.x, .006, p.z); p.glow.material.color.set(p.resting ? '#5aa9ff' : '#ff9a4a'); p.glow.material.emissive.set(p.resting ? '#2a6ad0' : '#ff6a00'); p.glow.scale.setScalar(p.resting ? .7 : .6 + .4 * (p.stamina ?? 1)); p.glow.material.opacity = p.sensed ? .32 : .1; }

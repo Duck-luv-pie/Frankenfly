@@ -1,4 +1,4 @@
 Assembled by scripts/build_viewer_site.py. Do not edit here.
 Viewer source: /Users/takatoshilee/Downloads/filess/flybrain-rover/../hunting-fly-integration/brain/companion_brain/ui
-Commit: 5405a7d
+Commit: 6ed9cd7
 Episodes: replay/episode_7_trained.json, replay/episode_7_lesioned.json
