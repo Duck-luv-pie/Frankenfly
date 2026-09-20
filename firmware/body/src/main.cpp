@@ -34,7 +34,9 @@ void setup() {
 void loop() {
   uint32_t now = millis();
 
-  if (brainLink.poll(brain)) {
+  bool fresh = brainLink.poll(brain);
+  if (brainLink.pollSerial(brain)) fresh = true;     // the same packets over USB (bench: tools/eyes_demo.py)
+  if (fresh) {
     eyes.setTargets(brain.l, brain.r);
     if (brain.blink) eyes.blink();
     if (brain.track > 0) audio.play(brain.track, brain.volume);

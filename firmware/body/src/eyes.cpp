@@ -41,56 +41,95 @@ void Eye::tick() {
   first_ = false;
 }
 
+// Row-span renderer: a row is painted once, left to right, in its final state (lid, sclera, iris, pupil,
+// highlight), and only the rows that changed since the last frame are painted. Nothing is ever cleared to
+// white first, so transitions never flash.
+struct EyeGeom {
+  int c, R, irisR, ix, iy, pupR, topLid, botLid, slope;
+  uint16_t iris;
+};
+
+static EyeGeom geom(const EyeParams &p, float blink) {
+  EyeGeom g;
+  g.c = EYE_SIZE / 2; g.R = EYE_SIZE / 2 - 2;
+  g.irisR = g.R * 0.55f;
+  const int maxOff = g.R - g.irisR - 4;
+  g.ix = g.c + (int)(p.px * maxOff); g.iy = g.c + (int)(p.py * maxOff);
+  g.pupR = (int)(g.irisR * (0.25f + 0.65f * p.pr));
+  const float ut = p.ut * (1 - blink), lt = p.lt * (1 - blink);
+  g.topLid = g.c - (int)(g.R * ut);
+  g.botLid = g.c + (int)(g.R * lt);
+  g.slope = (int)(p.tilt * g.R * (1 - blink));
+  g.iris = rgb(p.r, p.g, p.b);
+  return g;
+}
+
+static inline int chord(int r, int dy) { int q = r * r - dy * dy; return q > 0 ? (int)sqrtf((float)q) : -1; }
+
+void Eye::paintRows(const EyeGeom &g, int y0, int y1, bool withBg) {
+  y0 = constrain(y0, 0, EYE_SIZE); y1 = constrain(y1, 0, EYE_SIZE);
+  if (y1 <= y0) return;
+  gfx_->startWrite();
+  for (int y = y0; y < y1; y++) {
+    const int half = chord(g.R, y - g.c);
+    if (half < 0) { if (withBg) gfx_->writeFastHLine(0, y, EYE_SIZE, BG); continue; }
+    int x0 = g.c - half, x1 = g.c + half;                    // the eye disc on this row, inclusive
+    if (withBg) { if (x0 > 0) gfx_->writeFastHLine(0, y, x0, BG); if (x1 < EYE_SIZE - 1) gfx_->writeFastHLine(x1 + 1, y, EYE_SIZE - 1 - x1, BG); }
+    if (y >= g.botLid) { gfx_->writeFastHLine(x0, y, x1 - x0 + 1, LID); continue; }
+    // the upper lid's edge runs from (0, topLid - slope) to (EYE_SIZE - 1, topLid + slope): covered where y < edge(x)
+    int vx0 = x0, vx1 = x1;                                  // the visible (not lid) part of the disc row
+    if (g.slope == 0) {
+      if (y < g.topLid) { gfx_->writeFastHLine(x0, y, x1 - x0 + 1, LID); continue; }
+    } else {
+      // edge(x) = topLid + slope * (x - c) / c  ->  covered iff slope*(x - c) > (y - topLid) * c
+      const long t = (long)(y - g.topLid) * g.c;
+      if (g.slope > 0) {                                     // covered for x > c + t/slope (the right side)
+        long xs = g.c + t / g.slope;
+        if (xs < x0) { gfx_->writeFastHLine(x0, y, x1 - x0 + 1, LID); continue; }
+        if (xs < x1) { gfx_->writeFastHLine((int)xs + 1, y, x1 - (int)xs, LID); vx1 = (int)xs; }
+      } else {                                               // covered for x < c + t/slope (the left side)
+        long xs = g.c + t / g.slope;
+        if (xs > x1) { gfx_->writeFastHLine(x0, y, x1 - x0 + 1, LID); continue; }
+        if (xs > x0) { gfx_->writeFastHLine(x0, y, (int)xs - x0, LID); vx0 = (int)xs; }
+      }
+    }
+    if (vx1 < vx0) continue;
+    // sclera, then the iris / pupil / highlight spans clipped to the visible part
+    gfx_->writeFastHLine(vx0, y, vx1 - vx0 + 1, SCLERA);
+    const int ih = chord(g.irisR, y - g.iy);
+    if (ih >= 0) {
+      int a = max(vx0, g.ix - ih), b = min(vx1, g.ix + ih);
+      if (b >= a) gfx_->writeFastHLine(a, y, b - a + 1, g.iris);
+      const int ph = chord(g.pupR, y - g.iy);
+      if (ph >= 0) { a = max(vx0, g.ix - ph); b = min(vx1, g.ix + ph); if (b >= a) gfx_->writeFastHLine(a, y, b - a + 1, PUPIL); }
+      const int hx = g.ix - g.irisR / 3, hy = g.iy - g.irisR / 3, hh = chord(g.irisR / 6, y - hy);
+      if (hh >= 0) { a = max(vx0, hx - hh); b = min(vx1, hx + hh); if (b >= a) gfx_->writeFastHLine(a, y, b - a + 1, SCLERA); }
+    }
+  }
+  gfx_->endWrite();
+}
+
 void Eye::draw(bool full) {
-  const int c = EYE_SIZE / 2, R = EYE_SIZE / 2 - 2;
-  const int irisR = R * 0.55f;
-  const int maxOff = R - irisR - 4;
-  const int ix = c + (int)(cur_.px * maxOff), iy = c + (int)(cur_.py * maxOff);
-  const int pupR = (int)(irisR * (0.25f + 0.65f * cur_.pr));
-  const uint16_t iris = rgb(cur_.r, cur_.g, cur_.b);
-  const float ut = cur_.ut * (1 - blink_), lt = cur_.lt * (1 - blink_);
-  const int topLid = c - (int)(R * ut);       // y below which the eye is visible
-  const int botLid = c + (int)(R * lt);       // y above which the eye is visible
-
-  bool irisMoved = full || ix != (c + (int)(drawn_.px * maxOff)) || iy != (c + (int)(drawn_.py * maxOff)) ||
-                   rgb(drawn_.r, drawn_.g, drawn_.b) != iris;
-  bool pupilChanged = irisMoved || pupR != (int)(irisR * (0.25f + 0.65f * drawn_.pr));
-  int oldTop = c - (int)(R * drawn_.ut), oldBot = c + (int)(R * drawn_.lt);
-  const int slope = (int)(cur_.tilt * R * (1 - blink_));
-  bool lidsChanged = full || oldTop != topLid || oldBot != botLid ||
-                     slope != (int)(drawn_.tilt * R);
-
-  if (full) {
-    gfx_->fillScreen(BG);
-    gfx_->fillCircle(c, c, R, SCLERA);
-  } else if (irisMoved || lidsChanged) {
-    // restore sclera under the previous iris and previous lids
-    const int oix = c + (int)(drawn_.px * maxOff), oiy = c + (int)(drawn_.py * maxOff);
-    gfx_->fillCircle(oix, oiy, irisR + 1, SCLERA);
-    if (lidsChanged) gfx_->fillCircle(c, c, R, SCLERA);
-  }
-  if (irisMoved || lidsChanged) {
-    gfx_->fillCircle(ix, iy, irisR, iris);
-    gfx_->fillCircle(ix, iy, pupR, PUPIL);
-    gfx_->fillCircle(ix - irisR / 3, iy - irisR / 3, irisR / 6, SCLERA);  // highlight
-  } else if (pupilChanged) {
-    gfx_->fillCircle(ix, iy, irisR, iris);
-    gfx_->fillCircle(ix, iy, pupR, PUPIL);
-    gfx_->fillCircle(ix - irisR / 3, iy - irisR / 3, irisR / 6, SCLERA);
-  }
-  // lids: fill the parts of the eye disc above topLid and below botLid
-  if (lidsChanged || irisMoved || pupilChanged) {
-    const int leftTop = constrain(topLid - slope, 0, EYE_SIZE);
-    const int rightTop = constrain(topLid + slope, 0, EYE_SIZE);
-    gfx_->fillTriangle(0, 0, EYE_SIZE - 1, 0, 0, leftTop, LID);
-    gfx_->fillTriangle(EYE_SIZE - 1, 0, EYE_SIZE - 1, rightTop, 0, leftTop, LID);
-    if (botLid < c + R) gfx_->fillRect(0, botLid, EYE_SIZE, EYE_SIZE - botLid, LID);
-    // round the corners back to black outside the eye disc
-    gfx_->drawCircle(c, c, R + 1, BG);
+  const EyeGeom g = geom(cur_, blink_);
+  const EyeGeom o = geom(drawn_, 0.0f);                       // drawn_ already has the blink folded in
+  if (full) { paintRows(g, 0, EYE_SIZE, true); }
+  else {
+    // dirty bands: where the lids moved, and where the iris was / is (if it moved, resized or changed colour)
+    int bands[3][2]; int nb = 0;
+    const int oT = o.topLid, nT = g.topLid, oS = abs(o.slope), nS = abs(g.slope);
+    if (oT != nT || o.slope != g.slope) { bands[nb][0] = min(oT - oS, nT - nS) - 1; bands[nb][1] = max(oT + oS, nT + nS) + 1; nb++; }
+    if (o.botLid != g.botLid) { bands[nb][0] = min(o.botLid, g.botLid) - 1; bands[nb][1] = max(o.botLid, g.botLid) + 1; nb++; }
+    if (o.ix != g.ix || o.iy != g.iy || o.pupR != g.pupR || o.iris != g.iris) {
+      bands[nb][0] = min(o.iy, g.iy) - g.irisR - 1; bands[nb][1] = max(o.iy, g.iy) + g.irisR + 2; nb++;
+    }
+    // merge overlapping bands, then paint
+    for (int i = 0; i < nb; i++) for (int j = i + 1; j < nb; j++)
+      if (bands[j][0] <= bands[i][1] && bands[i][0] <= bands[j][1]) { bands[i][0] = min(bands[i][0], bands[j][0]); bands[i][1] = max(bands[i][1], bands[j][1]); bands[j][0] = bands[j][1] = -1; }
+    for (int i = 0; i < nb; i++) if (bands[i][1] > bands[i][0]) paintRows(g, bands[i][0], bands[i][1], false);
   }
   drawn_ = cur_;
-  drawn_.ut = ut;
-  drawn_.lt = lt;
+  drawn_.ut = cur_.ut * (1 - blink_);
+  drawn_.lt = cur_.lt * (1 - blink_);
   drawn_.tilt = cur_.tilt * (1 - blink_);
 }
 

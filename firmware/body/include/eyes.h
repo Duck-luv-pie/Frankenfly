@@ -10,6 +10,8 @@ struct EyeParams {
   uint8_t r = 90, g = 200, b = 255;  // iris tint
 };
 
+struct EyeGeom;
+
 class Eye {
  public:
   Eye(Arduino_GFX *gfx) : gfx_(gfx) {}
@@ -22,6 +24,7 @@ class Eye {
 
  private:
   void draw(bool full);
+  void paintRows(const EyeGeom &g, int y0, int y1, bool withBg);
   Arduino_GFX *gfx_;
   EyeParams cur_, target_, drawn_;
   bool first_ = true;

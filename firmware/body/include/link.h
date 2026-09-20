@@ -20,7 +20,8 @@ struct BrainPacket {
 class Link {
  public:
   void begin();
-  bool poll(BrainPacket &out);            // true when a new brain packet arrived
+  bool poll(BrainPacket &out);            // true when a new brain packet arrived (UDP)
+  bool pollSerial(BrainPacket &out);      // the same packets as JSON lines over USB serial (bench: tools/eyes_demo.py)
   void send(int pir, int busy);           // status packet to the brain
   bool hostAlive() const { return lastRx_ && millis() - lastRx_ < 2000; }
   uint32_t lastRx() const { return lastRx_; }
@@ -30,5 +31,10 @@ class Link {
   IPAddress host_;
   bool haveHost_ = false;
   uint32_t lastRx_ = 0;
+  bool parse(const char *buf, size_t len, BrainPacket &out);
+  void retryWifi();
   char buf_[1024];
+  char sbuf_[1024];
+  size_t slen_ = 0;
+  uint32_t lastWifiTry_ = 0;
 };

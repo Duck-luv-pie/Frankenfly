@@ -35,4 +35,4 @@
 
 // --- Animation --------------------------------------------------------------------------------
 #define EYE_FPS        30
-#define EASE_PER_FRAME 0.25f   // fraction of remaining distance closed per frame
+#define EASE_PER_FRAME 0.18f   // fraction of remaining distance closed per frame (~0.2 s glide at 30 fps)

@@ -43,8 +43,8 @@ void Link::begin() {
   WiFi.setHostname(HOSTNAME);
   // Every network the body may meet (secrets.ini: WIFI_SSID / WIFI_PASS, then WIFI_SSID2 / 3: a phone
   // hotspot, the Pi's own hotspot "companion" on the robot): scan, join the strongest known one.
-  uint32_t t0 = millis();
-  while (!joinKnown(12000) && millis() - t0 < 60000) delay(500);
+  joinKnown(10000);                       // one try now; retried every 30 s from poll() (the eyes work meanwhile)
+  lastWifiTry_ = millis();
   if (WiFi.status() == WL_CONNECTED) {
     Serial.printf("\nIP %s\n", WiFi.localIP().toString().c_str());
     if (MDNS.begin(HOSTNAME)) MDNS.addService("companion", "udp", UDP_LISTEN_PORT);
@@ -66,7 +66,54 @@ static void readEye(JsonObjectConst o, EyeParams &e) {
   if (t.size() == 3) { e.r = t[0]; e.g = t[1]; e.b = t[2]; }
 }
 
+void Link::retryWifi() {
+  if (WiFi.status() == WL_CONNECTED || millis() - lastWifiTry_ < 30000) return;
+  lastWifiTry_ = millis();
+  if (joinKnown(8000)) {
+    Serial.printf("IP %s\n", WiFi.localIP().toString().c_str());
+    if (MDNS.begin(HOSTNAME)) MDNS.addService("companion", "udp", UDP_LISTEN_PORT);
+    udp_.begin(UDP_LISTEN_PORT);
+  }
+}
+
+bool Link::pollSerial(BrainPacket &out) {
+  bool got = false;
+  while (Serial.available()) {
+    char c = (char)Serial.read();
+    if (c == '\n' || c == '\r') {
+      if (slen_ > 0 && sbuf_[0] == '{') { sbuf_[slen_] = 0; if (parse(sbuf_, slen_, out)) got = true; }
+      slen_ = 0;
+    } else if (slen_ < sizeof(sbuf_) - 1) {
+      sbuf_[slen_++] = c;
+    } else {
+      slen_ = 0;                           // overlong line: drop it
+    }
+  }
+  return got;
+}
+
+bool Link::parse(const char *buf, size_t len, BrainPacket &out) {
+  JsonDocument doc;
+  if (deserializeJson(doc, buf, len)) return false;
+  out.t = doc["t"] | 0;
+  strlcpy(out.state, doc["state"] | "idle", sizeof(out.state));
+  readEye(doc["eyes"]["l"], out.l);
+  readEye(doc["eyes"]["r"], out.r);
+  out.blink = doc["blink"] | false;
+  out.track = doc["sound"]["track"] | 0;
+  out.volume = doc["sound"]["vol"] | -1;
+  out.armL = doc["arms"]["l"] | 0.0f;
+  out.armR = doc["arms"]["r"] | 0.0f;
+  JsonArrayConst ch = doc["s1"]["ch"];
+  out.hasS1 = !ch.isNull() && ch.size() > 0;
+  out.s1n = 0;
+  if (out.hasS1) for (JsonVariantConst v : ch) { if (out.s1n < 16) out.s1[out.s1n++] = (uint16_t)(v.as<int>()); }
+  lastRx_ = millis();
+  return true;
+}
+
 bool Link::poll(BrainPacket &out) {
+  retryWifi();
   bool got = false;
   int n;
   while ((n = udp_.parsePacket()) > 0) {
@@ -75,23 +122,7 @@ bool Link::poll(BrainPacket &out) {
     buf_[len] = 0;
     host_ = udp_.remoteIP();
     haveHost_ = true;
-    JsonDocument doc;
-    if (deserializeJson(doc, buf_, len)) continue;
-    out.t = doc["t"] | 0;
-    strlcpy(out.state, doc["state"] | "idle", sizeof(out.state));
-    readEye(doc["eyes"]["l"], out.l);
-    readEye(doc["eyes"]["r"], out.r);
-    out.blink = doc["blink"] | false;
-    out.track = doc["sound"]["track"] | 0;
-    out.volume = doc["sound"]["vol"] | -1;
-    out.armL = doc["arms"]["l"] | 0.0f;
-    out.armR = doc["arms"]["r"] | 0.0f;
-    JsonArrayConst ch = doc["s1"]["ch"];
-    out.hasS1 = !ch.isNull() && ch.size() > 0;
-    out.s1n = 0;
-    if (out.hasS1) for (JsonVariantConst v : ch) { if (out.s1n < 16) out.s1[out.s1n++] = (uint16_t)(v.as<int>()); }
-    lastRx_ = millis();
-    got = true;
+    if (parse(buf_, len, out)) got = true;
   }
   return got;
 }
