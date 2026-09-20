@@ -67,6 +67,10 @@ static void readEye(JsonObjectConst o, EyeParams &e) {
 }
 
 void Link::retryWifi() {
+  // Brain packets are arriving (over USB serial in S1_MODE=usb, where the body is deliberately off Wi-Fi).
+  // joinKnown() blocks loop() for seconds on its channel scan, and while it does sbus.tick() never runs, so
+  // the S-Bus stream stops long enough for the S1 to cut out. Don't hunt for a network we aren't using.
+  if (hostAlive()) return;
   if (WiFi.status() == WL_CONNECTED || millis() - lastWifiTry_ < 30000) return;
   lastWifiTry_ = millis();
   if (joinKnown(8000)) {
