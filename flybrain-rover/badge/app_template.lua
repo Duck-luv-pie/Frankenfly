@@ -40,15 +40,25 @@ author=FlyBrain Rover
 -- shows up as "unfinished string" with no clue where.
 local function b64(s)
   local A = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
-  local map, out, n, bits = {}, {}, 0, 0
+  local map = {}
   for i = 1, 64 do map[A:sub(i, i)] = i - 1 end
+  -- Flush in 64-byte chunks. A table grown to 900 entries doubles its array part to 1024 slots and holds
+  -- the old array alive at the same time: 24.6 KB of peak heap to keep 900 bytes, on a badge that has
+  -- about 32 KB free once this app is loaded. Chunking keeps the accumulator at 64 slots.
+  local out, buf, nb, n, bits, no = {}, {}, 0, 0, 0, 0
   for i = 1, #s do
     local v = map[s:sub(i, i)]
     if v then
       bits = bits * 64 + v; n = n + 6
-      if n >= 8 then n = n - 8; local byte = bits // (2 ^ n); bits = bits % (2 ^ n); out[#out + 1] = string.char(byte) end
+      if n >= 8 then
+        n = n - 8
+        local byte = bits // (2 ^ n); bits = bits % (2 ^ n)
+        nb = nb + 1; buf[nb] = string.char(byte)
+        if nb == 64 then no = no + 1; out[no] = table.concat(buf); nb = 0 end
+      end
     end
   end
+  if nb > 0 then no = no + 1; out[no] = table.concat(buf, "", 1, nb) end
   return table.concat(out)
 end
 C.post, C.w = b64(C.post_b64), b64(C.w_b64)

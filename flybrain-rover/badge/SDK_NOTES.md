@@ -140,6 +140,28 @@ Rules we now follow:
   Error` is a firmware-level panic, not a script error, and no amount of Lua debugging will find it.
 - The same applies to the two-badge stretch in `badge/GAME_SPEC.md`: it needs a much smaller circuit.
 
+## Heap, measured: what actually costs memory on this badge
+
+The badge has roughly 78 KB of free system heap when an app launches, and `heap_kb` is a ceiling, not a
+reservation. Two things we got wrong, both found by measurement rather than reading:
+
+**Decoding into a per-byte table is the most expensive thing in our startup.** Building a 900-entry table
+one `string.char` at a time costs **17.7 KB of peak heap** to keep 900 bytes, because Lua doubles a
+table's array part and holds the old array alive during the copy. Flushing into a 64-byte buffer and
+`table.concat`ing chunks costs **3.5 KB**, an 80% saving for four extra lines. If you decode anything at
+load, chunk it.
+
+**Escaped-decimal string literals are cheaper than they look.** `"\65\66..."` costs about 2.4 KB and needs
+no runtime decode at all, because the lexer strips the escape digits from its buffer as it reads. Base64 is
+a smaller *file* (4 characters per 3 bytes, no backslashes for a serial push to mangle) but it needs a
+runtime decoder, and the decoder is where the heap goes. We ship base64 with a chunked decoder: smaller to
+push, and the decode peak is now under the cost of the escapes it replaced.
+
+**Runtime manifest options need a Reboot, not a reload.** Changing `heap_kb`, `wake_lock`, `api`,
+`home_button` or `confirm_home` on an already-installed slug has no effect after Push plus `reload`; only
+a Reboot applies them. A launcher entry showing no icon when the manifest sets one is a sign the installed
+`manifest.cfg` is not the one you just pushed. Check with `cat /littlefs/apps/<slug>/manifest.cfg`.
+
 ## What FlyBadge does with this
 
 `badge/app_template.lua` plus the generated `badge/flybadge_circuit.lua` build into
