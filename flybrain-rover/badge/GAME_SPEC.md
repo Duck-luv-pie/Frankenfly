@@ -231,7 +231,9 @@ Ship it when all seven are true:
 
 ## 11. Stretch, only if 1 to 7 are done
 
-**Two badges, one fly each, over `badge.radio`.** Both badges broadcast `SWAT1:<seed>` and use the same
+**Two badges, one fly each, over `badge.radio`.** Only with a much smaller circuit: on hardware,
+enabling BLE with the 150-neuron circuit loaded exhausts the heap and panics the badge (see
+`badge/SDK_NOTES.md`). Use the `--direct-only` export, or skip this. Both badges broadcast `SWAT1:<seed>` and use the same
 `badge.sys.random` seed so the arm delay and ramp are identical. Each human races their own fly; after the
 round, exchange `SWAT1:<press_ms>` and show both on screen: `you 231 · them 198 · fly 250`. Keep payloads
 under 44 bytes, drain at most 4 frames per tick, and fall back silently to single player if

@@ -24,6 +24,8 @@ author=FlyBrain Rover
 --   A                   -> put them back
 --   UP / DOWN           -> sensitivity, saved between runs
 --
+-- No Bluetooth: enabling it after this app loads exhausts the heap and panics the badge (see on_enter).
+--
 -- There is no flinch rule anywhere in this file. Deleting the lesion check would not leave a hidden
 -- reflex behind, because the escape only ever came out of the wiring.
 --
@@ -72,10 +74,9 @@ local spk, spk_n = {}, 0
 local lesion, gain = false, 3
 local loom, last = 0, nil
 local gf_count, gf_rate, win_start = 0, 0, 0
-local flash_until, jump_until, flirt_until, last_beacon = 0, 0, 0, 0
+local flash_until, jump_until, flirt_until = 0, 0, 0     -- flirt_until stays, set only by the test hook
 local tick_ms, led_state = 0, ""
 local ui = {}
-local radio_ok = false
 
 local function reset_brain()
   for i = 1, C.n do V[i] = V_REST; G[i] = 0; REF[i] = 0; SYN[i] = 0 end
@@ -178,12 +179,10 @@ function on_enter(root)
   led_state = "o"
   win_start = badge.sys.ms()
 
-  radio_ok = badge.radio.enable()
-  if radio_ok then
-    badge.radio.on_recv(function(mac, rssi, payload)
-      if payload == "FLY1" then flirt_until = badge.sys.ms() + FLIRT_MS end
-    end)
-  end
+  -- No radio. Measured on hardware: after this app loads, about 32 KB of heap is left and the BLE stack
+  -- needs roughly 22 KB contiguous; its malloc fails, the driver asserts (BLE assert emi.c 164) and the
+  -- whole badge panics and reboots, which looks exactly like the app refusing to open. The badge-to-badge
+  -- flirt is not worth a crash, and LC10a has no path to the giant fibre in this subcircuit anyway.
 end
 
 function on_tick()
@@ -229,11 +228,6 @@ function on_tick()
 
   ui.fly:set_pos(140, now < jump_until and 70 or 110)
 
-  if radio_ok and now - last_beacon > 1000 then
-    last_beacon = now
-    badge.radio.send("FLY1")
-  end
-
   tick_ms = badge.sys.ms() - t0
   if now - win_start >= 1000 then
     gf_rate = floor(gf_count * 1000 / (now - win_start) / 2)
@@ -270,7 +264,6 @@ function on_exit()
   badge.store.set_int("gain", gain)
   badge.led.clear()
   badge.led.show()
-  if radio_ok then badge.radio.on_recv(nil); badge.radio.disable() end
 end
 
 -- Test hook. badge/test_lua.lua runs this exact step() against badge/sim_fixed.py to confirm the

@@ -113,6 +113,33 @@ badge.me.name()   badge.me.badge_id()   badge.contacts.count()   badge.contacts.
 badge.app.exit()
 ```
 
+## The trap that cost us an hour: badge.radio and heap
+
+`badge.radio.enable()` can panic the whole badge, and it looks exactly like your app refusing to open.
+
+Measured on real hardware with FlyBadge (16 KB source, 150 neurons, 9 widgets) loaded:
+
+```
+app_reg: heap after exit Launcher: free=77760 largest=63488
+hal_radio: init_once: free heap 32840 largest 22528
+E BLE_INIT: Malloc failed
+BLE assert emi.c 164, param 00000000 00001000
+Guru Meditation Error: Core 0 panic'ed (Interrupt wdt timeout on CPU0)
+Rebooting...
+```
+
+The app itself loads and `on_enter` runs correctly up to the radio call. Entering it costs about 45 KB of
+the badge's roughly 78 KB of free heap, the BLE controller then wants around 22 KB contiguous, the malloc
+fails, and the BLE driver asserts and takes the device down. The badge reboots into the launcher, so from
+the outside the app "opens and immediately goes back to the home screen" with no Lua error anywhere.
+
+Rules we now follow:
+- A large app and Bluetooth do not fit together. If you need the radio, keep the rest of the app small.
+- `badge.radio.enable()` returning true is not the end of it; the panic happens inside BLE init afterwards.
+- If an app bounces to the launcher, read the serial console before touching the Lua. A `Guru Meditation
+  Error` is a firmware-level panic, not a script error, and no amount of Lua debugging will find it.
+- The same applies to the two-badge stretch in `badge/GAME_SPEC.md`: it needs a much smaller circuit.
+
 ## What FlyBadge does with this
 
 `badge/app_template.lua` plus the generated `badge/flybadge_circuit.lua` build into
