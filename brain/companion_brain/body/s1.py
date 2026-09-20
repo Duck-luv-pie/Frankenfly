@@ -120,11 +120,18 @@ class S1Body:
     """A body for the brain loop (same duck type as BodyLink): `send(packet)` takes the motor
     channels, a background thread streams S-Bus frames at ~70 Hz, sticks centre if packets stop."""
 
-    def __init__(self, cfg: dict | None = None, ser=None, port: str | None = None, start: bool = True):
+    def __init__(self, cfg: dict | None = None, ser=None, port: str | None = None, start: bool = True, udp: bool = False):
+        """`udp=True`: no serial port here; `send()` adds the S-Bus channels to the brain packet ("s1": {"ch": [...]})
+        and the body ESP32 (firmware/body, GPIO 4) streams them to the S1. Put this body first in a MultiBody so the
+        BodyLink after it sends the annotated packet."""
         self.cfg = {**DEFAULTS, **(dict(cfg) if cfg else {})}
         if port:
             self.cfg["port"] = port
-        self.ser = ser if ser is not None else open_serial(str(self.cfg["port"]))
+        self.udp = udp
+        if udp:
+            self.ser = None
+        else:
+            self.ser = ser if ser is not None else open_serial(str(self.cfg["port"]))
         self.sticks = {"forward": 0.0, "strafe": 0.0, "yaw": 0.0}
         self.released = False
         self.last_packet = 0.0
@@ -138,11 +145,11 @@ class S1Body:
         self.pir = 0            # BodyLink attributes the loop reads; S-Bus carries nothing back
         self.busy = 0
         self.last_rx = 0.0
-        self.addr = (str(self.cfg["port"]), 0)
+        self.addr = ("body-udp" if udp else str(self.cfg["port"]), 0)
         self._lock = threading.Lock()
         self._stop = threading.Event()
         self._t = threading.Thread(target=self._loop, daemon=True, name="s1-sbus")
-        if start:
+        if start and not udp:
             self._t.start()
 
     # --- the brain loop's interface
@@ -160,6 +167,9 @@ class S1Body:
             self.sticks = st
             self.released = asleep
             self.last_packet = time.monotonic()
+        if self.udp:                                              # the body ESP32 does the S-Bus: channels ride in the packet
+            packet["s1"] = {"ch": channels(st, self.cfg, asleep)}
+            self.frames += 1
 
     def poll(self) -> dict | None:
         return None
@@ -179,6 +189,8 @@ class S1Body:
     def close(self) -> None:
         with self._lock:
             self.sticks = {"forward": 0.0, "strafe": 0.0, "yaw": 0.0}
+        if self.udp:
+            return
         if self._t.is_alive():
             time.sleep(5 * FRAME_S)          # a few centred frames before the signal disappears
         self._stop.set()

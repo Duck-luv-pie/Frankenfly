@@ -109,3 +109,22 @@ def test_heading_tracking_follows_the_fly_and_ignores_wobble():
     assert abs(b.status()["error_deg"]) < 3
     b.send({"episode": 2, "motor": {"heading_deg": 250.0}})                  # new episode: the fly teleported, no spin to match
     assert b.est_heading == 250.0
+
+
+def test_udp_mode_puts_the_channels_in_the_packet():
+    b = S1Body({"stick_forward": 1.0, "stick_yaw": 1.0, "rotation_only": False}, udp=True)
+    sent = []
+
+    class Link:
+        pir = 0; busy = 0; last_rx = 0.0; addr = ("x", 1)
+        def send(self, p): sent.append(dict(p))
+        def poll(self): return None
+        def close(self): pass
+    m = MultiBody(b, Link())
+    m.send({"state": "track", "motor": {"forward": 1.0, "turn": -0.5}})
+    ch = sent[0]["s1"]["ch"]
+    assert len(ch) == 7 and ch[1] == HIGH and ch[3] == stick(-0.5) and ch[6] == HIGH
+    m.send({"state": "sleep", "motor": {}})
+    assert sent[1]["s1"]["ch"][6] == LOW                   # asleep: chassis released
+    assert b.status()["frames"] == 2
+    m.close()

@@ -18,6 +18,9 @@
 #define PIN_DF_BUSY   35   // DFPlayer BUSY (low while playing), input-only pin
 #define DF_DEFAULT_VOLUME 20   // 0..30
 
+// --- RoboMaster S1 over S-Bus (docs/wiring.md, "RoboMaster S1") ------------------------------
+#define PIN_SBUS_TX    4   // -> S1 motion controller S-Bus "Signal" pin (inverted UART1 TX); GND to GND, 5 V pin unused
+
 // --- HC-SR501 PIR ---------------------------------------------------------------------------
 #define PIN_PIR       34   // input-only pin
 #define PIR_WARMUP_MS 60000

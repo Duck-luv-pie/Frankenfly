@@ -95,6 +95,9 @@ cd firmware/body && pio run -t upload && pio device monitor
 
 ## Network protocol
 
+On the robot the packet also carries `"s1": {"ch": [c1..c7]}`, the S-Bus channels (1024 +/- 672) the body streams
+on GPIO 4 (see "RoboMaster S1").
+
 | Link | Transport | Rate | Content |
 |---|---|---|---|
 | cam → brain | HTTP `GET http://companion-cam.local:81/stream` | ~15 fps QVGA JPEG | multipart MJPEG; `/status` on port 80 gives JSON |
@@ -128,6 +131,12 @@ UART (RX, TX, GND). Only Signal and GND are connected; leave the 5 V pin alone. 
 has no SDK; the Pi is the "receiver". Channel map and the driver: `brain/companion_brain/body/s1.py`.
 
 S-Bus is an *inverted* serial signal, and the Pi's own UART cannot invert, so one of:
+
+**A0. The body ESP32 itself (the robot's build).** `firmware/body` streams S-Bus on **GPIO 4** from the
+channels the brain puts in its packet (`"s1": {"ch": [...]}`, `companion run --s1 udp` / `hunt-brain ... --s1 udp`,
+or `S1_MODE=udp` in the Pi's `companion-hunt.env`). Body GPIO 4 -> S1 S-Bus Signal, body GND -> S1 GND; the
+eyes, speaker and PIR stay on their pins (17 keeps the speaker). No USB link to the Pi: the body joins the
+Pi's Wi-Fi `companion` (secrets.ini WIFI_SSID2/3) and takes the packet at 20 Hz; no packet for 0.5 s -> sticks centred.
 
 **A. ESP32 as the inverter (jumper wires only).** Flash `firmware/sbus-bridge` onto a spare
 ESP32 DevKit (`pio run -t upload`). Pi USB -> ESP32 USB cable. ESP32 GPIO17 -> S1 S-Bus Signal,

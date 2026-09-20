@@ -1,16 +1,18 @@
-// Companion "body": ESP32 DevKit driving two GC9A01 eyes, a DFPlayer Mini and a PIR sensor,
-// expressing whatever the fly brain on the Mac decides. Wiring: docs/wiring.md
+// Companion "body": ESP32 DevKit driving two GC9A01 eyes, a DFPlayer Mini, a PIR sensor and, on the
+// robot, the RoboMaster S1 over S-Bus, expressing whatever the fly brain decides. Wiring: docs/wiring.md
 #include <Arduino.h>
 #include "config.h"
 #include "eyes.h"
 #include "audio.h"
 #include "pir.h"
 #include "link.h"
+#include "sbus.h"
 
 static Eyes eyes;
 static Audio audio;
 static Pir pir;
 static Link brainLink;
+static SBusOut sbus;   // the RoboMaster S1, when the brain sends "s1" channels
 static BrainPacket brain;
 static uint32_t lastHeartbeat = 0;
 static uint32_t startleUntil = 0;
@@ -24,6 +26,7 @@ void setup() {
   audio.begin();
   pir.begin();
   brainLink.begin();
+  sbus.begin();
   audio.play(1, DF_DEFAULT_VOLUME);  // boot sound: confirms the SD card works
   Serial.println("ready");
 }
@@ -35,7 +38,9 @@ void loop() {
     eyes.setTargets(brain.l, brain.r);
     if (brain.blink) eyes.blink();
     if (brain.track > 0) audio.play(brain.track, brain.volume);
+    if (brain.hasS1) sbus.set(brain.s1, brain.s1n);
   }
+  sbus.tick();
 
   pir.poll();
   if (pir.rose()) {

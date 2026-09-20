@@ -413,13 +413,23 @@ def cmd_hunt_brain(args, cfg):
           f"nobody in range {sm['blind']:.0%} of the time, of which standing still {sm['idle']:.0%} | {time.time() - t0:.0f} s wall", flush=True)
 
 
-def _s1_body(args, cfg):
-    """`--s1 [PORT]`: a RoboMaster S1 on S-Bus mirroring the fly (docs/wiring.md); None when not asked for."""
+def _s1_body(args, cfg, with_link: bool = True):
+    """`--s1 [PORT]`: a RoboMaster S1 on S-Bus mirroring the fly (docs/wiring.md); None when not asked for.
+    `--s1 udp`: the body ESP32 streams the S-Bus (firmware/body); the channels ride in the brain packet, so this
+    returns a MultiBody(S1Body, BodyLink) unless `with_link` is False (the caller has its own BodyLink)."""
     s1_cfg = dict(cfg.body.get("s1", {}))
-    if getattr(args, "s1", None) is None and not s1_cfg.get("enabled"):
+    mode = getattr(args, "s1", None)
+    if mode is None and not s1_cfg.get("enabled"):
         return None
-    from .body.s1 import S1Body
-    s1 = S1Body(s1_cfg, port=(getattr(args, "s1", None) or None))
+    from .body.s1 import S1Body, MultiBody
+    if mode == "udp" or s1_cfg.get("port") == "udp":
+        s1 = S1Body(s1_cfg, udp=True)
+        print(f"[body] RoboMaster S1 via the body ESP32 ({cfg.body.host}: S-Bus channels in the packet, free_mode={s1.cfg['free_mode']}, speed {s1.cfg['speed']})", flush=True)
+        if not with_link:
+            return s1
+        from .body.link import BodyLink
+        return MultiBody(s1, BodyLink(cfg.body.host, cfg.body.port, cfg.body.listen_port))
+    s1 = S1Body(s1_cfg, port=(mode or None))
     print(f"[body] RoboMaster S1 on {s1.cfg['port']} (S-Bus, free_mode={s1.cfg['free_mode']}, speed {s1.cfg['speed']}, sticks fwd {s1.cfg['stick_forward']} / yaw {s1.cfg['stick_yaw']})", flush=True)
     return s1
 
@@ -499,12 +509,10 @@ def cmd_run(args, cfg):
     lobe = OpticLobe(cam_cfg.width, cam_cfg.height, 10.0)                  # the fly's own eyes (retina from its world)
     decoder = Decoder(cfg, baseline)
     body = DryBody() if args.dry_body else BodyLink(cfg.body.host, cfg.body.port, cfg.body.listen_port)
-    s1_cfg = dict(cfg.body.get("s1", {}))
-    if args.s1 is not None or s1_cfg.get("enabled"):
-        from .body.s1 import S1Body, MultiBody
-        s1 = S1Body(s1_cfg, port=args.s1 or None)
-        print(f"[body] RoboMaster S1 on {s1.cfg['port']} (S-Bus, free_mode={s1.cfg['free_mode']}, speed {s1.cfg['speed']}, sticks fwd {s1.cfg['stick_forward']} / yaw {s1.cfg['stick_yaw']})", flush=True)
-        body = MultiBody(body, s1)
+    s1 = _s1_body(args, cfg, with_link=False)
+    if s1 is not None:
+        from .body.s1 import MultiBody
+        body = MultiBody(s1, body)                       # the S1 first: in udp mode it annotates the packet the body link then sends
     period = 1.0 / float(cfg.body.rate_hz)
     pir_until = 0.0
     last_pir = 0
@@ -748,7 +756,7 @@ def main(argv=None):
     p.add_argument("--sim-camera", default=None, metavar="SRC", help="'synthetic' or a video file / URL instead of the ESP32-CAM")
     p.add_argument("--dry-body", action="store_true", help="print body packets instead of sending UDP")
     p.add_argument("--s1", nargs="?", const="", default=None, metavar="PORT",
-                   help="also drive a RoboMaster S1 over S-Bus from this serial port (default body.s1.port)")
+                   help="also drive a RoboMaster S1 over S-Bus from this serial port, or 'udp' = via the body ESP32 (default body.s1.port)")
     p.add_argument("-v", "--verbose", action="store_true")
     p.add_argument("--recalibrate", action="store_true", help="re-measure the resting baseline")
     p.add_argument("--no-learn", action="store_true", help="start with mushroom-body plasticity switched off")

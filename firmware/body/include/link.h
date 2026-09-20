@@ -12,6 +12,9 @@ struct BrainPacket {
   int track = 0;
   int volume = -1;
   float armL = 0, armR = 0;   // reserved for future arms
+  bool hasS1 = false;         // "s1": {"ch": [...]}: S-Bus channels for the RoboMaster S1 (1024 +/- 672)
+  uint16_t s1[16];
+  size_t s1n = 0;
 };
 
 class Link {

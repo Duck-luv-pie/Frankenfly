@@ -7,17 +7,44 @@
 #error "Create firmware/secrets.ini from secrets.example.ini with WIFI_SSID / WIFI_PASS"
 #endif
 
+struct KnownNet { const char *ssid; const char *pass; };
+static const KnownNet KNOWN[] = {
+  {WIFI_SSID, WIFI_PASS},
+#ifdef WIFI_SSID2
+  {WIFI_SSID2, WIFI_PASS2},
+#endif
+#ifdef WIFI_SSID3
+  {WIFI_SSID3, WIFI_PASS3},
+#endif
+};
+
+static bool joinKnown(uint32_t waitMs) {
+  WiFi.disconnect(true, false);
+  delay(100);
+  int n = WiFi.scanNetworks(false, false, false, 300);
+  const KnownNet *chosen = nullptr;
+  int best = -1000;
+  for (int i = 0; i < n; i++)
+    for (const KnownNet &k : KNOWN)
+      if (WiFi.SSID(i) == k.ssid && WiFi.RSSI(i) > best) { best = WiFi.RSSI(i); chosen = &k; }
+  WiFi.scanDelete();
+  if (!chosen) { Serial.printf("scan: %d networks, none known\n", n); return false; }
+  Serial.printf("joining %s (%d dBm)", chosen->ssid, best);
+  WiFi.begin(chosen->ssid, chosen->pass);
+  uint32_t t0 = millis();
+  while (WiFi.status() != WL_CONNECTED && millis() - t0 < waitMs) { delay(250); Serial.print('.'); }
+  Serial.println();
+  return WiFi.status() == WL_CONNECTED;
+}
+
 void Link::begin() {
   WiFi.mode(WIFI_STA);
   WiFi.setSleep(false);
   WiFi.setHostname(HOSTNAME);
-  WiFi.begin(WIFI_SSID, WIFI_PASS);
-  Serial.printf("connecting to %s", WIFI_SSID);
+  // Every network the body may meet (secrets.ini: WIFI_SSID / WIFI_PASS, then WIFI_SSID2 / 3: a phone
+  // hotspot, the Pi's own hotspot "companion" on the robot): scan, join the strongest known one.
   uint32_t t0 = millis();
-  while (WiFi.status() != WL_CONNECTED && millis() - t0 < 20000) {
-    delay(250);
-    Serial.print('.');
-  }
+  while (!joinKnown(12000) && millis() - t0 < 60000) delay(500);
   if (WiFi.status() == WL_CONNECTED) {
     Serial.printf("\nIP %s\n", WiFi.localIP().toString().c_str());
     if (MDNS.begin(HOSTNAME)) MDNS.addService("companion", "udp", UDP_LISTEN_PORT);
@@ -59,6 +86,10 @@ bool Link::poll(BrainPacket &out) {
     out.volume = doc["sound"]["vol"] | -1;
     out.armL = doc["arms"]["l"] | 0.0f;
     out.armR = doc["arms"]["r"] | 0.0f;
+    JsonArrayConst ch = doc["s1"]["ch"];
+    out.hasS1 = !ch.isNull() && ch.size() > 0;
+    out.s1n = 0;
+    if (out.hasS1) for (JsonVariantConst v : ch) { if (out.s1n < 16) out.s1[out.s1n++] = (uint16_t)(v.as<int>()); }
     lastRx_ = millis();
     got = true;
   }
