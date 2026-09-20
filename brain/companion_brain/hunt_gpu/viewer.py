@@ -17,6 +17,7 @@ import torch
 from ..ui.server import STATIC_TYPES, UI_DIR
 from .arena import BatchArena, scripted_drive, wrap
 from .brain import EvaderNet, HunterNet, build
+from .mirror import Mirror
 from .ppo import summarize
 
 HTML = UI_DIR / "hunt_gpu.html"
@@ -25,9 +26,15 @@ HTML = UI_DIR / "hunt_gpu.html"
 class Watch:
     """One room, one fly, stepped at the arena's tick rate; `state()` is what the page draws."""
 
-    def __init__(self, cfg, net: HunterNet | None, seed: int = 0, speed: float = 1.0, device: str = "cpu", humans: EvaderNet | None = None, spiking=None, body=None):
+    def __init__(self, cfg, net: HunterNet | None, seed: int = 0, speed: float = 1.0, device: str = "cpu", humans: EvaderNet | None = None, spiking=None, body=None,
+                 v_max=None, w_max=None, sign_yaw=None):
         self.cfg, self.speed = cfg, float(speed)
         self.body = body                                         # a real body (the RoboMaster S1) mirroring the fly's drive
+        # the Mirror is the one gate between the fly's drive and the S1's sticks (scaling, clamping, caps).
+        self.mirror = Mirror(body, v_max=v_max, w_max=w_max, sign_yaw=sign_yaw) if body is not None else None
+        self.estop = False                                       # the operator's emergency stop (local machine only, R6.4)
+        self._paused = False                                     # the sim is paused: the mirror centres every tick (R7.3)
+        self.halt_unconfirmed = False                            # an E-stop centred write could not be confirmed (R6.5)
         self.t0 = time.time()
         self.spiking = spiking                                   # a SpikingHunter: the connectome's neurons drive the fly
         g = {**dict(cfg.hunt_gpu), "obs_noise": 0.0}
@@ -126,12 +133,14 @@ class Watch:
         # grows to the left), speed along its nose. A real body copies these, not the drive channels.
         yaw_dps = 0.0 if bool(done[0]) else -math.degrees(float(wrap(a.heading[0:1] - h0)[0])) / a.dt * self.speed
         speed_mps = float(a.speed[0]) * self.speed
-        if self.body is not None:
-            f, tu = float(drive[0, 0]), float(drive[0, 1])
-            self.body.send({"t": int((time.time() - self.t0) * 1000), "state": "hunt", "episode": self.episode,
-                            "motor": {"forward": max(0.0, f), "backward": max(0.0, -f), "turn": tu,
-                                      "yaw_dps": yaw_dps, "speed_mps": speed_mps,
-                                      "heading_deg": (-math.degrees(float(a.heading[0]))) % 360.0}})
+        if self.mirror is not None:
+            # the gate: E-stop and pause both send the neutral centre regardless of the drive (E-stop dominates),
+            # otherwise the scaled drive is sent before the next tick (R6.2, R7.3, R4.2).
+            centered = self.estop or self._paused
+            ok = self.mirror.send(float(drive[0, 0]), float(drive[0, 1]), centered=centered)
+            # R6.5: while the E-stop is active, if the centred write cannot be confirmed (the S-Bus link is
+            # down), keep the E-stop state, keep sending centred, and surface an "unconfirmed halt".
+            self.halt_unconfirmed = self.estop and not (ok and getattr(self.body, "link_ok", True))
         self.total += float(r[0])
         heat, vis, _ = a.spec.split(obs)
         tgt = int(a.target[0])
@@ -146,6 +155,7 @@ class Watch:
               "reward": round(float(r[0]), 3), "total": round(self.total, 2), "done": bool(done[0]), "lobotomized": self.lobotomized, "heat_on": self.heat_on,
               "see_m": a.see_m, "fov_deg": round(math.degrees(a.fov), 1), "brain": brain,
               "heading_deg": round((-math.degrees(float(a.heading[0]))) % 360.0, 1), "yaw_dps": round(yaw_dps, 1), "speed_mps": round(speed_mps, 2),
+              "estop": self.estop, "halt_unconfirmed": self.halt_unconfirmed,
               "body": (self.body.status() if self.body is not None and hasattr(self.body, "status") else None)}
         if bool(done[0]):
             ep = info["episodes"][0]
@@ -162,6 +172,13 @@ class Watch:
         with self.lock:
             self._start(self.seed + self.episode)
 
+    def set_estop(self, on: bool) -> None:
+        """The operator's emergency stop, from the local machine only (R6.4): while active the mirror
+        sends only the neutral centre (R6.2); clearing it resumes the drive on the next tick (R6.3)."""
+        self.estop = bool(on)
+        if not self.estop:
+            self.halt_unconfirmed = False
+
     def lobotomize(self, on: bool) -> None:
         """Swap the untrained brain in (on) or the trained one back (off); the fly starts afresh either way."""
         with self.lock:
@@ -176,11 +193,19 @@ class Watch:
 
 
 def serve(cfg, net: HunterNet | None, port: int = 8601, open_browser: bool = False, seed: int = 0, speed: float = 1.0, net_label: str = "trained fly",
-          humans: EvaderNet | None = None, spiking=None, body=None) -> None:
-    watch = Watch(cfg, net, seed=seed, speed=speed, humans=humans, spiking=spiking, body=body)
+          humans: EvaderNet | None = None, spiking=None, body=None, v_max=None, w_max=None, sign_yaw=None,
+          read_only: bool = True, feed: str = "local", relay_url=None, bind: str = "0.0.0.0",
+          publish_url=None, publish_token=None) -> None:
+    # R9.1 / R9.5: the port is configurable but must be a usable TCP port (1024-65535); refuse to start on
+    # an out-of-range port with a clear error that names the offending port rather than binding somewhere odd.
+    if not isinstance(port, int) or not (1024 <= port <= 65535):
+        raise SystemExit(f"[hunt-gpu] invalid port {port!r}: choose a port in the range 1024-65535")
+    watch = Watch(cfg, net, seed=seed, speed=speed, humans=humans, spiking=spiking, body=body, v_max=v_max, w_max=w_max, sign_yaw=sign_yaw)
     who = (f"({spiking.hc.n:,} spiking neurons of the connectome, {net_label})" if spiking is not None else "(the scripted hunter)" if net is None else f"({net_label})") + f" vs {watch.last.get('humans', '')}"
     cond = threading.Condition()
-    box = {"version": 0, "payload": b"{}", "paused": False}
+    # `s1_rejections` counts inbound network messages discarded as ignored-for-S1 so the rejection is
+    # externally observable (R8.5); it is surfaced on /config alongside the read-only / feed configuration.
+    box = {"version": 0, "payload": b"{}", "paused": False, "s1_rejections": 0}
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *a):
@@ -192,6 +217,15 @@ def serve(cfg, net: HunterNet | None, port: int = 8601, open_browser: bool = Fal
                 self._send(200, "text/html; charset=utf-8", HTML.read_bytes())
             elif path == "/events":
                 self._events()
+            elif path == "/config":
+                # what the front-end needs to decide read-only UI (R1.1) and its feed source (R11): the
+                # spectator flag, the feed ("local" same-origin SSE / "remote" relay), and the relay url.
+                self._send(200, "application/json", json.dumps({
+                    "read_only": bool(read_only),
+                    "feed": feed,
+                    "relay_url": relay_url,
+                    "s1_rejections": box["s1_rejections"],
+                }, separators=(",", ":")).encode())
             elif path == "/who":
                 self._send(200, "text/plain; charset=utf-8", who.encode())
             elif path == "/brain.json":
@@ -206,7 +240,27 @@ def serve(cfg, net: HunterNet | None, port: int = 8601, open_browser: bool = Fal
 
         def do_POST(self):
             n = int(self.headers.get("Content-Length", 0))
-            body = json.loads(self.rfile.read(n).decode() or "{}") if n else {}
+            try:
+                body = json.loads(self.rfile.read(n).decode() or "{}") if n else {}
+            except (json.JSONDecodeError, ValueError):
+                body = {}
+            if not isinstance(body, dict):
+                body = {}
+            # R8.2/R8.3: this POST handler is the only inbound network surface and it has NO branch that
+            # writes to S1Body -- the sim keys below (next/lobotomy/heat/unlimited/paused/speed) never reach
+            # the S-Bus. Any inbound message that looks like a robot command (stick / motion / velocity /
+            # actuator fields) is discarded without translating any part of it into an S-Bus frame, leaving
+            # the S1 command stream unchanged, and the rejection is recorded so it is observable (R8.5).
+            if any(k in body for k in ("motor", "sticks", "stick", "motion", "velocity", "actuator", "channels", "throttle", "drive")):
+                box["s1_rejections"] += 1
+                print(f"[hunt-gpu] inbound message ignored for the S1 (never reaches S1Body): keys={sorted(body)}"
+                      f" | total ignored-for-S1: {box['s1_rejections']}", flush=True)
+            # R1.2 / R9.6: while Spectator_Mode is enabled every web client is read-only -- a control POST is
+            # rejected with 403 and nothing in the simulation or robot state changes. The local operator does
+            # not rely on POST (they use terminal / keyboard hotkeys, R1.4), so this does not lock them out.
+            if read_only:
+                self._send(403, "application/json", b'{"error":"read-only: controls are disabled for spectators"}')
+                return
             if body.get("next"):
                 watch.next_episode()
             if "lobotomy" in body:
@@ -220,6 +274,7 @@ def serve(cfg, net: HunterNet | None, port: int = 8601, open_browser: bool = Fal
                 print(f"[hunt-gpu] eye range {'unlimited' if watch.arena.see_m == 0 else f'{watch.arena.see_m:g} m'}", flush=True)
             if "paused" in body:
                 box["paused"] = bool(body["paused"])
+                watch._paused = box["paused"]
             if "speed" in body:
                 watch.speed = max(0.1, min(8.0, float(body["speed"])))
             self._send(204, "text/plain", b"")
@@ -248,18 +303,39 @@ def serve(cfg, net: HunterNet | None, port: int = 8601, open_browser: bool = Fal
             except (BrokenPipeError, ConnectionResetError, OSError):
                 return
 
-    server = ThreadingHTTPServer(("0.0.0.0", port), Handler)
+    # R9.2: bind to all interfaces ("0.0.0.0") so LAN devices can reach the view; deployed mode passes
+    # "127.0.0.1" to keep the machine off the network (R14.3). R9.5: an already-in-use (or otherwise
+    # unbindable) port raises OSError here -- turn it into a clear refuse-to-start error naming the port.
+    try:
+        server = ThreadingHTTPServer((bind, port), Handler)
+    except OSError as e:
+        raise SystemExit(f"[hunt-gpu] cannot serve on {bind}:{port} ({e.strerror or e}); "
+                         f"the port may already be in use -- pass --port with a free port in 1024-65535")
     server.daemon_threads = True
     threading.Thread(target=server.serve_forever, daemon=True).start()
     url = f"http://localhost:{port}"
     print(f"[hunt-gpu] watching {'the spiking connectome fly' if spiking is not None else 'the scripted hunter' if net is None else 'the trained fly'} at {url} (Ctrl-C to stop)", flush=True)
+    # R11.5 / R14.1: when a publish URL is configured, start the outbound-only Publisher on the SAME shared
+    # box + Condition so it pushes each tick's payload to the relay. It holds no reference to S1Body, opens
+    # no listening socket, and its failures are isolated so the local SSE serving and the mirror carry on.
+    publisher = None
+    if publish_url:
+        try:
+            from .publish import Publisher
+            publisher = Publisher(box, cond, publish_url, token=publish_token)
+            publisher.start()
+            print(f"[hunt-gpu] publishing state outbound to the relay at {publish_url}", flush=True)
+        except Exception as e:
+            print(f"[hunt-gpu] could not start the publish client, local serving continues: {e}", flush=True)
+            publisher = None
     if open_browser:
         webbrowser.open(url)
     dt = watch.arena.dt
     nxt = time.perf_counter()
     try:
         while True:
-            if not box["paused"]:
+            watch._paused = bool(box["paused"])
+            if not watch._paused:
                 st = watch.tick()
                 payload = json.dumps(st, separators=(",", ":")).encode()
                 with cond:
@@ -271,6 +347,8 @@ def serve(cfg, net: HunterNet | None, port: int = 8601, open_browser: bool = Fal
                     print(f"[hunt-gpu] episode {watch.episode - 1} seed {e['seed']}: "
                           f"{('first touch at %.1f s, tracked %.0f%% of the rest, %d contacts' % (e['t_touch'], 100 * e['track'], e['touches'])) if e['touched'] else 'no touch'}"
                           f" | reward {e['total_reward']:.1f}", flush=True)
+            elif watch.mirror is not None:
+                watch.mirror.send(0.0, 0.0, centered=True)   # paused-centering: keep the S1 stopped every tick (R7.3)
             nxt += dt / watch.speed
             time.sleep(max(0.0, nxt - time.perf_counter()))
             if time.perf_counter() - nxt > 1.0:          # fell behind (sleeping laptop): do not race to catch up
@@ -278,4 +356,6 @@ def serve(cfg, net: HunterNet | None, port: int = 8601, open_browser: bool = Fal
     except KeyboardInterrupt:
         print("\n[hunt-gpu] stopped", flush=True)
     finally:
+        if publisher is not None:
+            publisher.stop()
         server.shutdown()

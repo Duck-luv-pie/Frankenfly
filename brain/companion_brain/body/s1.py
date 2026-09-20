@@ -12,6 +12,7 @@ This module imports nothing heavy so tools/s1_sbus.py can use it before the brai
 """
 from __future__ import annotations
 
+import math
 import threading
 import time
 
@@ -33,9 +34,11 @@ DEFAULTS = {
     "heading_gain": 3.0,     # heading tracking: yaw rate = gain x heading error (deg/s per deg), capped at yaw_dps_full
     "heading_deadband_deg": 2.0,
     "gimbal_pitch": 0.0,     # -1..1 held on channel 3
-    "timeout_s": 0.5,        # no brain packet for this long -> sticks centred
+    "timeout_s": 0.2,        # failsafe: no per-tick packet for this long -> sticks centred (R7.1, 0.05..2.0)
     "release_asleep": True,  # the sleeping fly goes limp: chassis released on channel 7
 }
+
+TIMEOUT_MIN, TIMEOUT_MAX = 0.05, 2.0     # the failsafe timeout is configurable within this range (R7.1)
 
 
 def encode(ch: list[int], failsafe: bool = False, lost: bool = False) -> bytes:
@@ -72,9 +75,11 @@ def stick(x: float) -> int:
     return int(round(CENTER + SPAN * max(-1.0, min(1.0, float(x)))))
 
 
-def motor_to_sticks(motor: dict, cfg: dict) -> dict:
+def motor_to_sticks(motor: dict, cfg: dict, clip_axes: bool = True) -> dict:
     """The hunt vehicle's mapping (sim/hunt_arena.py) as stick deflections in -1..1:
-    forward = forward - backward, yaw = the turn channel (DNa right minus left, +ve = right)."""
+    forward = forward - backward, yaw = the turn channel (DNa right minus left, +ve = right).
+    With `clip_axes=False` the final axes are returned unclipped, so a caller can see whether a
+    command falls outside the S1 stick range before it is squeezed back in (S1Body.send, R7.4)."""
     gf, gs, gy = (float(cfg.get(k, DEFAULTS[k])) for k in ("stick_forward", "stick_strafe", "stick_yaw"))
     clip = lambda x: max(-1.0, min(1.0, x))
     # physical units when the sender knows them (the hunt viewer: the fly's real yaw rate and speed) ...
@@ -89,10 +94,11 @@ def motor_to_sticks(motor: dict, cfg: dict) -> dict:
     strafe = gs * float(motor.get("strafe", 0.0))
     if bool(cfg.get("rotation_only", DEFAULTS["rotation_only"])):
         fwd = strafe = 0.0
+    axis = clip if clip_axes else (lambda x: x)
     return {
-        "forward": clip(float(cfg.get("sign_forward", 1)) * fwd),
-        "strafe": clip(float(cfg.get("sign_strafe", 1)) * strafe),
-        "yaw": clip(float(cfg.get("sign_yaw", 1)) * yaw),
+        "forward": axis(float(cfg.get("sign_forward", 1)) * fwd),
+        "strafe": axis(float(cfg.get("sign_strafe", 1)) * strafe),
+        "yaw": axis(float(cfg.get("sign_yaw", 1)) * yaw),
     }
 
 
@@ -124,10 +130,15 @@ class S1Body:
         self.cfg = {**DEFAULTS, **(dict(cfg) if cfg else {})}
         if port:
             self.cfg["port"] = port
+        # the failsafe timeout is clamped to its valid range (R7.1: 0.05..2.0 s)
+        self.cfg["timeout_s"] = max(TIMEOUT_MIN, min(TIMEOUT_MAX, float(self.cfg.get("timeout_s", DEFAULTS["timeout_s"]))))
         self.ser = ser if ser is not None else open_serial(str(self.cfg["port"]))
-        self.sticks = {"forward": 0.0, "strafe": 0.0, "yaw": 0.0}
+        self.sticks = {"forward": 0.0, "strafe": 0.0, "yaw": 0.0}     # the last neutral-safe state (kept on a rejected packet, R7.4)
         self.released = False
         self.last_packet = 0.0
+        self.rejects = 0                   # out-of-range packets rejected by send (R7.4)
+        self.last_valid = True             # False after the most recent send was rejected
+        self.link_ok = True                # the last S-Bus write succeeded (an S1 link check for the E-stop, R6.5)
         # heading tracking (the hunt viewer sends the fly's absolute heading): the rover's heading is estimated from what
         # it was told (no odometry comes back), and it steers toward the fly's heading. A wobbling fly nets to nothing;
         # a real turn is followed to the degree, even when the fly out-turns the rover for a while.
@@ -146,11 +157,24 @@ class S1Body:
             self._t.start()
 
     # --- the brain loop's interface
-    def send(self, packet: dict) -> None:
+    def send(self, packet: dict) -> bool:
+        """Update the target sticks from a motor packet. Returns True when the packet is accepted,
+        False when it is rejected for being out of the valid stick range (R7.4): a rejected packet
+        leaves the last neutral-safe sticks untouched and raises the validation-failure signal."""
         motor = packet.get("motor") or {}
+        # R7.4: reject a command whose stick axes fall outside [-1, 1] (or are non-finite) before it is
+        # clamped in, keeping the last good state, so a bad per-tick command cannot move the robot.
+        raw = motor_to_sticks(motor, self.cfg, clip_axes=False)
+        if not all(math.isfinite(v) and -1.0 - 1e-9 <= v <= 1.0 + 1e-9 for v in raw.values()):
+            with self._lock:
+                self.rejects += 1
+                self.last_valid = False
+            print(f"[s1] rejected out-of-range stick command {raw}, holding last safe state", flush=True)
+            return False
         st = motor_to_sticks(motor, self.cfg)
         asleep = packet.get("state") == "sleep" and bool(self.cfg.get("release_asleep", True))
         with self._lock:
+            self.last_valid = True
             if "heading_deg" in motor:
                 h = float(motor["heading_deg"])
                 ep = packet.get("episode")
@@ -160,6 +184,7 @@ class S1Body:
             self.sticks = st
             self.released = asleep
             self.last_packet = time.monotonic()
+        return True
 
     def poll(self) -> dict | None:
         return None
@@ -170,7 +195,8 @@ class S1Body:
             st = dict(self.sticks)
         full = float(self.cfg.get("yaw_dps_full", DEFAULTS["yaw_dps_full"]))
         out = {"sticks": {k: round(v, 3) for k, v in st.items()}, "yaw_dps": round(st["yaw"] * full, 1),
-               "saturated": abs(st["yaw"]) >= 0.999, "rotation_only": bool(self.cfg.get("rotation_only", True)), "frames": self.frames}
+               "saturated": abs(st["yaw"]) >= 0.999, "rotation_only": bool(self.cfg.get("rotation_only", True)), "frames": self.frames,
+               "valid": self.last_valid, "rejects": self.rejects, "link_ok": self.link_ok}
         if self.est_heading is not None and self.target_heading is not None:
             out["heading_deg"] = round(self.est_heading, 1)
             out["error_deg"] = round(wrap_deg(self.target_heading - self.est_heading), 1)
@@ -210,8 +236,9 @@ class S1Body:
             try:
                 self.ser.write(self.frame())
                 self.frames += 1
+                self.link_ok = True
             except Exception:
-                pass
+                self.link_ok = False        # the S-Bus write failed: the halt cannot be confirmed (R6.5)
             nxt += FRAME_S
             time.sleep(max(0.0, nxt - time.perf_counter()))
 
