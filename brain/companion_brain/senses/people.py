@@ -38,11 +38,17 @@ class NanoDetPeople:
         self.project = np.arange(self.reg_max + 1, dtype=np.float32)
         self.mean = np.array([103.53, 116.28, 123.675], dtype=np.float32).reshape(1, 1, 3)
         self.std = np.array([57.375, 57.12, 58.395], dtype=np.float32).reshape(1, 1, 3)
-        self.anchors = []
-        for st in self.strides:
-            n = self.size // st
-            xv, yv = np.meshgrid(np.arange(n) * st, np.arange(n) * st)
-            self.anchors.append(np.column_stack((xv.ravel() + 0.5 * (st - 1), yv.ravel() + 0.5 * (st - 1))).astype(np.float32))
+        self._anchor_cache: dict[tuple[int, int], np.ndarray] = {}
+
+    def anchors(self, stride: int, grid: int) -> np.ndarray:
+        """Cell centres of a `grid` x `grid` level at `stride`, built from the grid the model actually
+        returned: the coarsest level is ceil(416/64) = 7, not the floor 6 an even division would give."""
+        key = (stride, grid)
+        if key not in self._anchor_cache:
+            xv, yv = np.meshgrid(np.arange(grid) * stride, np.arange(grid) * stride)
+            self._anchor_cache[key] = np.column_stack(
+                (xv.ravel() + 0.5 * (stride - 1), yv.ravel() + 0.5 * (stride - 1))).astype(np.float32)
+        return self._anchor_cache[key]
 
     def __call__(self, frame: np.ndarray) -> list[tuple[int, int, int, int]]:
         if frame.ndim == 2:
@@ -67,17 +73,18 @@ class NanoDetPeople:
         blob = cv2.dnn.blobFromImage(((img.astype(np.float32) - self.mean) / self.std))
         self.net.setInput(blob)
         outs = self.net.forward(self.net.getUnconnectedOutLayersNames())
-        # pair the heads by shape (the output order is not the stride order): rows = (416/stride)^2, 80 channels = classes, 32 = box
-        heads: dict[tuple[int, str], np.ndarray] = {}
-        for o in outs:
-            o = o.reshape(-1, o.shape[-1])
-            st = int(round(self.size / math.sqrt(o.shape[0])))
-            heads[(st, "cls" if o.shape[1] == 80 else "reg")] = o
+        # pair the heads by size, not by a stride derived from the row count: the coarsest level's grid is
+        # ceil(416/64) = 7, so round(416/sqrt(49)) gave 59, the (64, ...) lookup never matched, and that head
+        # was dropped without a word, taking every large (close-up) person with it. Rows descending = stride
+        # ascending, whichever order the model returns them in.
+        flat = [o.reshape(-1, o.shape[-1]) for o in outs]
+        cls_heads = sorted((o for o in flat if o.shape[1] == 80), key=lambda o: -o.shape[0])
+        reg_heads = sorted((o for o in flat if o.shape[1] != 80), key=lambda o: -o.shape[0])
         boxes, scores = [], []
-        for st, anc in zip(self.strides, self.anchors):
-            if (st, "cls") not in heads or (st, "reg") not in heads:
+        for st, cls, reg in zip(self.strides, cls_heads, reg_heads):
+            anc = self.anchors(st, int(round(math.sqrt(cls.shape[0]))))
+            if cls.shape[0] != reg.shape[0] or anc.shape[0] != cls.shape[0]:
                 continue
-            cls, reg = heads[(st, "cls")], heads[(st, "reg")]
             x = np.exp(reg.reshape(-1, self.reg_max + 1)); x /= x.sum(axis=1, keepdims=True)
             d = (x @ self.project).reshape(-1, 4) * st
             person = cls[:, 0]                                        # COCO class 0

@@ -43,3 +43,15 @@ def test_lost_detection_is_held_briefly_then_cleared():
     s.observe(f)
     assert s.observe(f)[0][:, 0].max() == 0
     assert s.observe(None)[0].shape == (24, 2)          # no frame at all is fine
+
+
+def test_every_level_including_the_coarsest_keeps_its_anchors():
+    import math
+    from companion_brain.senses.people import NanoDetPeople
+    d = object.__new__(NanoDetPeople)                  # no model load: anchors() is pure numpy
+    d._anchor_cache = {}
+    d.strides, d.size = (8, 16, 32, 64), 416
+    for st, rows in zip(d.strides, (2704, 676, 169, 49)):   # NanoDet-Plus-m 416's four levels
+        g = int(round(math.sqrt(rows)))
+        assert d.anchors(st, g).shape == (rows, 2), f"stride {st} lost its head"
+    assert d.anchors(64, 7)[0].tolist() == [31.5, 31.5]     # centre of the first 64 px cell
