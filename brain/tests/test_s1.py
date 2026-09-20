@@ -28,7 +28,7 @@ def test_stick_range():
 
 
 def test_physical_units_and_rotation_only():
-    cfg = {"yaw_dps_full": 90.0, "speed_mps_full": 0.85, "rotation_only": True, "stick_forward": 1.0, "scale": 1.0}
+    cfg = {"yaw_dps_full": 90.0, "speed_mps_full": 0.85, "rotation_only": True, "stick_forward": 1.0, "scale": 1.0, "scale_yaw": 1.0, "scale_yaw": 1.0}
     st = motor_to_sticks({"forward": 1.0, "turn": 1.0, "yaw_dps": 45.0, "speed_mps": 0.85}, cfg)
     assert st["yaw"] == 0.5 and st["forward"] == 0.0            # rotation only: forward stays centred
     cfg["rotation_only"] = False
@@ -37,12 +37,12 @@ def test_physical_units_and_rotation_only():
 
 
 def test_motor_mapping_follows_the_hunt_vehicle():
-    cfg = {"stick_forward": 0.5, "stick_strafe": 0.5, "stick_yaw": 0.5, "rotation_only": False, "scale": 1.0}
+    cfg = {"stick_forward": 0.5, "stick_strafe": 0.5, "stick_yaw": 0.5, "rotation_only": False, "scale": 1.0, "scale_yaw": 1.0, "scale_yaw": 1.0}
     st = motor_to_sticks({"forward": 1.0, "turn": -0.5}, cfg)
     assert st["forward"] == 0.5 and st["yaw"] == -0.25 and st["strafe"] == 0
     st = motor_to_sticks({"forward": 0.2, "backward": 0.6}, cfg)
     assert abs(st["forward"] - (-0.2)) < 1e-9
-    st = motor_to_sticks({"turn": 1.0}, {"stick_yaw": 1.0, "sign_yaw": -1, "rotation_only": False, "scale": 1.0})
+    st = motor_to_sticks({"turn": 1.0}, {"stick_yaw": 1.0, "sign_yaw": -1, "rotation_only": False, "scale": 1.0, "scale_yaw": 1.0, "scale_yaw": 1.0})
     assert st["yaw"] == -1.0
 
 
@@ -55,7 +55,7 @@ def test_channels_modes():
 
 def test_body_streams_and_fails_safe():
     ser = FakeSerial()
-    b = S1Body({"stick_forward": 1.0, "stick_yaw": 1.0, "timeout_s": 0.2, "rotation_only": False, "scale": 1.0}, ser=ser, start=False)
+    b = S1Body({"stick_forward": 1.0, "stick_yaw": 1.0, "timeout_s": 0.2, "rotation_only": False, "scale": 1.0, "scale_yaw": 1.0, "scale_yaw": 1.0}, ser=ser, start=False)
     assert decode(b.frame())[1] == CENTER                  # nothing received yet: centred, lost flag
     b.send({"state": "track", "motor": {"forward": 1.0, "turn": 0.5}})
     ch = decode(b.frame())
@@ -112,7 +112,7 @@ def test_heading_tracking_follows_the_fly_and_ignores_wobble():
 
 
 def test_udp_mode_puts_the_channels_in_the_packet():
-    b = S1Body({"stick_forward": 1.0, "stick_yaw": 1.0, "rotation_only": False, "scale": 1.0}, udp=True)
+    b = S1Body({"stick_forward": 1.0, "stick_yaw": 1.0, "rotation_only": False, "scale": 1.0, "scale_yaw": 1.0, "scale_yaw": 1.0}, udp=True)
     sent = []
 
     class Link:
@@ -134,7 +134,7 @@ def test_serial_body_link_writes_packets_as_lines():
     from companion_brain.body.link import SerialBodyLink
     ser = FakeSerial(); ser.in_waiting = 0
     link = SerialBodyLink(port="fake", ser=ser)
-    b = S1Body({"rotation_only": False, "scale": 1.0}, udp=True)
+    b = S1Body({"rotation_only": False, "scale": 1.0, "scale_yaw": 1.0, "scale_yaw": 1.0}, udp=True)
     m = MultiBody(b, link)
     m.send({"state": "hunt", "motor": {"forward": 1.0, "turn": 0.0}})
     line = ser.frames[0]
@@ -142,5 +142,5 @@ def test_serial_body_link_writes_packets_as_lines():
 
 
 def test_scale_slows_every_stick():
-    st = motor_to_sticks({"speed_mps": 0.85, "yaw_dps": 90.0}, {"rotation_only": False, "scale": 0.25})
-    assert abs(st["forward"] - 0.25) < 1e-9 and abs(st["yaw"] - 0.25) < 1e-9
+    st = motor_to_sticks({"speed_mps": 0.85, "yaw_dps": 90.0}, {"rotation_only": False, "scale": 0.25, "scale_yaw": 0.75})
+    assert abs(st["forward"] - 0.25) < 1e-9 and abs(st["yaw"] - 0.75) < 1e-9

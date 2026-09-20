@@ -34,7 +34,8 @@ class RealHunt:
         self.arena = BatchArena(cfg.hunt, g, 1, "cpu", seed=0)      # only for its sensor geometry and observation layout
         spiking.bind_arena(self.arena)
         self.cam = CameraStream(camera, 320, 240)
-        self.sense = PeopleSense(self.arena.spec.bins, math.degrees(self.arena.fov), cam_fov_deg, tick_s=self.arena.dt)
+        self.sense = PeopleSense(self.arena.spec.bins, math.degrees(self.arena.fov), cam_fov_deg, tick_s=self.arena.dt,
+                                 hold_s=float(dict(cfg.hunt_gpu).get("real", {}).get("hold_s", 1.0)))   # a missed detection keeps the person on the retina this long
         self.vmax, self.wmax_dps = float(self.arena.vmax), math.degrees(float(self.arena.wmax))
         self.prev_drive = np.zeros(2, dtype=np.float32)
         self.speed = 0.0

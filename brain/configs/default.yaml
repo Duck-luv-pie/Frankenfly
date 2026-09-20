@@ -384,7 +384,8 @@ body:
     yaw_dps_full: 90           # the hunt viewer sends the fly's real yaw rate and speed instead: deg/s at full yaw stick ...
     speed_mps_full: 0.85       # ... and m/s at full forward stick (both measured on the slow preset)
     rotation_only: false       # true = the robot copies the fly's rotation only, never drives (the first matching test)
-    scale: 0.25                # overall speed: every stick x this (1 = the fly's full pace; 0.25 = a quarter, for indoors)
+    scale: 0.25                # forward / strafe: sticks x this (1 = the fly's full pace; 0.25 = a quarter, for indoors)
+    scale_yaw: 0.75            # turning: yaw stick x this (high, so the robot keeps people inside the camera's ~62 deg view)
     free_mode: true            # channel 4 turns the chassis (the hunt vehicle) rather than the gimbal
     speed: slow                # S1 speed preset: slow | medium | fast
     sign_forward: 1            # flip any of these if the bench test drives the wrong way
