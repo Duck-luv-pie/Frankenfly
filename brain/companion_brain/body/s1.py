@@ -30,7 +30,12 @@ DEFAULTS = {
     "sign_forward": 1, "sign_strafe": 1, "sign_yaw": 1,   # flip after the bench test if an axis is mirrored
     "yaw_dps_full": 90.0,    # measured: degrees per second at full yaw stick (slow preset, 2026-09-19)
     "speed_mps_full": 0.85,  # measured: metres per second at full forward stick (slow preset)
-    "rotation_only": False,  # True: copy the fly's rotation only; forward and strafe stay centred (the first matching test)
+    # False, because chase mode has to approach a person and not just spin on the spot. The two branches
+    # disagreed here (s1-fly-brain False, sim-mirror-webapp True) and the merge kept False deliberately.
+    # Nothing is lost: Mirror sets rotation_only = False on itself and on the body regardless
+    # (hunt_gpu/mirror.py), so this default only governs the heading-only bench path. For a first
+    # hardware run, prop the wheels off the ground rather than relying on this being True.
+    "rotation_only": False,  # True: copy the fly's rotation only; forward and strafe stay centred
     "heading_gain": 3.0,     # heading tracking: yaw rate = gain x heading error (deg/s per deg), capped at yaw_dps_full
     "heading_deadband_deg": 2.0,
     "gimbal_pitch": 0.0,     # -1..1 held on channel 3
