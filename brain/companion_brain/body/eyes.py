@@ -76,11 +76,16 @@ def eyes_for(d: Decoded, gaze_x: float, gaze_y: float, blink: bool = False, *, e
         a, b = stops[(index - 1) % len(stops)], stops[index]
         px, py = a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f
         ut += .025 * math.sin(t * 2.2)
+    if state in ("angry", "threat"):
+        # A glare that breathes: the pupils pulse slowly (a 3 s cycle) and the upper lids tremble a little,
+        # so the face reads as held anger rather than a frozen frame.
+        t = time.monotonic() if now is None else now
+        pr = float(np.clip(pr - .04 + .04 * math.sin(t * 2.1), 0.15, 0.9))
+        ut = .36 + .02 * math.sin(t * 9.0) * math.sin(t * 0.7)
     l = Eye(px, py, pr, ut, lt, tint)
     r = Eye(px, py, pr, ut, lt, tint)
     if state in ("angry", "threat"):
         l.tilt, r.tilt = .36, -.36
-        l.ut = r.ut = .36
     if state == "groom":  # asymmetric squint while grooming
         r.ut, r.lt = 0.3, 0.5
     if blink:
