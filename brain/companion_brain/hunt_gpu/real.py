@@ -55,6 +55,7 @@ class RealHunt:
         self.lock = threading.Lock()
         self.last: dict = {}
         self.frame_jpg = b""
+        self.body_log = ""
         self.heat_on = True
         # the person detector runs on its own thread at the camera's pace; the brain loop takes the latest columns
         self.latest = (np.zeros((self.arena.spec.bins, 2), dtype=np.float32), [], False)
@@ -85,6 +86,14 @@ class RealHunt:
     def tick(self) -> dict:
         with self.lock:
             vis, boxes, camera_ok = self.latest
+        # Whatever the body is saying back. The UDP link learns the body's address from its own packets in
+        # here (mDNS on the Pi's hotspot is not reliable), and the USB link hands up the ESP32's log lines,
+        # the 5 s S-Bus report among them, which otherwise just fill the Pi's tty buffer and are dropped.
+        if self.body is not None:
+            msg = self.body.poll()
+            if msg and msg.get("log"):
+                self.body_log = str(msg["log"])
+                print(f"[body] {self.body_log}", flush=True)
         heat = np.zeros(2, dtype=np.float32)
         if self.heat_on and self.pir is not None:
             self.pir.poll()
@@ -116,6 +125,7 @@ class RealHunt:
               "speed_mps": round(self.speed, 2), "yaw_dps": round(yaw_dps, 1), "fov_deg": self.sense.cam_fov,
               "rover": (self.body.status() if self.body is not None and hasattr(self.body, "status") else None), "rover_on": self.rover_on,
               "paused": self.paused, "heat_on": self.heat_on, "camera_ok": camera_ok, "lobotomized": self.lobotomized,
+              "body_log": self.body_log,
               "brain": {"n_spikes": int(spk.sum()), "top": sorted(types.items(), key=lambda kv: -kv[1])[:8],
                         "rates": {g: [round(rates[g]["left"], 1), round(rates[g]["right"], 1)] for g in ("DNa02", "DNa01", "DN_all", "MDN", "DNp09")}}}
         with self.lock:
