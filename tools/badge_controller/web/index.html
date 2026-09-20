@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>FlyBadge Pi Receiver</title>
+  <style>
+    body { margin: 0; padding: 24px; background: #0c1118; color: #e6edf3; font: 16px system-ui, sans-serif; }
+    h1 { margin: 0 0 8px; color: #70b7ff; }
+    p { color: #aab7c4; }
+    .ok { color: #63df8b; }
+    pre { min-height: 320px; overflow: auto; padding: 16px; background: #111a24; border: 1px solid #2b3b4d; border-radius: 8px; color: #f0f4f8; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <h1>FlyBadge &rarr; Raspberry Pi</h1>
+  <p class="ok">This is a read-only reception test. It cannot control the robot.</p>
+  <p>Open <strong>Fly Pi Probe</strong> on the badge, then press <strong>A</strong> and <strong>B</strong>. This log refreshes every second.</p>
+  <pre id="log">Waiting for receiver.log...</pre>
+  <script>
+    const log = document.getElementById('log');
+    async function refresh() {
+      try {
+        const response = await fetch('receiver.log?t=' + Date.now(), {cache: 'no-store'});
+        log.textContent = response.ok ? await response.text() : 'receiver.log is not ready yet';
+        log.scrollTop = log.scrollHeight;
+      } catch (error) {
+        log.textContent = 'Could not load the Pi log: ' + error;
+      }
+    }
+    refresh();
+    setInterval(refresh, 1000);
+  </script>
+</body>
+</html>

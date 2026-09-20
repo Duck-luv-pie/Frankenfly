@@ -1,0 +1,33 @@
+HACKER BADGE -> RASPBERRY PI TEST
+=================================
+
+This is a reception test only. It cannot control the robot.
+
+1. With the Raspberry Pi POWERED OFF, put this card in the Pi's microSD slot.
+2. Connect a monitor, keyboard, and power to the Pi.
+3. Complete Raspberry Pi OS's first-boot setup: create your user and connect Wi-Fi.
+4. Open Terminal from the Raspberry Pi desktop.
+5. Run exactly:
+
+   bash /boot/firmware/badge-controller-transfer/install_on_pi.sh
+
+6. Wait for "parser self-test: PASS" and "Installation complete".
+7. Start the receiver:
+
+   ~/badge-controller/run_receiver.sh
+
+8. Open Fly Pi Probe on the Hacker Badge. Press A, then B.
+
+Expected Pi messages:
+
+   RECEIVED A / LOBOTOMIZE TEST
+   RECEIVED B / RESTORE TEST
+
+Ctrl-C stops the receiver.
+
+If nothing appears, stop it and run:
+
+   ~/badge-controller/run_receiver.sh --show-all
+
+The prepared boot card includes the Python Bluetooth packages for an offline install.
+Full troubleshooting is in README.md in this same transfer folder.
