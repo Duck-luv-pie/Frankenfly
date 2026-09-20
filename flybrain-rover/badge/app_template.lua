@@ -143,7 +143,9 @@ local ui, JW, JX, JY, JN, TR = {}, {}, {}, {}, 0, {}
 local full, mode, slow, slow_c, wd = true, 0, false, 0, 0
 local r_eye, r_int, gf_all, flash_until = 0, 0, 0, 0
 local P, wn_gf, TOPT = 90, 0, ""                   -- replay phase; 90 = idle and re-armable
-local HINT = "B cut   A restore   LEFT slow   START swat"
+local HINT = "B cuts its eye"                      -- one control, not four
+local SAY_IDLE, SAY_GO, SAY_BLIND = "SWAT ME", "IT GOT AWAY", "IT CANNOT SEE YOU"
+local say_until = 0                                 -- how long the answer stays up
 local d_s, dc_s, ev_s, dv_s, be_s, bi_s, bg_s = -1, -1, -1, -1, -1, -1, -1
 
 local function lv(v) return v>=85 and 4 or (v>=55 and 3 or (v>=28 and 2 or (v>=8 and 1 or 0))) end
@@ -247,6 +249,10 @@ function on_enter(root)
   ui.top:style({text_color=0x6E6660, text_font=14}); ui.top:align("top_left", 10, 4)
   ui.hint = badge.ui.label(root, HINT)
   ui.hint:style({text_color=0x4E4844, text_font=14}); ui.hint:align("top_left", 10, 222)
+  -- The one thing the first version got wrong: nothing on screen said what to do. This is bigger than
+  -- everything else and it changes to answer whatever just happened.
+  ui.say = badge.ui.label(root, "SWAT ME")
+  ui.say:style({text_color=0xFFFFFF, text_font=24}); ui.say:align("top_left", 10, 26)
 
   -- SWAT placeholder, three widgets over the top: merging badge/GAME_SPEC.md is deleting this block.
   ui.sw1 = badge.ui.box(root, 320, 240); ui.sw1:set_pos(0, 0)
@@ -311,6 +317,10 @@ function on_tick()
   end
   gf_all = gf_all + gf_tick
   if gf_tick > 0 then flash_until = now + FLASH_MS end
+  if gf_tick > 0 then ui.say:set_text(SAY_GO); ui.say:style({text_color=0xFF715B}); say_until = now + 1400 end
+  if say_until > 0 and now > say_until and not lesion then
+    ui.say:set_text(SAY_IDLE); ui.say:style({text_color=0xFFFFFF}); say_until = 0
+  end
 
   -- Only 8 of the 27 intermediates ever fire, at most 7 in one volley, so this divides by 7. All 12
   -- LC10a cells are silent here and drawn nowhere: never draw a neuron that cannot light.
@@ -378,11 +388,13 @@ function on_button(button, kind)
     lesion = true
     ui.cut:style(SOP[255]); tract(2)
     ui.top:set_text("LC4 + LPLC2 CUT"); ui.top:style({text_color=0xFF2A18})
+    ui.say:set_text(SAY_BLIND); ui.say:style({text_color=0xFF2A18}); say_until = 0
     LL[1] = -1
   elseif button == B.A then
     lesion = false
     ui.cut:style(SOP[0]); tract(0)
     ui.top:set_text(TOPT); ui.top:style({text_color=0x6E6660})
+    ui.say:set_text(SAY_IDLE); ui.say:style({text_color=0xFFFFFF}); say_until = 0
     LL[1] = -1
   elseif button == B.LEFT then
     slow = not slow; slow_c = 0
