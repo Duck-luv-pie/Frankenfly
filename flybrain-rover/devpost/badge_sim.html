@@ -1,0 +1,241 @@
+<title>FlyBadge Simulator</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500&display=swap">
+<style>
+  :root{
+    --ground:#0b0a09; --panel:#161311; --rule:#2c2723; --text:#ece7e1; --dim:#8e867d; --faint:#5c554d;
+    --coral:#FF715B; --amber:#FFC24A; --good:#44DD88; --bad:#FF2A18;
+    --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace; --sans:"IBM Plex Sans",system-ui,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{background:var(--ground);color:var(--text);font-family:var(--sans);line-height:1.6;margin:0;padding:0 20px 70px}
+  .wrap{max-width:1020px;margin:0 auto}
+  h1,h2{text-wrap:balance;margin:0}
+  header{padding:42px 0 24px;border-bottom:1px solid var(--rule)}
+  .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--coral);margin-bottom:12px}
+  h1{font-family:var(--mono);font-size:clamp(26px,5vw,40px);font-weight:600;letter-spacing:-.02em}
+  .lede{color:var(--dim);max-width:66ch;margin-top:12px}
+  .lede b{color:var(--text);font-weight:500}
+  section{padding:34px 0;border-bottom:1px solid var(--rule)}
+  h2{font-family:var(--mono);font-size:17px;font-weight:600}
+  .sub{color:var(--dim);max-width:70ch;margin-top:8px;font-size:14.5px}
+
+  .rig{display:grid;grid-template-columns:minmax(320px,400px) 1fr;gap:26px;margin-top:22px;align-items:start}
+  @media(max-width:780px){.rig{grid-template-columns:1fr}}
+  .badge{background:#000;border:1px solid var(--rule);border-radius:10px;padding:14px 34px;position:relative}
+  .screen{position:relative;width:100%;aspect-ratio:320/240;background:#0A0A0A;border:1px solid #241f1c;overflow:hidden}
+  .screen canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+  .led{position:absolute;width:11px;height:11px;border-radius:50%;background:#1a1512;border:1px solid #2b2320;transition:background .05s}
+  .keys{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}
+  button{font-family:var(--mono);font-size:12px;font-weight:500;padding:10px 15px;cursor:pointer;background:#1d1a16;
+         color:var(--text);border:1px solid var(--rule);border-radius:5px}
+  button:hover{border-color:var(--coral)}
+  button:focus-visible{outline:2px solid var(--coral);outline-offset:2px}
+  button.big{background:var(--coral);color:#180c09;border-color:var(--coral);font-weight:600;font-size:14px;padding:12px 24px}
+  button.cut{border-color:#5a1a14;color:#ff9c8e}
+  .readout{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--rule);border:1px solid var(--rule);margin-top:14px}
+  .readout div{background:var(--panel);padding:9px 10px}
+  .readout .k{font-family:var(--mono);font-size:9.5px;color:var(--dim);letter-spacing:.06em;text-transform:uppercase}
+  .readout .v{font-family:var(--mono);font-size:16px;font-weight:600;font-variant-numeric:tabular-nums;margin-top:2px}
+
+  .raster{width:100%;height:190px;background:#0A0A0A;border:1px solid var(--rule);display:block}
+  .key{display:flex;gap:15px;flex-wrap:wrap;font-family:var(--mono);font-size:11px;color:var(--dim);margin-top:8px}
+  .key i{display:inline-block;width:9px;height:9px;margin-right:5px}
+  .steps{margin-top:16px;border:1px solid var(--rule)}
+  .step{display:grid;grid-template-columns:38px 1fr;gap:12px;padding:13px 14px;border-bottom:1px solid var(--rule);background:var(--panel)}
+  .step:last-child{border-bottom:0}
+  .step .n{font-family:var(--mono);font-size:17px;font-weight:600;color:var(--coral)}
+  .step b{font-weight:600}
+  .step p{margin:3px 0 0;color:var(--dim);font-size:14px}
+  code{font-family:var(--mono);font-size:12.5px;background:#1d1a16;padding:2px 6px;border-radius:3px;border:1px solid var(--rule);color:var(--coral)}
+  footer{padding:24px 0;color:var(--faint);font-family:var(--mono);font-size:11.5px}
+  @media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="wrap">
+<header>
+  <div class="eyebrow">Hack the North 2026 · the badge, without the badge</div>
+  <h1>FlyBadge, playable here</h1>
+  <p class="lede">This is the app that is on the badge, running the same 150 connectome neurons and 900
+  measured synapses, the same fixed-point arithmetic, at the same 100 Hz. <b>Hit SWAT and the fly escapes.
+  Cut its eye and it cannot.</b> Nothing here is animation: the jump happens because the giant fibre
+  actually spikes.</p>
+</header>
+
+<section>
+  <h2>The badge</h2>
+  <div class="rig">
+    <div>
+      <div class="badge" id="badge"><div class="screen"><canvas id="scr" width="640" height="480"></canvas></div></div>
+      <div class="keys">
+        <button class="big" id="swat">SWAT (space)</button>
+        <button class="cut" id="cut">B · cut the eye</button>
+        <button id="restore">A · restore</button>
+      </div>
+      <div class="readout">
+        <div><div class="k">giant fibre</div><div class="v" id="rGf">0</div></div>
+        <div><div class="k">escapes</div><div class="v" id="rEsc">0</div></div>
+        <div><div class="k">eye Hz</div><div class="v" id="rEye">0</div></div>
+        <div><div class="k">drive</div><div class="v" id="rDrv">0</div></div>
+      </div>
+    </div>
+    <div>
+      <canvas class="raster" id="raster" width="640" height="190"></canvas>
+      <div class="key">
+        <span><i style="background:#FF715B"></i>LC4 and LPLC2, the eye</span>
+        <span><i style="background:#FFC24A"></i>relays</span>
+        <span><i style="background:#fff"></i>giant fibre</span>
+      </div>
+      <div class="steps">
+        <div class="step"><div class="n">1</div><div><b>Hit SWAT.</b>
+          <p>Current floods the 119 eye cells. The bar at the bottom of the screen climbs toward the mark,
+          which is the measured threshold: 1793.</p></div></div>
+        <div class="step"><div class="n">2</div><div><b>The fly jumps and the LEDs flash.</b>
+          <p>Because the giant fibre fired, not because a timer said so. The white spike travels the axon
+          first, then the body leaps.</p></div></div>
+        <div class="step"><div class="n">3</div><div><b>Press B.</b>
+          <p>A red bar cuts across the axon. Every synapse leaving the eye is zeroed.</p></div></div>
+        <div class="step"><div class="n">4</div><div><b>Hit SWAT again.</b>
+          <p>The eye still fires, you can see its bar climb. Nothing reaches the giant fibre. The fly sits
+          there. That is the whole point of the exhibit.</p></div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>150 neurons and 900 synapses of the male <em>Drosophila</em> connectome (neuPrint male-cns:v1.0) ·
+same integer arithmetic as badge/app_template.lua, verified against badge/sim_fixed.py spike for spike</footer>
+</div>
+
+<script>
+const DATA = {"n":150,"n_lc4":59,"n_lplc2":60,"eye_last":119,"gf_first":149,"gf_last":150,"n_edges":900,"colptr":[0,8,13,22,26,34,39,46,52,57,63,71,74,83,92,97,102,107,111,119,125,130,137,142,150,156,163,166,175,183,186,190,196,201,206,211,217,224,232,238,246,250,256,262,268,273,281,285,292,297,304,307,312,317,323,325,330,337,342,347,358,364,374,383,387,390,397,405,409,416,424,431,436,443,449,458,466,473,480,487,492,496,498,508,513,518,522,526,531,538,545,549,554,559,565,571,574,576,580,588,597,604,609,611,617,626,631,640,646,647,657,659,662,667,671,671,674,681,684,687,698,707,717,726,733,738,749,757,763,773,782,791,803,806,813,817,826,833,836,840,847,855,860,869,873,878,881,888,895,896,900],"post":"CxUYeoKIjpZ6goiLlgEVGCl6goiOlnqCiJYHEzSCiImLliR6goiWBRyCiImLln6EkpOUlX1+hJKVE4KIiYuWARgzeoKIjpYZgpYOLTB9foSTlJUNHjl9foSTlJUhfX6ElTN6goiWGDV6gpZ6goiWBSJ6goiJi5Z+hJCRkpUYeoKOlhQofoSRkpUbeoKIlgEDCxF6goiWDDJ6gomWHSt+hJGSlYKIlgcTIjqCiImLlhQWKzZ+hJGVfoSVeoKIliF9foSTlSB9foSVBXqCi5YEeoKIlgYXeoKIlhw6eoKIi5YdKH6EkJGSlQUTJYKIlh0mfoSRkpSVeoiOln1+hJGSlR0ofoSQlX1+hJOUlQ19fpOVL31+hJGSlJV9fpKVDX1+hJOUlXqCiIuWDBk6eoKJlnqIlgV6goiWEXqCiJYofX6EkpV6ln1+hJKVMH1+hJOUlRyCiIuWfX6Ek5VCRkdIU2VuhJOUlUhMhJOUlU1TY2hshIqTlJVFS1RbXGqIjpZLWI6WX46WPExTV5OUlUdMTVmEk5SVBHKOlj9LXGdqjpY8R0xVhJOUlUNGdYSTlJU8a26UlUdMboSTlJVPZWyTlJVARVxkaWqFjpY9SVNuhJOUlT5shIqTlJVbXmJ0f4iWSlBuhJOUlVqEk5SVLZOUlY6WPD5CUWhsipOUlT9caY6WhIyTlJVchY6WhJOUlT9kdI6WQ2NlhJOUlUxQZoSTlJVebYiWP0BWjpZfZHR2lltdf4iOlkFYZHSFlkmUlQKOiI6TlkdJWmWEk5SVS1JfYnR2iI6WSVBZY5OUlVqEk5SVjpY+U4STlJVAS1JUVmp2jpY/aYiOlj1GSG51hJOUlT5NipOUlZZHSElMUHWEk5SVk5QWlJVHUJOUlQEVQY5dX5ZHa25whJSVX2SWKpOUeXp8f4KIjI6PlZZ4fX5/hIaMlZZ4gIKFiI6Pk5SWeHl8f4aIjJWWeHl/hoyVlnl+hI2VeHmBgoOEjJOUlZZ4eYGDiJOVlnh5eo2Vlnh5fn+CiIyPlZZ4eX5/gYOIlZZ4eX5/goyPlZZ4eX1+f4KMjZOUlZZ6ipZ4eXt/jJWWgouOlnh5en5/goyVlgolMTI0i5Z9g5UHh4mWeHl/gYSVlnh5fYCEjJWWeHp/gJZ4eXp/goOMlZZ+kZKVCDiQkpU4kJV6f4GCg4iWen+BgoiOlnl4en+A","w":"AgICBwUDAwkDBwIDCwICAgIIBQIDDgMEBAkDAwIHBAMCDgMDBAMKAwMDAwQECQkEAgICDAMHBQMIAgQDBAMLAgICBAUEAg8DBQgDAgMIBwQCAwsDAgIGBwUCAgkCAggGCAICBAMLAgIHAw4DAgIJAgICBAMCBAsFBAIEAgoCBwMCCQICBQMEAwoCAgIDCwMCAgIHAgIKAgIDAwMJAgIDAwMDBgMDBgMDAgIEAwMCBwICAgIFAgIKBQQJBQICBgIEBQMCCwMFBAMGAgICBAcCBQMCCAMCBAQCBwMCAwUCAwoCAgYEAgMCBwICAgUDDAICBAMFBAIKBQICBwICAgIDCAICBgICCAQEAwICBwIFAgIIAgMDAgICAwYEAwMHAgQCAgMCBgQDBAINAgICAgIDCQQDBwICBAMLAgUCBAsCAgQEAgkFBwMDAwILAgYDAwICBgIDAwIKAgcCAggCBAIDAgICAgMEBwICBAMFBQMCAgIDAgMEBwYEAgICAgICBwcEAgMIAgQKAwICAgMIBwICAwMDAwYIAgIEAgMCAgICBQYCAwICAwMFBgICAgIDAwcDAwIFCAICAgIEBQUCAgIEAwcDAwMCAgICAwgCAgICAwQFCQMDAwIDCAYCAgMCAgIGAgICAgQGCAICAwMKAwIFAgUDAgMCAgICAwUGCAICBAUHAgIEAgUCAgMFAgMGBAICAgIJAgICAgMFCAICAgIDAggCAgIFAgICBQcCAgICCwMCAgICCAICAgICCAICCAICAgICBQICAgICAgcFAwICAgMCBAMJAgICAgIFBQICAgIFAwUCAgMEAwYCAgIDAgMCBAYCAwICCAICAgICAgIDBgMCAgQFAwYCAgICAgMCAgUIAgUCBAICAgIEBgICAgMCAgkCAgICAgMHAgIHAgIDAwcDCAISBAYDCn8EBgIDEwQFXA75+/3+/Pn9+/u5+vr+/f7+++Xk+vv5/v7r3vj9/PvNBg0LBQsIAwUEMAMLBQIDAgINJQQCBwUJKPv85u7i/u/47OUMBAcDCQ0FAiz9/OHq3u/y6+gFEAMLBAYGAgcGKAXq/NT8+/39/O7pAgICKQsIAwUFCAMCJgICAgICAyXq/dsCAgQlBwkDAgIYCwIDBwMCAxsI+/z+/uAFAgQEAgICAh4DAgYgAgMCAyACAx8DBQMHAwUcAwQCBwUCHAIDAwMC"};
+(function(){
+  // ---- the circuit, exactly as the badge runs it -------------------------------------------------
+  const b64=s=>{const b=atob(s),a=new Uint8Array(b.length);for(let i=0;i<b.length;i++)a[i]=b.charCodeAt(i);return a;};
+  const POST=b64(DATA.post), WB=b64(DATA.w), CP=DATA.colptr, N=DATA.n, EYE=DATA.eye_last, GF=DATA.gf_first;
+  const W=new Int8Array(WB.length); for(let i=0;i<WB.length;i++)W[i]=WB[i]>127?WB[i]-256:WB[i];
+  const V_REST=-13312, V_TH=-11520, SYN_DECAY=35, GAIN_Q=75, REFRAC=1, CUR_MAX=4000, THR=1793;
+  const V=new Int32Array(N+1), G=new Int32Array(N+1), REF=new Int32Array(N+1), SYN=new Int32Array(N+1);
+  let spk=new Int32Array(N+1), spkN=0, nxt=new Int32Array(N+1);
+  let lesion=false, loom=0, escapes=0, gfWin=0, gfRate=0, eyeWin=0, eyeRate=0, winT=0;
+  for(let i=1;i<=N;i++)V[i]=V_REST;
+
+  function step(cur){
+    SYN.fill(0);
+    for(let k=0;k<spkN;k++){const i=spk[k]; if(lesion&&i<=EYE)continue;
+      for(let e=CP[i-1];e<CP[i];e++)SYN[POST[e]]+=W[e]*GAIN_Q;}
+    let n=0,gf=0,eye=0;
+    for(let i=1;i<=N;i++){
+      const g=Math.floor(G[i]*SYN_DECAY/256)+SYN[i]; G[i]=g;
+      if(REF[i]>0){REF[i]--;V[i]=V_REST;continue;}
+      const inj=i<=EYE?cur:0;
+      const v=V[i]+Math.floor((V_REST-V[i]+g+inj)/2);
+      if(v>=V_TH){V[i]=V_REST;REF[i]=REFRAC;nxt[n++]=i;if(i>=GF)gf++;else if(i<=EYE)eye++;}
+      else V[i]=v;
+    }
+    const t=spk;spk=nxt;nxt=t;spkN=n;
+    return [gf, eye];
+  }
+
+  // ---- the screen, the same parts the Lua builds --------------------------------------------------
+  const CX=160, CY=116, S=2;
+  const PA=[["wingL",76,24,60,92,0x28303A,12],["wingR",76,24,184,92,0x28303A,12],
+    ["abdo",46,58,137,136,0x3A2E22,22],["band1",46,6,137,152,0x1E1812,3],
+    ["band2",46,6,137,170,0x1E1812,3],["thor",56,48,132,94,0x3E3226,20],
+    ["head",30,30,145,42,0x2A2622,14],["eyeL",30,34,120,40,0x5A1610,15],
+    ["eyeR",30,34,170,34+6,0x5A1610,15],["trbL",44,4,116,72,0x2A2320,2],
+    ["trbR",44,4,160,72,0x2A2320,2],["trbl",22,4,138,78,0x2A2320,2],
+    ["trbr",22,4,160,78,0x2A2320,2],["axon",10,56,155,84,0x241E1A,5],
+    ["nrv1",22,5,149,98,0x2A2320,2],["nrv2",22,5,149,112,0x2A2320,2],
+    ["nrv3",22,5,149,126,0x2A2320,2]];
+  const TRACT=new Set(["trbL","trbR","trbl","trbr","nrv1","nrv2","nrv3"]);
+  const hex=v=>"#"+v.toString(16).padStart(6,"0");
+  const cv=document.getElementById("scr"), x=cv.getContext("2d");
+  const $=id=>document.getElementById(id);
+
+  const leds=[], POS=[[1,'r',0],[2,'r',1],[3,'r',2],[4,'l',2],[5,'l',1],[6,'l',0]], bd=$("badge");
+  POS.forEach(([,side,row])=>{const d=document.createElement("div");d.className="led";
+    d.style[side==='l'?'left':'right']='12px';d.style.top=(20+row*44)+'%';bd.appendChild(d);leds.push(d);});
+  function setLeds(n,c){leds.forEach((d,i)=>{const on=i<n;
+    d.style.background=on?c:'#1a1512';d.style.boxShadow=on?'0 0 9px '+c:'none';});}
+
+  let flashUntil=0, jumpUntil=0, spikeUntil=0, sayT=0, say="SWAT ME", sayCol="#FFFFFF";
+  function rr(px,py,w,h,r,fill,alpha){x.globalAlpha=alpha===undefined?1:alpha;x.fillStyle=fill;
+    x.beginPath();x.roundRect(px*S,py*S,w*S,h*S,Math.min(r,w/2,h/2)*S);x.fill();x.globalAlpha=1;}
+
+  function paint(now, cur, eyeLive, gfLive){
+    x.fillStyle="#0A0A0A"; x.fillRect(0,0,640,480);
+    // threat ring: closes as the drive climbs, which is the swatter arriving
+    const prog=Math.min(1,cur/CUR_MAX), rad=150-118*prog;
+    x.strokeStyle="#3A1410"; x.lineWidth=3*S;
+    x.beginPath(); x.arc(CX*S,CY*S,rad*S,0,6.283); x.stroke();
+    if(now<flashUntil){x.strokeStyle="#FF715B";x.lineWidth=5*S;x.beginPath();
+      x.arc(CX*S,CY*S,(24+120*(1-(flashUntil-now)/160))*S,0,6.283);x.stroke();}
+    // the fly, leaping when the giant fibre went
+    const dy = now<jumpUntil ? -18 : 0;
+    for(const p of PA){
+      const lit = TRACT.has(p[0]) && now<spikeUntil;
+      rr(p[3], p[4]+dy, p[1], p[2], p[6], lit?"#FFE9B0":hex(p[5]));
+    }
+    if(now<spikeUntil) rr(155,70+dy,10,6,5,"#FFFFFF");
+    if(lesion) rr(114,86+dy,92,6,3,"#FF2A18");
+    // drive bar with the measured threshold marked on it
+    rr(12,200,296,6,3,"#14181A");
+    rr(12,200,296*Math.min(1,cur/CUR_MAX),6,3,"#FF715B");
+    rr(12+296*THR/CUR_MAX,197,2,12,0,"#F2EFEA");
+    // three stage bars
+    const bars=[[12,"#FF715B",eyeLive/40],[114,"#FFC24A",0],[216,"#FFFFFF",gfLive/2]];
+    bars.forEach(([bx,c,v])=>{rr(bx,214,92,5,2,"#161616"); rr(bx,214,92*Math.min(1,v),5,2,c);});
+    // words
+    x.font="500 28px IBM Plex Mono, monospace"; x.fillStyle="#6E6660"; x.textBaseline="top";
+    x.fillText(DATA.n+" real neurons   "+DATA.n_edges+" real synapses", 20, 8);
+    x.font="600 48px IBM Plex Mono, monospace"; x.fillStyle=sayCol; x.fillText(say, 20, 52);
+    x.font="400 28px IBM Plex Mono, monospace"; x.fillStyle="#4E4844";
+    x.fillText("B cuts its eye", 20, 444);
+  }
+
+  // ---- raster ----
+  const rc=$("raster"), rx=rc.getContext("2d"); rx.fillStyle="#0A0A0A"; rx.fillRect(0,0,640,190);
+  let col=0;
+  function raster(){const px=col%640; rx.fillStyle="#0A0A0A"; rx.fillRect(px,0,3,190);
+    const h=190/N;
+    for(let k=0;k<spkN;k++){const i=spk[k];
+      rx.fillStyle=i>=GF?"#ffffff":i<=EYE?"#FF715B":"#FFC24A";
+      rx.fillRect(px,(i-1)*h,i>=GF?2.5:1.6,i>=GF?3.5:Math.max(1.2,h));}
+    col+=1.7;}
+
+  // ---- loop, 100 Hz like the badge ----
+  let acc=0,last=performance.now(),eyeLive=0,gfLive=0;
+  function frame(now){
+    const dt=Math.min(100,now-last); last=now; acc+=dt;
+    let gfTick=0, eyeTick=0;
+    while(acc>=10){
+      loom=Math.floor(loom*3/4);
+      const cur=Math.min(CUR_MAX,loom*3);
+      const [g,e]=step(cur); gfTick+=g; eyeTick+=e; acc-=10; raster();
+    }
+    eyeLive=eyeLive*0.75+eyeTick*0.25; gfLive=gfLive*0.7+gfTick*0.3;
+    gfWin+=gfTick; eyeWin+=eyeTick;
+    if(gfTick>0){flashUntil=now+160; jumpUntil=now+260; spikeUntil=now+120; escapes+=gfTick;
+      say="IT GOT AWAY"; sayCol="#FF715B"; sayT=now+1400;}
+    if(sayT&&now>sayT&&!lesion){say="SWAT ME";sayCol="#FFFFFF";sayT=0;}
+    const cur=Math.min(CUR_MAX,loom*3);
+    setLeds(now<flashUntil?6:Math.min(6,Math.floor(eyeLive/6)), now<flashUntil?"#ffffff":"#FF715B");
+    paint(now,cur,eyeLive,gfLive);
+    if(now-winT>=1000){gfRate=Math.round(gfWin/2);eyeRate=Math.round(eyeWin/DATA.eye_last);
+      gfWin=0;eyeWin=0;winT=now;
+      $("rGf").textContent=gfRate; $("rGf").style.color=gfRate?"#FF715B":"#ECE7E1";
+      $("rEsc").textContent=escapes; $("rEye").textContent=eyeRate; $("rDrv").textContent=cur;}
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+
+  function swat(){loom+=900;}
+  $("swat").addEventListener("click",swat);
+  $("cut").addEventListener("click",()=>{lesion=true;say="IT CANNOT SEE YOU";sayCol="#FF2A18";sayT=0;});
+  $("restore").addEventListener("click",()=>{lesion=false;say="SWAT ME";sayCol="#FFFFFF";sayT=0;});
+  document.addEventListener("keydown",e=>{const k=e.key.toLowerCase();
+    if(k===" "){e.preventDefault();swat();}
+    if(k==="b")$("cut").click(); if(k==="a")$("restore").click();});
+  setTimeout(swat,900);
+})();
+</script>

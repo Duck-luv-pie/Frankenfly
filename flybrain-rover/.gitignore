@@ -1,0 +1,15 @@
+.env
+__pycache__/
+*.pyc
+checkpoints/
+logs/
+data/raw/
+data/brain.npz
+*.pt
+.venv/
+.venv38/
+*.pt
+
+# workflow worktrees and scratch
+.claude/
+badge/luac.out

@@ -1,0 +1,382 @@
+<title>Mosquito or Chicken</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500&display=swap">
+<style>
+  :root{
+    --ground:#0b0a09; --panel:#171412; --rule:#2e2924; --text:#ece7e1; --dim:#8e867d; --faint:#5c554d;
+    --coral:#FF715B; --amber:#FFC24A; --good:#44DD88; --bad:#FF3B22;
+    --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace; --sans:"IBM Plex Sans",system-ui,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{background:var(--ground);color:var(--text);font-family:var(--sans);line-height:1.6;margin:0;padding:0 20px 60px}
+  .wrap{max-width:940px;margin:0 auto}
+  h1,h2{text-wrap:balance;margin:0}
+  header{padding:36px 0 18px}
+  .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--amber);margin-bottom:9px}
+  h1{font-family:var(--mono);font-size:clamp(25px,5vw,34px);font-weight:600;letter-spacing:-.02em}
+  .lede{color:var(--dim);max-width:64ch;margin-top:9px}
+  .lede b{color:var(--text);font-weight:500}
+
+  .rig{display:grid;grid-template-columns:minmax(320px,470px) 1fr;gap:24px;align-items:start}
+  @media(max-width:790px){.rig{grid-template-columns:1fr}}
+  .badge{background:#000;border:1px solid var(--rule);border-radius:10px;padding:14px 34px;position:relative}
+  .screen{position:relative;width:100%;aspect-ratio:320/240;background:#000;border:1px solid #241f1c;overflow:hidden;
+          touch-action:manipulation}
+  .screen canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+  .screen{cursor:pointer}
+  .led{position:absolute;width:11px;height:11px;border-radius:50%;background:#1a1512;border:1px solid #2b2320}
+  .keys{display:flex;gap:8px;margin-top:13px;flex-wrap:wrap;align-items:center}
+  button{font-family:var(--mono);font-size:12px;font-weight:500;padding:9px 14px;cursor:pointer;background:#1e1a16;
+         color:var(--text);border:1px solid var(--rule);border-radius:5px}
+  button:hover{border-color:var(--amber)}
+  button:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+  button.on{background:var(--amber);color:#1a1407;border-color:var(--amber)}
+  .tip{font-family:var(--mono);font-size:11px;color:var(--faint);margin-top:9px;max-width:46ch}
+
+  .panel{background:var(--panel);border:1px solid var(--rule);padding:16px 18px}
+  .panel h2{font-family:var(--mono);font-size:14px;font-weight:600;margin-bottom:4px}
+  .panel p{color:var(--dim);font-size:14px;margin:8px 0 0}
+  .panel p b{color:var(--text);font-weight:600}
+  .rules{list-style:none;padding:0;margin:8px 0 0}
+  .rules li{display:grid;grid-template-columns:82px 1fr;gap:10px;padding:8px 0;border-top:1px solid var(--rule);font-size:14px}
+  .rules li:first-child{border-top:0}
+  .rules b{font-family:var(--mono);font-size:12px;font-weight:600;color:var(--amber)}
+  .rules span{color:var(--dim)}
+  .log{font-family:var(--mono);font-size:12px;color:var(--dim);background:#100e0c;border:1px solid var(--rule);
+       padding:10px 12px;margin-top:13px;height:112px;overflow:hidden}
+  .log div{padding:1px 0}
+  .log .hit{color:var(--good)} .log .esc{color:var(--coral)} .log .foul{color:var(--bad)} .log .miss{color:var(--faint)}
+  footer{padding:20px 0;color:var(--faint);font-family:var(--mono);font-size:11.5px;border-top:1px solid var(--rule);margin-top:24px}
+  @media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="wrap">
+<header>
+  <div class="eyebrow">badge game · prototype</div>
+  <h1>Mosquito or Chicken</h1>
+  <p class="lede">The swatter sits in the middle. Things fly through it.
+  <b>Shake the badge when a mosquito is under the swatter, and hold still for the chickens.</b>
+  The mosquito can see the swatter, because the thing deciding whether it dodges is 150 real neurons
+  from a fly brain.</p>
+</header>
+
+<div class="rig">
+  <div>
+    <div class="badge" id="badge"><div class="screen" id="screen"><canvas id="scr" width="640" height="480"></canvas></div></div>
+    <div class="keys">
+      <button id="start">START</button>
+      <button id="motion">use motion</button>
+    </div>
+    <p class="tip" id="tip">Click the screen or press space to swing. On a phone, tap "use motion" and
+    then physically shake it, which is exactly what the badge does with its accelerometer.</p>
+  </div>
+
+  <div>
+    <div class="panel">
+      <h2>How it works</h2>
+      <ul class="rules">
+        <li><b>mosquito</b><span>swat it. +1.</span></li>
+        <li><b>chicken</b><span>let it walk past. Swat it and you lose a life.</span></li>
+        <li><b>the dodge</b><span>a mosquito bolts when its giant fibre fires. Nothing else can make it leave.</span></li>
+        <li><b>shake late</b><span>a fly is faster than your hand. Shake while it is still approaching and
+          it gets out from under the swatter. Wait until it is dead centre.</span></li>
+        <li><b>the bar</b><span>the mosquito's own eye. Full means it is about to go.</span></li>
+      </ul>
+      <p>A swatter sitting still is not a threat, so the approach alone never trips anything. <b>The shake
+      is the looming stimulus</b>: the head jumps and the mosquito sees it expand, harder the nearer it is.
+      We measured the circuit at 1800 units of current to fire at all, then 10 to 40 ms to fire, which is
+      faster than the 60 ms your swatter takes to land. So you cannot out-race a fly that sees you coming.
+      You beat it by shaking when it is already under the swatter and has nowhere to go.</p>
+    </div>
+    <div class="log" id="log"></div>
+  </div>
+</div>
+
+<footer>150 neurons and 900 synapses of the male <em>Drosophila</em> connectome, fixed-point LIF at 100 Hz,
+the same arithmetic the badge runs. Each mosquito on screen has its own brain. The chicken has none.</footer>
+</div>
+
+<script>
+const DATA = {"n":150,"n_lc4":59,"n_lplc2":60,"eye_last":119,"gf_first":149,"gf_last":150,"n_edges":900,"colptr":[0,8,13,22,26,34,39,46,52,57,63,71,74,83,92,97,102,107,111,119,125,130,137,142,150,156,163,166,175,183,186,190,196,201,206,211,217,224,232,238,246,250,256,262,268,273,281,285,292,297,304,307,312,317,323,325,330,337,342,347,358,364,374,383,387,390,397,405,409,416,424,431,436,443,449,458,466,473,480,487,492,496,498,508,513,518,522,526,531,538,545,549,554,559,565,571,574,576,580,588,597,604,609,611,617,626,631,640,646,647,657,659,662,667,671,671,674,681,684,687,698,707,717,726,733,738,749,757,763,773,782,791,803,806,813,817,826,833,836,840,847,855,860,869,873,878,881,888,895,896,900],"post":"CxUYeoKIjpZ6goiLlgEVGCl6goiOlnqCiJYHEzSCiImLliR6goiWBRyCiImLln6EkpOUlX1+hJKVE4KIiYuWARgzeoKIjpYZgpYOLTB9foSTlJUNHjl9foSTlJUhfX6ElTN6goiWGDV6gpZ6goiWBSJ6goiJi5Z+hJCRkpUYeoKOlhQofoSRkpUbeoKIlgEDCxF6goiWDDJ6gomWHSt+hJGSlYKIlgcTIjqCiImLlhQWKzZ+hJGVfoSVeoKIliF9foSTlSB9foSVBXqCi5YEeoKIlgYXeoKIlhw6eoKIi5YdKH6EkJGSlQUTJYKIlh0mfoSRkpSVeoiOln1+hJGSlR0ofoSQlX1+hJOUlQ19fpOVL31+hJGSlJV9fpKVDX1+hJOUlXqCiIuWDBk6eoKJlnqIlgV6goiWEXqCiJYofX6EkpV6ln1+hJKVMH1+hJOUlRyCiIuWfX6Ek5VCRkdIU2VuhJOUlUhMhJOUlU1TY2hshIqTlJVFS1RbXGqIjpZLWI6WX46WPExTV5OUlUdMTVmEk5SVBHKOlj9LXGdqjpY8R0xVhJOUlUNGdYSTlJU8a26UlUdMboSTlJVPZWyTlJVARVxkaWqFjpY9SVNuhJOUlT5shIqTlJVbXmJ0f4iWSlBuhJOUlVqEk5SVLZOUlY6WPD5CUWhsipOUlT9caY6WhIyTlJVchY6WhJOUlT9kdI6WQ2NlhJOUlUxQZoSTlJVebYiWP0BWjpZfZHR2lltdf4iOlkFYZHSFlkmUlQKOiI6TlkdJWmWEk5SVS1JfYnR2iI6WSVBZY5OUlVqEk5SVjpY+U4STlJVAS1JUVmp2jpY/aYiOlj1GSG51hJOUlT5NipOUlZZHSElMUHWEk5SVk5QWlJVHUJOUlQEVQY5dX5ZHa25whJSVX2SWKpOUeXp8f4KIjI6PlZZ4fX5/hIaMlZZ4gIKFiI6Pk5SWeHl8f4aIjJWWeHl/hoyVlnl+hI2VeHmBgoOEjJOUlZZ4eYGDiJOVlnh5eo2Vlnh5fn+CiIyPlZZ4eX5/gYOIlZZ4eX5/goyPlZZ4eX1+f4KMjZOUlZZ6ipZ4eXt/jJWWgouOlnh5en5/goyVlgolMTI0i5Z9g5UHh4mWeHl/gYSVlnh5fYCEjJWWeHp/gJZ4eXp/goOMlZZ+kZKVCDiQkpU4kJV6f4GCg4iWen+BgoiOlnl4en+A","w":"AgICBwUDAwkDBwIDCwICAgIIBQIDDgMEBAkDAwIHBAMCDgMDBAMKAwMDAwQECQkEAgICDAMHBQMIAgQDBAMLAgICBAUEAg8DBQgDAgMIBwQCAwsDAgIGBwUCAgkCAggGCAICBAMLAgIHAw4DAgIJAgICBAMCBAsFBAIEAgoCBwMCCQICBQMEAwoCAgIDCwMCAgIHAgIKAgIDAwMJAgIDAwMDBgMDBgMDAgIEAwMCBwICAgIFAgIKBQQJBQICBgIEBQMCCwMFBAMGAgICBAcCBQMCCAMCBAQCBwMCAwUCAwoCAgYEAgMCBwICAgUDDAICBAMFBAIKBQICBwICAgIDCAICBgICCAQEAwICBwIFAgIIAgMDAgICAwYEAwMHAgQCAgMCBgQDBAINAgICAgIDCQQDBwICBAMLAgUCBAsCAgQEAgkFBwMDAwILAgYDAwICBgIDAwIKAgcCAggCBAIDAgICAgMEBwICBAMFBQMCAgIDAgMEBwYEAgICAgICBwcEAgMIAgQKAwICAgMIBwICAwMDAwYIAgIEAgMCAgICBQYCAwICAwMFBgICAgIDAwcDAwIFCAICAgIEBQUCAgIEAwcDAwMCAgICAwgCAgICAwQFCQMDAwIDCAYCAgMCAgIGAgICAgQGCAICAwMKAwIFAgUDAgMCAgICAwUGCAICBAUHAgIEAgUCAgMFAgMGBAICAgIJAgICAgMFCAICAgIDAggCAgIFAgICBQcCAgICCwMCAgICCAICAgICCAICCAICAgICBQICAgICAgcFAwICAgMCBAMJAgICAgIFBQICAgIFAwUCAgMEAwYCAgIDAgMCBAYCAwICCAICAgICAgIDBgMCAgQFAwYCAgICAgMCAgUIAgUCBAICAgIEBgICAgMCAgkCAgICAgMHAgIHAgIDAwcDCAISBAYDCn8EBgIDEwQFXA75+/3+/Pn9+/u5+vr+/f7+++Xk+vv5/v7r3vj9/PvNBg0LBQsIAwUEMAMLBQIDAgINJQQCBwUJKPv85u7i/u/47OUMBAcDCQ0FAiz9/OHq3u/y6+gFEAMLBAYGAgcGKAXq/NT8+/39/O7pAgICKQsIAwUFCAMCJgICAgICAyXq/dsCAgQlBwkDAgIYCwIDBwMCAxsI+/z+/uAFAgQEAgICAh4DAgYgAgMCAyACAx8DBQMHAwUcAwQCBwUCHAIDAwMC"};
+(function(){
+  // ---------- the circuit, as the badge runs it ----------
+  const b64=s=>{const b=atob(s),a=new Uint8Array(b.length);for(let i=0;i<b.length;i++)a[i]=b.charCodeAt(i);return a;};
+  const POST=b64(DATA.post), WB=b64(DATA.w), CP=DATA.colptr, N=DATA.n, EYE=DATA.eye_last, GF=DATA.gf_first;
+  const W=new Int8Array(WB.length); for(let i=0;i<WB.length;i++)W[i]=WB[i]>127?WB[i]-256:WB[i];
+  const V_REST=-13312, V_TH=-11520, SYN_DECAY=35, GAIN_Q=75, REFRAC=1, CUR_MAX=4000;
+
+  // one brain per mosquito, so two on screen are two independent flies
+  function makeBrain(){
+    const V=new Int32Array(N+1),G=new Int32Array(N+1),REF=new Int32Array(N+1),SYN=new Int32Array(N+1);
+    let spk=new Int32Array(N+1),spkN=0,nxt=new Int32Array(N+1);
+    for(let i=1;i<=N;i++)V[i]=V_REST;
+    return {step(cur){
+      SYN.fill(0);
+      for(let k=0;k<spkN;k++){const i=spk[k];
+        for(let e=CP[i-1];e<CP[i];e++)SYN[POST[e]]+=W[e]*GAIN_Q;}
+      let n=0,gf=0,eye=0;
+      for(let i=1;i<=N;i++){
+        const g=Math.floor(G[i]*SYN_DECAY/256)+SYN[i]; G[i]=g;
+        if(REF[i]>0){REF[i]--;V[i]=V_REST;continue;}
+        const v=V[i]+Math.floor((V_REST-V[i]+g+(i<=EYE?cur:0))/2);
+        if(v>=V_TH){V[i]=V_REST;REF[i]=REFRAC;nxt[n++]=i;if(i>=GF)gf++;else if(i<=EYE)eye++;}
+        else V[i]=v;
+      }
+      const t=spk;spk=nxt;nxt=t;spkN=n;
+      return [gf,eye];
+    }};
+  }
+
+  // ---------- board ----------
+  const S=2, WD=320, HT=240;                 // badge pixels; canvas is 2x
+  const SWAT_R=26;                           // strike radius, badge px
+  const DART=400;                            // escape speed once the giant fibre fires, badge px/s
+  const STRIKE_LAG=60;                       // ms from your shake to the swatter landing
+  const scr=document.getElementById("scr"), x=scr.getContext("2d");
+  const $=id=>document.getElementById(id), logEl=$("log"), screenEl=$("screen");
+
+  const leds=[], LEDPOS=[['r',0],['r',1],['r',2],['l',2],['l',1],['l',0]], bd=$("badge");
+  LEDPOS.forEach(([side,row])=>{const d=document.createElement("div");d.className="led";
+    d.style[side==='l'?'left':'right']='12px';d.style.top=(20+row*44)+'%';bd.appendChild(d);leds.push(d);});
+  function setLeds(n,c){leds.forEach((d,i)=>{const on=i<n;
+    d.style.background=on?c:'#1a1512';d.style.boxShadow=on?'0 0 9px '+c:'none';});}
+
+  function say(cls,msg){const d=document.createElement("div");d.className=cls;d.textContent=msg;
+    logEl.prepend(d); while(logEl.children.length>7)logEl.lastChild.remove();}
+
+  // ---------- drawing, in badge pixels, shapes a Lua box widget can also make ----------
+  function rr(px,py,w,h,r,fill,alpha){
+    x.globalAlpha=alpha===undefined?1:alpha; x.fillStyle=fill;
+    x.beginPath(); x.roundRect(px*S,py*S,w*S,h*S,Math.min(r,w/2,h/2)*S); x.fill(); x.globalAlpha=1;
+  }
+  // Draw facing right in local coords, then mirror, so there is one set of shapes per animal.
+  function facing(cx,cy,dir,fn){ x.save(); x.translate(cx*S,cy*S); x.scale(dir,1); x.translate(-cx*S,-cy*S); fn(); x.restore(); }
+
+  // MOSQUITO — the needle and the long trailing legs are what read as mosquito and not housefly
+  function drawMosquito(cx,cy,dir,alarm,dead){
+    const dim = dead?0.4:1;
+    facing(cx,cy,dir,()=>{
+      rr(cx-7,cy-11,15,7,3.5,"#7C8894",0.34*dim);           // upper wing
+      rr(cx-5,cy-8,13,6,3,"#7C8894",0.26*dim);              // lower wing
+      for(let i=0;i<3;i++){                                  // trailing legs
+        rr(cx+1+i*3, cy+2+i*1.6, 10,1.2,0.6,"#2B2723",0.85*dim);
+        rr(cx-3-i*2, cy+3+i*1.3,  8,1.2,0.6,"#2B2723",0.7*dim);
+      }
+      rr(cx-1, cy-2.5, 16,5.5,2.7,"#3C362E",dim);            // abdomen
+      rr(cx-8, cy-3.5,  8,7,  3.5,"#2E2A25",dim);            // thorax
+      rr(cx-14,cy-3.5,  7,7,  3.5,"#221F1C",dim);            // head
+      rr(cx-20,cy-0.6,  7,1.7,0.9,"#8A4A3A",dim);            // proboscis, the needle
+      rr(cx-13,cy-3,    4.5,4.5,2.3, alarm>0.7?"#FF7A5C":"#5A1610", dim);   // eye
+    });
+  }
+  // CHICKEN — big, pale, unmistakable at a glance
+  function drawChicken(cx,cy,dir,step){
+    const bob=Math.sin(step*7)*1.2;
+    facing(cx,cy,dir,()=>{
+      rr(cx-4,cy+11+bob*0.4,2.6,7,1,"#E8A33C");              // legs
+      rr(cx+3,cy+11-bob*0.4,2.6,7,1,"#E8A33C");
+      rr(cx-19,cy-5+bob*0.5,13,14,6,"#E6D8C6");              // tail
+      rr(cx-12,cy-6+bob,   24,18,9,"#F4E9DA");               // body
+      rr(cx-7, cy-2+bob,   14, 9,4.5,"#E3D3BE");             // wing
+      rr(cx+6, cy-16+bob,  13,13,6,"#F4E9DA");               // head
+      rr(cx+8, cy-21+bob,   4.5,5.5,2,"#D94F3A");            // comb
+      rr(cx+9, cy-6+bob,    4, 4.5,2,"#D94F3A");             // wattle
+      rr(cx+18,cy-11.5+bob, 6, 3.5,1.5,"#E8A33C");           // beak
+      rr(cx+13,cy-12.5+bob, 3, 3, 1.5,"#1F1B18");            // eye
+    });
+  }
+  // SWATTER — mesh head plus handle, all axis aligned so the Lua is the same shapes
+  function drawSwatter(cx,cy,lunge,flash){
+    const s=1+lunge*0.22;
+    x.save(); x.translate(cx*S,cy*S); x.scale(s,s); x.translate(-cx*S,-cy*S);
+    rr(cx+4,cy+6,5,26,2.5,"#43372C");                       // handle
+    rr(cx+5.2,cy+8,2.6,22,1.3,"#5E4E3E",0.8);               // handle highlight
+    rr(cx-16,cy-16,32,32,7,"#2A2724");                      // rim
+    rr(cx-14,cy-14,28,28,6,flash?"#FFFFFF":"#D6D2CB");      // mesh
+    if(!flash){ x.globalAlpha=0.5; x.fillStyle="#6E6961";    // the holes
+      for(let a=0;a<5;a++)for(let b=0;b<5;b++)
+        {x.beginPath();x.roundRect((cx-11+a*5.4)*S,(cy-11+b*5.4)*S,2.6*S,2.6*S,1*S);x.fill();}
+      x.globalAlpha=1; }
+    x.restore();
+  }
+
+  // ---------- game ----------
+  let bugs=[], score=0, best=0, lives=3, spawnAt=0, spawned=0, sinceChicken=0;
+  const SWAT_X=160, SWAT_Y=112;              // the swatter is bolted to the middle; you only time the hit
+  let running=false;
+  let lungeUntil=0, strikeAt=0, struck=false, flashUntil=0, shakeUntil=0, over=false, splats=[];
+  try{ best=parseInt(localStorage.getItem("swat_best")||"0",10)||0; }catch(e){}
+
+  function spawn(now){
+    const chicken = sinceChicken>=3 || (Math.random()<0.3 && spawned>0);
+    sinceChicken = chicken?0:sinceChicken+1; spawned++;
+    const dir = Math.random()<0.5?1:-1;
+    const pace = 1 + Math.min(0.9, score*0.05);
+    bugs.push({
+      kind: chicken?"chicken":"mosquito", dir,
+      x: dir>0 ? -30 : WD+30, y0: SWAT_Y + (Math.random()*10-5),
+      vx: dir*(chicken?62:100)*pace, vy:0,
+      ph: Math.random()*6, amp: chicken?1.5:4, freq: chicken?2.2:3.6,
+      brain: chicken?null:makeBrain(), alarm:0, prevD:999, gone:false, dead:false,
+      bolt:0, dodge:0, y:0, born:now
+    });
+  }
+
+  let acc=0, steps=0, last=performance.now(), tSec=0;
+  function frame(now){
+    const dtms=Math.min(60,now-last); last=now; const dt=dtms/1000; tSec+=dt;
+    const lunging = now<lungeUntil;
+
+    if(running && !over){
+      if(now>spawnAt && bugs.filter(b=>!b.gone).length<2){ spawn(now); spawnAt=now+700+Math.random()*600; }
+
+      acc+=dtms; steps=Math.floor(acc/10); acc-=steps*10; steps=Math.min(steps,6);
+      for(const b of bugs){
+        if(b.gone) continue;
+        b.ph += dt*b.freq;
+        b.x += b.vx*dt;
+        b.y = b.y0 + Math.sin(b.ph)*b.amp + b.dodge;
+        if(b.bolt!==0) b.dodge += b.bolt*DART*dt;      // the escape, once the giant fibre has fired
+        if(b.x<-46||b.x>WD+46||b.y<-40||b.y>HT+40){
+          b.gone=true;
+          if(b.kind==="mosquito" && !b.dead)
+            say(b.bolt!==0?"esc":"miss", b.bolt!==0?"it got away   ·   giant fibre fired":"it flew past");
+          continue;
+        }
+        if(b.kind!=="mosquito") continue;
+
+        // Looming: how fast the swatter is closing, and how near it already is. Both are real drivers
+        // of LC4 and LPLC2, so a slow approach is genuinely quieter than a lunge.
+        const d=Math.hypot(SWAT_X-b.x, SWAT_Y-b.y);
+        const closing=Math.max(0, b.prevD-d)/Math.max(dt,0.001); b.prevD=d;
+        const d2=Math.max(30, d*d);
+        // Measured: the giant fibre needs about 1800 to fire at all, then fires in 10 to 40 ms.
+        // A swatter sitting still is not a looming object, so the approach alone stays under that.
+        // The shake is what looms: the head jumps 22% and the fly sees it, harder the nearer it is.
+        let cur = 380*SWAT_R*SWAT_R/Math.max(500,d*d) + 160*closing*SWAT_R/Math.max(500,d*d);
+        cur = Math.min(1500, cur);
+        if(lunging) cur += 5200*SWAT_R*SWAT_R/Math.max(300,d*d);
+        cur=Math.max(0,Math.min(CUR_MAX,Math.round(cur)));
+
+        let gf=0, eye=0;
+        for(let k=0;k<steps;k++){const r=b.brain.step(cur); gf+=r[0]; eye+=r[1];}
+        b.alarm = b.alarm*0.55 + Math.min(1,(eye/Math.max(1,steps))/30)*0.45;
+        if(gf>0 && b.bolt===0){ b.bolt = b.y<HT/2?-1:1; b.vx*=1.5; }
+      }
+      bugs=bugs.filter(b=>!b.gone||now-b.born<4000);
+
+      // the strike lands a beat after you commit, which is the window the mosquito is racing
+      if(struck && now>=strikeAt){
+        struck=false; flashUntil=now+90;
+        let got=null;
+        for(const b of bugs){ if(b.gone||b.dead) continue;
+          if(Math.hypot(SWAT_X-b.x,SWAT_Y-b.y) < SWAT_R + (b.kind==="chicken"?14:12)){ got=b; break; } }
+        if(!got){ say("miss","shook at nothing"); }
+        else if(got.kind==="chicken"){ got.dead=true; got.gone=true; lives--; shakeUntil=now+260;
+          splats.push({x:got.x,y:got.y,t:now,bad:true});
+          say("foul","that was a chicken   ·   -1 life");
+          if(lives<=0){ over=true; running=false;
+            if(score>best){best=score; try{localStorage.setItem("swat_best",String(best));}catch(e){}}
+            say("foul","game over   ·   "+score); } }
+        else if(got.bolt!==0 && Math.abs(got.dodge)>14){ say("esc","it got out from under it"); }
+        else { got.dead=true; got.gone=true; score++;
+          splats.push({x:got.x,y:got.y,t:now,bad:false}); say("hit","got it   ·   "+score); }
+      }
+    }
+
+    // ----- paint -----
+    x.save();
+    if(now<shakeUntil){const k=(shakeUntil-now)/260; x.translate((Math.random()-0.5)*10*k*S,(Math.random()-0.5)*10*k*S);}
+    x.fillStyle="#07110D"; x.fillRect(-20,-20,700,520);
+    x.fillStyle="#0C1912"; for(let i=0;i<4;i++) x.fillRect(0,(52+i*48)*S,640,1);   // faint bands
+
+    let worst=0;
+    for(const b of bugs){ if(b.gone&&b.dead) continue;
+      if(b.kind==="chicken") drawChicken(b.x,b.y,b.dir,tSec+b.ph);
+      else { drawMosquito(b.x,b.y,b.dir,b.alarm,b.bolt!==0); worst=Math.max(worst,b.alarm); } }
+
+    x.strokeStyle="#1B2E24"; x.lineWidth=2*S; x.setLineDash([5*S,5*S]);
+    x.beginPath(); x.arc(SWAT_X*S,SWAT_Y*S,(SWAT_R+9)*S,0,6.283); x.stroke(); x.setLineDash([]);
+    splats=splats.filter(sp=>now-sp.t<320);
+    for(const sp of splats){ const k=(now-sp.t)/320;
+      x.globalAlpha=(1-k)*0.9; x.strokeStyle=sp.bad?"#FF3B22":"#44DD88"; x.lineWidth=(4-3*k)*S;
+      x.beginPath(); x.arc(sp.x*S,sp.y*S,(7+34*k)*S,0,6.283); x.stroke();
+      x.globalAlpha=(1-k)*0.55; x.fillStyle=sp.bad?"#FF3B22":"#44DD88";
+      for(let i=0;i<6;i++){const a=i*1.047+k*2, r=(6+30*k);
+        x.beginPath(); x.arc((sp.x+Math.cos(a)*r)*S,(sp.y+Math.sin(a)*r)*S,(2.6-1.8*k)*S,0,6.283); x.fill();}
+      x.globalAlpha=1; }
+
+    const lunge = now<lungeUntil ? (lungeUntil-now)/110 : 0;
+    drawSwatter(SWAT_X,SWAT_Y,lunge,now<flashUntil);
+
+    x.textBaseline="top"; x.font="600 28px IBM Plex Mono, monospace"; x.fillStyle="#ECE7E1";
+    x.fillText(String(score), 18, 12);
+    x.font="400 20px IBM Plex Mono, monospace"; x.fillStyle="#6E6660";
+    x.fillText("best "+best, 18, 46);
+    for(let i=0;i<3;i++){ x.fillStyle = i<lives ? "#FF715B" : "#2A2420";
+      x.beginPath(); x.arc(600-i*26, 24, 8, 0, 6.283); x.fill(); }
+
+    x.fillStyle="#0F1A15"; x.beginPath(); x.roundRect(18,452,604,13,6); x.fill();
+    x.fillStyle = worst>0.8?"#FF3B22":"#FF715B"; x.beginPath();
+    x.roundRect(18,452,604*Math.min(1,worst),13,6); x.fill();
+
+    if(!running){
+      x.fillStyle="rgba(4,10,8,0.78)"; x.fillRect(0,0,640,480);
+      x.font="600 34px IBM Plex Mono, monospace"; x.fillStyle="#ECE7E1";
+      const t = over ? "GAME OVER" : "SHAKE TO SWAT";
+      x.fillText(t, 320-x.measureText(t).width/2, 176);
+      x.font="400 22px IBM Plex Mono, monospace"; x.fillStyle="#9A9189";
+      const t2 = over ? ("score "+score+"   ·   shake to play again") : "mosquitoes yes, chickens no";
+      x.fillText(t2, 320-x.measureText(t2).width/2, 226);
+      x.font="400 19px IBM Plex Mono, monospace"; x.fillStyle="#6E6660";
+      const t3 = "shake when it is under the swatter";
+      x.fillText(t3, 320-x.measureText(t3).width/2, 262);
+    }
+    x.restore();
+    setLeds(now<flashUntil?6:Math.min(6,Math.round(worst*6)), now<flashUntil?"#FFFFFF":"#FF715B");
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+
+  // ---------- input ----------
+  function begin(){ bugs=[];splats=[];score=0;lives=3;spawned=0;sinceChicken=0;over=false;running=true;
+    spawnAt=performance.now()+350; logEl.textContent=""; say("miss","go"); }
+  function swing(){
+    const now=performance.now();
+    if(!running){ begin(); return; }
+    if(now<lungeUntil) return;                 // one swing at a time
+    lungeUntil=now+110; strikeAt=now+STRIKE_LAG; struck=true;
+  }
+  screenEl.addEventListener("pointerdown",e=>{e.preventDefault();swing();});
+  $("start").addEventListener("click",begin);
+  document.addEventListener("keydown",e=>{if(e.key===" "){e.preventDefault();swing();}});
+
+  // The badge reads badge.sensor.accel() every tick and a hard enough jerk is the swat. Same verb here,
+  // so the phone version plays the way the hardware will.
+  let motionOn=false,lastMag=null,lastSwing=0;
+  function onMotion(ev){
+    const a=ev.accelerationIncludingGravity; if(!a) return;
+    const mag=Math.hypot(a.x||0,a.y||0,a.z||0);
+    if(lastMag!==null){
+      const now=performance.now();
+      if(Math.abs(mag-lastMag)>12 && now-lastSwing>400){lastSwing=now;swing();}
+    }
+    lastMag=mag;
+  }
+  $("motion").addEventListener("click",async()=>{
+    if(motionOn){window.removeEventListener("devicemotion",onMotion);motionOn=false;
+      $("motion").classList.remove("on");$("motion").textContent="use motion";return;}
+    try{
+      if(typeof DeviceMotionEvent==="undefined"){$("tip").textContent="no motion sensor here, so click or space it is.";return;}
+      if(DeviceMotionEvent.requestPermission){
+        const r=await DeviceMotionEvent.requestPermission();
+        if(r!=="granted"){$("tip").textContent="motion refused, so click or space it is.";return;}
+      }
+      window.addEventListener("devicemotion",onMotion);motionOn=true;
+      $("motion").classList.add("on");$("motion").textContent="motion on";
+      $("tip").textContent="drag to aim the swatter, then swat the phone itself. That is what the badge does.";
+    }catch(e){$("tip").textContent="motion unavailable here, so click or space it is.";}
+  });
+
+  say("miss","click or shake to start");
+})();
+</script>

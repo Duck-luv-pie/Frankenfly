@@ -1,0 +1,3357 @@
+{
+ "max_hops": 4,
+ "min_weight": 5,
+ "pairs": {
+  "LC10a->DNp09": {
+   "n_paths": 550,
+   "by_hops": {
+    "1": 4,
+    "2": 105,
+    "3": 441
+   },
+   "top_intermediates": [
+    [
+     "LAL026_b",
+     127
+    ],
+    [
+     "AOTU041",
+     107
+    ],
+    [
+     "TuTuA_1",
+     66
+    ],
+    [
+     "AOTU042",
+     61
+    ],
+    [
+     "AOTU101m",
+     47
+    ],
+    [
+     "LC10c-1",
+     46
+    ],
+    [
+     "AOTU008",
+     38
+    ],
+    [
+     "TuTuA_2",
+     37
+    ]
+   ],
+   "seconds": 13.3
+  },
+  "LC10a->DNa01": {
+   "n_paths": 550,
+   "by_hops": {
+    "2": 355,
+    "3": 195
+   },
+   "top_intermediates": [
+    [
+     "AOTU019",
+     188
+    ],
+    [
+     "AOTU041",
+     94
+    ],
+    [
+     "AOTU016_a",
+     52
+    ],
+    [
+     "AOTU016_c",
+     31
+    ],
+    [
+     "AOTU001",
+     29
+    ],
+    [
+     "LT82a",
+     28
+    ],
+    [
+     "PLP300m",
+     26
+    ],
+    [
+     "AOTU012",
+     25
+    ]
+   ],
+   "seconds": 8.6
+  },
+  "LC4->DNp09": {
+   "n_paths": 252,
+   "by_hops": {
+    "2": 155,
+    "3": 97
+   },
+   "top_intermediates": [
+    [
+     "PVLP141",
+     51
+    ],
+    [
+     "PVLP010",
+     49
+    ],
+    [
+     null,
+     24
+    ],
+    [
+     "VES023",
+     19
+    ],
+    [
+     "DNp04",
+     16
+    ],
+    [
+     "LHAD1g1",
+     16
+    ],
+    [
+     "LC31b",
+     11
+    ],
+    [
+     "PVLP122",
+     11
+    ]
+   ],
+   "seconds": 4.9
+  },
+  "LC4->DNa01": {
+   "n_paths": 252,
+   "by_hops": {
+    "2": 209,
+    "3": 43
+   },
+   "top_intermediates": [
+    [
+     "PVLP141",
+     59
+    ],
+    [
+     "PVLP137",
+     54
+    ],
+    [
+     "PLP029",
+     50
+    ],
+    [
+     null,
+     33
+    ],
+    [
+     "LT82a",
+     18
+    ],
+    [
+     "aSP10A_b",
+     15
+    ],
+    [
+     "PVLP015",
+     13
+    ],
+    [
+     "DNp04",
+     8
+    ]
+   ],
+   "seconds": 8.2
+  }
+ },
+ "nodes": {
+  "514646": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "516616": {
+   "type": "TuTuA_2",
+   "instance": "TuTuA_2_L"
+  },
+  "29715": {
+   "type": "AOTU062",
+   "instance": "AOTU062_R"
+  },
+  "11177": {
+   "type": "DNp09",
+   "instance": "DNp09_R"
+  },
+  "520905": {
+   "type": "AOTU008",
+   "instance": "AOTU008_L"
+  },
+  "520020": {
+   "type": "AVLP717m",
+   "instance": "AVLP717m_L"
+  },
+  "10783": {
+   "type": "DNp09",
+   "instance": "DNp09_L"
+  },
+  "29186": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "11452": {
+   "type": "TuTuA_2",
+   "instance": "TuTuA_2_R"
+  },
+  "18720": {
+   "type": "AOTU017",
+   "instance": "AOTU017_R"
+  },
+  "10997": {
+   "type": "AN06B009",
+   "instance": "AN06B009_L"
+  },
+  "32946": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "523317": {
+   "type": "AOTU041",
+   "instance": "AOTU041_R"
+  },
+  "10875": {
+   "type": "AOTU042",
+   "instance": "AOTU042_L"
+  },
+  "524005": {
+   "type": "LAL026_b",
+   "instance": "LAL026_b_L"
+  },
+  "31976": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "21065": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "19563": {
+   "type": "AOTU016_c",
+   "instance": "AOTU016_c_R"
+  },
+  "10167": {
+   "type": "VES041",
+   "instance": "VES041_R"
+  },
+  "10771": {
+   "type": "LT66",
+   "instance": "LT66_R"
+  },
+  "520576": {
+   "type": "PVLP080_a",
+   "instance": "PVLP080_a_L"
+  },
+  "32493": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "517462": {
+   "type": "TuTuA_1",
+   "instance": "TuTuA_1_L"
+  },
+  "72995": {
+   "type": "LC10c-1",
+   "instance": "LC10c-1_R"
+  },
+  "512329": {
+   "type": "LC9",
+   "instance": "LC9_L"
+  },
+  "44299": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "54673": {
+   "type": "LC10d",
+   "instance": "LC10d_R"
+  },
+  "22783": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "11731": {
+   "type": "TuTuA_1",
+   "instance": "TuTuA_1_R"
+  },
+  "78645": {
+   "type": "LC10c-1",
+   "instance": "LC10c-1_R"
+  },
+  "42452": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "25003": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "530855": {
+   "type": "CB3127",
+   "instance": "CB3127_L"
+  },
+  "30707": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "12568": {
+   "type": "AOTU014",
+   "instance": "AOTU014_L"
+  },
+  "11180": {
+   "type": "LoVC5",
+   "instance": "LoVC5_R"
+  },
+  "14373": {
+   "type": "AOTU015",
+   "instance": "AOTU015_L"
+  },
+  "54562": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "28654": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "21173": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "531863": {
+   "type": "AOTU012",
+   "instance": "AOTU012_L"
+  },
+  "24731": {
+   "type": "VES200m",
+   "instance": "VES200m_L"
+  },
+  "11808": {
+   "type": "AOTU101m",
+   "instance": "AOTU101m_L"
+  },
+  "523512": {
+   "type": "AVLP538",
+   "instance": "AVLP538_L"
+  },
+  "36152": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "515799": {
+   "type": "LAL029_e",
+   "instance": "LAL029_e_L"
+  },
+  "533064": {
+   "type": "AVLP370_b",
+   "instance": "AVLP370_b_L"
+  },
+  "12130": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "552128": {
+   "type": "AOTU003",
+   "instance": "AOTU003_L"
+  },
+  "522472": {
+   "type": "LT82a",
+   "instance": "LT82a_L"
+  },
+  "534320": {
+   "type": "PVLP005",
+   "instance": "PVLP005_L"
+  },
+  "52430": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "580484": {
+   "type": "LC10d",
+   "instance": "LC10d_L"
+  },
+  "36286": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "82923": {
+   "type": "LC10c-1",
+   "instance": "LC10c-1_R"
+  },
+  "68728": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "24545": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "13025": {
+   "type": "ICL002m",
+   "instance": "ICL002m_R"
+  },
+  "99541": {
+   "type": "ICL004m_a",
+   "instance": "ICL004m_a_R"
+  },
+  "84104": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "45579": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "31440": {
+   "type": "AVLP442",
+   "instance": "AVLP442_R"
+  },
+  "74072": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "532748": {
+   "type": "LAL029_d",
+   "instance": "LAL029_d_L"
+  },
+  "34265": {
+   "type": "LAL049",
+   "instance": "LAL049_L"
+  },
+  "25952": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "51397": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "10202": {
+   "type": "GNG103",
+   "instance": "GNG103(hb5813083315)_R"
+  },
+  "24742": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "22733": {
+   "type": "CL121_b",
+   "instance": "CL121_b_L"
+  },
+  "27334": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "23936": {
+   "type": "LLPC1",
+   "instance": "LLPC1_R"
+  },
+  "13786": {
+   "type": "PLP018",
+   "instance": "PLP018_R"
+  },
+  "12051": {
+   "type": "AOTU101m",
+   "instance": "AOTU101m_R"
+  },
+  "28397": {
+   "type": "CB3439",
+   "instance": "CB3439_L"
+  },
+  "524616": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "15876": {
+   "type": "pC1_9a",
+   "instance": "pC1_9a_L"
+  },
+  "10172": {
+   "type": "AVLP080",
+   "instance": "AVLP080_L"
+  },
+  "31033": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "13007": {
+   "type": "mALD4",
+   "instance": "mALD4_R"
+  },
+  "47206": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "24208": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "25167": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "37410": {
+   "type": "AOTU062",
+   "instance": "AOTU062_R"
+  },
+  "28227": {
+   "type": "AOTU002_a",
+   "instance": "AOTU002_a_R"
+  },
+  "44690": {
+   "type": "PVLP004",
+   "instance": "PVLP004_L"
+  },
+  "76174": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "35228": {
+   "type": "AOTU001",
+   "instance": "AOTU001_R"
+  },
+  "10971": {
+   "type": "DNa11",
+   "instance": "DNa11(VES008)_L"
+  },
+  "26373": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "20933": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "27915": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "25839": {
+   "type": "AVLP176_d",
+   "instance": "AVLP176_d_R"
+  },
+  "19659": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "11219": {
+   "type": "LT82a",
+   "instance": "LT82a_L"
+  },
+  "32153": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "79475": {
+   "type": "LC10c-1",
+   "instance": "LC10c-1_R"
+  },
+  "49360": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "72158": {
+   "type": "LC10c-2",
+   "instance": "LC10c-2_R"
+  },
+  "25394": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "64668": {
+   "type": "LC10c-2",
+   "instance": "LC10c-2_R"
+  },
+  "41240": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "27704": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "519168": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "550121": {
+   "type": "AOTU008",
+   "instance": "AOTU008_L"
+  },
+  "555227": {
+   "type": "CL038",
+   "instance": "CL038_L"
+  },
+  "27709": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "25198": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "13085": {
+   "type": "AVLP571",
+   "instance": "AVLP571_R"
+  },
+  "32090": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "90422": {
+   "type": "AOTU008",
+   "instance": "AOTU008_L"
+  },
+  "36938": {
+   "type": "PVLP005",
+   "instance": "PVLP005_R"
+  },
+  "11049": {
+   "type": "Li30",
+   "instance": "Li30_L"
+  },
+  "512484": {
+   "type": "LC31a",
+   "instance": "LC31a_L"
+  },
+  "22997": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "958379": {
+   "type": null,
+   "instance": null
+  },
+  "24211": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "26560": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "44345": {
+   "type": "CB3439",
+   "instance": "CB3439_R"
+  },
+  "32111": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "24592": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "25711": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "54638": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "87750": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "10109": {
+   "type": "VES041",
+   "instance": "VES041_L"
+  },
+  "536318": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "26380": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "67502": {
+   "type": "LC10c-2",
+   "instance": "LC10c-2_R"
+  },
+  "18078": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "543277": {
+   "type": "AOTU018",
+   "instance": "AOTU018_L"
+  },
+  "38020": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "24482": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "68724": {
+   "type": "LC10c-1",
+   "instance": "LC10c-1_R"
+  },
+  "25641": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "26192": {
+   "type": "LC9",
+   "instance": "LC9_R"
+  },
+  "15040": {
+   "type": "SMP080",
+   "instance": "SMP080_R"
+  },
+  "524883": {
+   "type": "PLP074",
+   "instance": "PLP074_R"
+  },
+  "25817": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "68772": {
+   "type": "LC10c-1",
+   "instance": "LC10c-1_R"
+  },
+  "26788": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "13974": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "74768": {
+   "type": "LC10c-1",
+   "instance": "LC10c-1_R"
+  },
+  "525452": {
+   "type": "AVLP710m",
+   "instance": "AVLP710m_L"
+  },
+  "27067": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "19350": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "23210": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "53572": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "37879": {
+   "type": "aIPg8",
+   "instance": "aIPg8_R"
+  },
+  "95135": {
+   "type": null,
+   "instance": null
+  },
+  "28390": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "14365": {
+   "type": "AOTU005",
+   "instance": "AOTU005_R"
+  },
+  "523821": {
+   "type": "PS065",
+   "instance": "PS065_R"
+  },
+  "23499": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "49424": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "48716": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "17291": {
+   "type": "SMP546",
+   "instance": "SMP546_R"
+  },
+  "28904": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "24854": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "10212": {
+   "type": "AOTU042",
+   "instance": "AOTU042_L"
+  },
+  "31634": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "33219": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "73462": {
+   "type": "LC10c-1",
+   "instance": "LC10c-1_R"
+  },
+  "23001": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "16262": {
+   "type": "pC1_1b",
+   "instance": "pC1_1b_L"
+  },
+  "20905": {
+   "type": "SIP118m",
+   "instance": "SIP118m_L"
+  },
+  "76185": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "72064": {
+   "type": "LC10c-2",
+   "instance": "LC10c-2_R"
+  },
+  "22750": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "42379": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "382559434": {
+   "type": "AOTU001",
+   "instance": "AOTU001_L"
+  },
+  "10457": {
+   "type": "mALD1",
+   "instance": "mALD1_L"
+  },
+  "24164": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "37316": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "29785": {
+   "type": "CL121_b",
+   "instance": "CL121_b_R"
+  },
+  "13697": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "557095": {
+   "type": "AOTU008",
+   "instance": "AOTU008_L"
+  },
+  "10588": {
+   "type": "AVLP710m",
+   "instance": "AVLP710m_R"
+  },
+  "23154": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "20582": {
+   "type": "AOTU008",
+   "instance": "AOTU008_R"
+  },
+  "34992": {
+   "type": "PVLP005",
+   "instance": "PVLP005_L"
+  },
+  "518549": {
+   "type": "AOTU008",
+   "instance": "AOTU008_L"
+  },
+  "58449": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "38374": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "24105": {
+   "type": "LC14a-1",
+   "instance": "LC14a-1_R"
+  },
+  "55868": {
+   "type": "LC31b",
+   "instance": "LC31b_L"
+  },
+  "49773": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "44656": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "27300": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "18035": {
+   "type": "SMP547",
+   "instance": "SMP547_R"
+  },
+  "24784": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "26993": {
+   "type": "pC1_1b",
+   "instance": "pC1_1b_R"
+  },
+  "35750": {
+   "type": "SIP118m",
+   "instance": "SIP118m_L"
+  },
+  "22620": {
+   "type": "AVLP176_d",
+   "instance": "AVLP176_d_L"
+  },
+  "23128": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "22831": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "34877": {
+   "type": "LLPC1",
+   "instance": "LLPC1_R"
+  },
+  "13269": {
+   "type": "PLP018",
+   "instance": "PLP018_R"
+  },
+  "18917": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "51720": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "66361": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "41089": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "11915": {
+   "type": "CL339",
+   "instance": "CL339_L"
+  },
+  "15471": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "29359": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "26320": {
+   "type": "AOTU008",
+   "instance": "AOTU008_R"
+  },
+  "12798": {
+   "type": "AVLP210",
+   "instance": "AVLP210_R"
+  },
+  "28259": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "47400": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "24035": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "18335": {
+   "type": "AOTU015",
+   "instance": "AOTU015_R"
+  },
+  "28543": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "29744": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "38810": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "524268": {
+   "type": "AOTU063_a",
+   "instance": "AOTU063_a_R"
+  },
+  "532653": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "32894": {
+   "type": "AOTU001",
+   "instance": "AOTU001_L"
+  },
+  "54421": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "546795": {
+   "type": "LoVP26",
+   "instance": "LoVP26_R"
+  },
+  "55013": {
+   "type": "IB095",
+   "instance": "IB095_R"
+  },
+  "28415": {
+   "type": "LC14a-1",
+   "instance": "LC14a-1_R"
+  },
+  "544664": {
+   "type": "LC31a",
+   "instance": "LC31a_L"
+  },
+  "68463": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "21744": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "519300": {
+   "type": "CL211",
+   "instance": "CL211_R"
+  },
+  "24909": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "18139": {
+   "type": "CL122_b",
+   "instance": "CL122_b_L"
+  },
+  "21632": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "30499": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "51462": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "22259": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "44666": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "141703": {
+   "type": "AOTU001",
+   "instance": "AOTU001_R"
+  },
+  "521778": {
+   "type": "SMP052",
+   "instance": "SMP052_L"
+  },
+  "40220": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "24597": {
+   "type": "CL053",
+   "instance": "CL053_L"
+  },
+  "23377": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "79251": {
+   "type": "LC10c-1",
+   "instance": "LC10c-1_R"
+  },
+  "33177": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "15699": {
+   "type": "LAL029_e",
+   "instance": "LAL029_e_R"
+  },
+  "11311": {
+   "type": "CL248",
+   "instance": "CL248_R"
+  },
+  "16775": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "71665": {
+   "type": "LC10c-2",
+   "instance": "LC10c-2_R"
+  },
+  "22248": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "11291": {
+   "type": "LT82a",
+   "instance": "LT82a_R"
+  },
+  "12525": {
+   "type": "AVLP160",
+   "instance": "AVLP160_R"
+  },
+  "21426": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "32767": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "22392": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "61952": {
+   "type": "LC10c-2",
+   "instance": "LC10c-2_R"
+  },
+  "23002": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "22397": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "23930": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "555278": {
+   "type": "AOTU008",
+   "instance": "AOTU008_L"
+  },
+  "26450": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "53417": {
+   "type": "LC10d",
+   "instance": "LC10d_R"
+  },
+  "64964": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "27468": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "43865": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "60028": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "14368": {
+   "type": "AOTU059",
+   "instance": "AOTU059_L"
+  },
+  "140676": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "76312": {
+   "type": "LC10c-1",
+   "instance": "LC10c-1_R"
+  },
+  "12501": {
+   "type": "PLP018",
+   "instance": "PLP018_L"
+  },
+  "57894": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "82439": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "40815": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "25472": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "29979": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "23686": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "38301": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "45300": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "28204": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "25412": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "57264": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "60207": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "31250": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "528991": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "24492": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "36779": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "18876": {
+   "type": "LAL029_d",
+   "instance": "LAL029_d_R"
+  },
+  "31878": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "25304": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "23868": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "11664": {
+   "type": "AVLP209",
+   "instance": "AVLP209_R"
+  },
+  "27340": {
+   "type": "AVLP190",
+   "instance": "AVLP190_R"
+  },
+  "32238": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "34643": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "48790": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "553807": {
+   "type": "AOTU103m",
+   "instance": "AOTU103m_L"
+  },
+  "525777": {
+   "type": "SMP165",
+   "instance": "SMP165_R"
+  },
+  "30661": {
+   "type": "LC9",
+   "instance": "LC9_L"
+  },
+  "19537": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "22989": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "10005": {
+   "type": "AOTU019",
+   "instance": "AOTU019_R"
+  },
+  "28599": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "23867": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "565505": {
+   "type": "AOTU008",
+   "instance": "AOTU008_R"
+  },
+  "26872": {
+   "type": "SIP118m",
+   "instance": "SIP118m_R"
+  },
+  "34838": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "24769": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "27916": {
+   "type": "LC9",
+   "instance": "LC9_R"
+  },
+  "22184": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "534038": {
+   "type": "PVLP062",
+   "instance": "PVLP062_R"
+  },
+  "122434": {
+   "type": "AOTU003",
+   "instance": "AOTU003_L"
+  },
+  "23421": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "144957": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "519046": {
+   "type": "PVLP005",
+   "instance": "PVLP005_R"
+  },
+  "73715": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "28143": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "56376": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "20112": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "557990": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "25369": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "27967": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "11022": {
+   "type": "CL053",
+   "instance": "CL053_R"
+  },
+  "22148": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "22505": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "85707": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "49244": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "23463": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "26304": {
+   "type": "LC9",
+   "instance": "LC9_R"
+  },
+  "514764": {
+   "type": "PVLP141",
+   "instance": "PVLP141_R"
+  },
+  "527684": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "28082": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "24505": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "25202": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "29803": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "34774": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "69463": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "37958": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "22070": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "10764": {
+   "type": "LT1c",
+   "instance": "LT1c_R"
+  },
+  "531581": {
+   "type": "AVLP451",
+   "instance": "AVLP451_R"
+  },
+  "36421": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "20378": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "27579": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "52471": {
+   "type": "LC10d",
+   "instance": "LC10d_R"
+  },
+  "12424": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "49807": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "25667": {
+   "type": "MeLo13",
+   "instance": "MeLo13_L"
+  },
+  "12678": {
+   "type": "LC31b",
+   "instance": "LC31b_L"
+  },
+  "26811": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "32657": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "31941": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "23148": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "32614": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "61545": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "50564": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "27689": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "521650": {
+   "type": "AOTU033",
+   "instance": "AOTU033_L"
+  },
+  "10735": {
+   "type": "LoVC18",
+   "instance": "LoVC18(PLP030,PLP031)_L"
+  },
+  "84470": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "23830": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "23719": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "43296": {
+   "type": "LC10d",
+   "instance": "LC10d_R"
+  },
+  "35250": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "22510": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "33048": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "519926": {
+   "type": "AOTU025",
+   "instance": "AOTU025_R"
+  },
+  "31801": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "21238": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "19540": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "12458": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "27268": {
+   "type": "LC9",
+   "instance": "LC9_L"
+  },
+  "23314": {
+   "type": "LC9",
+   "instance": "LC9_L"
+  },
+  "34351": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "34756": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "37042": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "10070": {
+   "type": "AOTU019",
+   "instance": "AOTU019_L"
+  },
+  "26749": {
+   "type": "LAL049",
+   "instance": "LAL049_R"
+  },
+  "25296": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "29092": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "517337": {
+   "type": "pC1_10a",
+   "instance": "pC1_10a_R"
+  },
+  "531985": {
+   "type": "PVLP010",
+   "instance": "PVLP010_R"
+  },
+  "13109": {
+   "type": "PVLP020",
+   "instance": "PVLP020_R"
+  },
+  "22959": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "21162": {
+   "type": "AOTU008",
+   "instance": "AOTU008_L"
+  },
+  "23677": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "518681": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "68541": {
+   "type": "LC10c-2",
+   "instance": "LC10c-2_R"
+  },
+  "516361": {
+   "type": "AOTU025",
+   "instance": "AOTU025_L"
+  },
+  "19720": {
+   "type": "LAL186",
+   "instance": "LAL186_L"
+  },
+  "14980": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "25400": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "23192": {
+   "type": null,
+   "instance": null
+  },
+  "39108": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "512978": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "27548": {
+   "type": "LC14a-1",
+   "instance": "LC14a-1_L"
+  },
+  "25708": {
+   "type": "LC31a",
+   "instance": "LC31a_R"
+  },
+  "24071": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "22839": {
+   "type": "aIPg5",
+   "instance": "aIPg5_R"
+  },
+  "31623": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "21199": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "25450": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "10502": {
+   "type": "AOTU041",
+   "instance": "AOTU041_L"
+  },
+  "24719": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "521049": {
+   "type": "LLPC1",
+   "instance": "LLPC1_L"
+  },
+  "38037": {
+   "type": "PLP018",
+   "instance": "PLP018_L"
+  },
+  "46034": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "44856": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "23989": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "23741": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "36783": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "21835": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "37896": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "21984": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "25446": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "15508": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "514122": {
+   "type": "MeLo13",
+   "instance": "MeLo13_L"
+  },
+  "11794": {
+   "type": "LC31b",
+   "instance": "LC31b_L"
+  },
+  "29686": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "525482": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "19667": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "18388": {
+   "type": "AOTU015",
+   "instance": "AOTU015_L"
+  },
+  "37871": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "46817": {
+   "type": "AOTU061",
+   "instance": "AOTU061_R"
+  },
+  "16481": {
+   "type": "SMP158",
+   "instance": "SMP158_R"
+  },
+  "30025": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "52783": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "19703": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "529578": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "70337": {
+   "type": "LT52",
+   "instance": "LT52_L"
+  },
+  "11192": {
+   "type": "CRE040",
+   "instance": "CRE040_R"
+  },
+  "32286": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "19120": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "524037": {
+   "type": "MeLo8",
+   "instance": "MeLo8_L"
+  },
+  "10450": {
+   "type": "LT62",
+   "instance": "LT62_L"
+  },
+  "43910": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "22339": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "21983": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "62280": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "28823": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "64850": {
+   "type": "CB3683",
+   "instance": "CB3683_R"
+  },
+  "28533": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "517465": {
+   "type": "AOTU026",
+   "instance": "AOTU026_L"
+  },
+  "23328": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "15340": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "23890": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "14751": {
+   "type": "AOTU008",
+   "instance": "AOTU008_R"
+  },
+  "26963": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "183483": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "53585": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "30993": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "32336": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "30449": {
+   "type": "LC9",
+   "instance": "LC9_R"
+  },
+  "70408": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "52329": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "23599": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "24283": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "12074": {
+   "type": "SIP133m",
+   "instance": "SIP133m_R"
+  },
+  "18518": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "575597": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "532298": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "26740": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "513934": {
+   "type": "CL122_b",
+   "instance": "CL122_b_R"
+  },
+  "86507": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "20205": {
+   "type": "AOTU016_b",
+   "instance": "AOTU016_b_R"
+  },
+  "25088": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "69870": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "26142": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "11300": {
+   "type": "LT82b",
+   "instance": "LT82b_L"
+  },
+  "71451": {
+   "type": "PVLP005",
+   "instance": "PVLP005_L"
+  },
+  "48198": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "23852": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "26976": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "10573": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "527589": {
+   "type": "AOTU016_c",
+   "instance": "AOTU016_c_L"
+  },
+  "100368": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "25067": {
+   "type": "LC10a",
+   "instance": "LC10a_R"
+  },
+  "89301": {
+   "type": "LC10a",
+   "instance": "LC10a_L"
+  },
+  "10760": {
+   "type": "DNa01",
+   "instance": "DNa01(VES006)_R"
+  },
+  "519944": {
+   "type": "LAL124",
+   "instance": "LAL124_L"
+  },
+  "10442": {
+   "type": "DNa01",
+   "instance": "DNa01(VES006)_L"
+  },
+  "10031": {
+   "type": "AOTU041",
+   "instance": "AOTU041_R"
+  },
+  "11579": {
+   "type": "LT82a",
+   "instance": "LT82a_R"
+  },
+  "10850": {
+   "type": "AOTU016_c",
+   "instance": "AOTU016_c_R"
+  },
+  "19686": {
+   "type": "AOTU016_a",
+   "instance": "AOTU016_a_L"
+  },
+  "14049": {
+   "type": "PLP300m",
+   "instance": "PLP300m_R"
+  },
+  "533590": {
+   "type": "CRE040",
+   "instance": "CRE040_L"
+  },
+  "19331": {
+   "type": "AOTU017",
+   "instance": "AOTU017_L"
+  },
+  "529641": {
+   "type": "LAL018",
+   "instance": "LAL018_R"
+  },
+  "10763": {
+   "type": "MDN",
+   "instance": "MDN_R"
+  },
+  "532944": {
+   "type": "GNG553",
+   "instance": "GNG553_L"
+  },
+  "536050": {
+   "type": "SMP151",
+   "instance": "SMP151_L"
+  },
+  "516170": {
+   "type": "DNa13",
+   "instance": "DNa13(LAL041)_R"
+  },
+  "516223": {
+   "type": "AOTU006",
+   "instance": "AOTU006_L"
+  },
+  "519947": {
+   "type": "PPM1205",
+   "instance": "PPM1205_L"
+  },
+  "10148": {
+   "type": "AOTU041",
+   "instance": "AOTU041_L"
+  },
+  "11810": {
+   "type": "PLP300m",
+   "instance": "PLP300m_L"
+  },
+  "529568": {
+   "type": "DNp39",
+   "instance": "DNp39(PS297)_L"
+  },
+  "15101": {
+   "type": "SMP080",
+   "instance": "SMP080_L"
+  },
+  "58254": {
+   "type": "VES077",
+   "instance": "VES077_R"
+  },
+  "516820": {
+   "type": "GNG127",
+   "instance": "GNG127_L"
+  },
+  "11416": {
+   "type": "LAL083",
+   "instance": "LAL083_R"
+  },
+  "555803": {
+   "type": "AOTU024",
+   "instance": "AOTU024_R"
+  },
+  "532906": {
+   "type": "LAL141",
+   "instance": "LAL141_L"
+  },
+  "530154": {
+   "type": "VES106",
+   "instance": "VES106_R"
+  },
+  "46259": {
+   "type": "AOTU016_b",
+   "instance": "AOTU016_b_L"
+  },
+  "230783": {
+   "type": "DNg97",
+   "instance": "DNg97_R"
+  },
+  "525960": {
+   "type": "DNa13",
+   "instance": "DNa13(LAL041)_L"
+  },
+  "74075": {
+   "type": "AOTU013",
+   "instance": "AOTU013_L"
+  },
+  "521406": {
+   "type": "IB023",
+   "instance": "IB023_L"
+  },
+  "36409": {
+   "type": "AOTU001",
+   "instance": "AOTU001_R"
+  },
+  "555726": {
+   "type": "DNa13",
+   "instance": "DNa13(LAL041)_L"
+  },
+  "11419": {
+   "type": "WED195",
+   "instance": "WED195(hb5813023473)_L"
+  },
+  "13050": {
+   "type": "SIP137m_a",
+   "instance": "SIP137m_a_L"
+  },
+  "116987": {
+   "type": "LAL021",
+   "instance": "LAL021_L"
+  },
+  "103686": {
+   "type": "AOTU001",
+   "instance": "AOTU001_L"
+  },
+  "18817": {
+   "type": "LAL301m",
+   "instance": "LAL301m_R"
+  },
+  "519141": {
+   "type": "SMP148",
+   "instance": "SMP148_L"
+  },
+  "15689": {
+   "type": "LAL160",
+   "instance": "LAL160_R"
+  },
+  "526218": {
+   "type": "VES052",
+   "instance": "VES052_R"
+  },
+  "558781": {
+   "type": "GNG590",
+   "instance": "GNG590_L"
+  },
+  "59170": {
+   "type": "VES049",
+   "instance": "VES049_L"
+  },
+  "558897": {
+   "type": "GNG584",
+   "instance": "GNG584_L"
+  },
+  "96574": {
+   "type": "LT52",
+   "instance": "LT52_L"
+  },
+  "516845": {
+   "type": "LC19",
+   "instance": "LC19_L"
+  },
+  "13327": {
+   "type": "VES005",
+   "instance": "VES005_R"
+  },
+  "513691": {
+   "type": "LAL026_a",
+   "instance": "LAL026_a_R"
+  },
+  "529498": {
+   "type": "CB0625",
+   "instance": "CB0625_R"
+  },
+  "902646": {
+   "type": "CB4101",
+   "instance": "CB4101_R"
+  },
+  "12391": {
+   "type": "AOTU027",
+   "instance": "AOTU027_L"
+  },
+  "42625": {
+   "type": "LAL021",
+   "instance": "LAL021_L"
+  },
+  "11208": {
+   "type": "IB018",
+   "instance": "IB018_L"
+  },
+  "11596": {
+   "type": "DNpe022",
+   "instance": "DNpe022(PS271)_R"
+  },
+  "46847": {
+   "type": "GNG502",
+   "instance": "GNG502_L"
+  },
+  "515032": {
+   "type": "LAL194",
+   "instance": "LAL194_L"
+  },
+  "20755": {
+   "type": "LAL300m",
+   "instance": "LAL300m_R"
+  },
+  "70088": {
+   "type": null,
+   "instance": null
+  },
+  "531859": {
+   "type": "DNpe022",
+   "instance": "DNpe022(PS271)_L"
+  },
+  "12110": {
+   "type": "PLP029",
+   "instance": "PLP029_R"
+  },
+  "10030": {
+   "type": "pIP1",
+   "instance": "pIP1_L"
+  },
+  "13419": {
+   "type": "AOTU024",
+   "instance": "AOTU024_L"
+  },
+  "22126": {
+   "type": "LAL301m",
+   "instance": "LAL301m_L"
+  },
+  "520117": {
+   "type": "GNG562",
+   "instance": "GNG562_L"
+  },
+  "519877": {
+   "type": "VES007",
+   "instance": "VES007_L"
+  },
+  "13920": {
+   "type": "VES202m",
+   "instance": "VES202m_L"
+  },
+  "529571": {
+   "type": "VES087",
+   "instance": "VES087_L"
+  },
+  "10038": {
+   "type": "pIP1",
+   "instance": "pIP1_R"
+  },
+  "18112": {
+   "type": "AOTU002_a",
+   "instance": "AOTU002_a_L"
+  },
+  "200284": {
+   "type": "LAL040",
+   "instance": "LAL040_R"
+  },
+  "523772": {
+   "type": "LAL016",
+   "instance": "LAL016_L"
+  },
+  "10127": {
+   "type": "VES064",
+   "instance": "VES064_L"
+  },
+  "562991": {
+   "type": "LoVP85",
+   "instance": "LoVP85_L"
+  },
+  "518721": {
+   "type": "PS315",
+   "instance": "PS315(hb5813022991)_R"
+  },
+  "13942": {
+   "type": "SIP126m_b",
+   "instance": "SIP126m_b_R"
+  },
+  "48795": {
+   "type": "LC10d",
+   "instance": "LC10d_L"
+  },
+  "26342": {
+   "type": "AOTU028",
+   "instance": "AOTU028_L"
+  },
+  "18146": {
+   "type": "AOTU026",
+   "instance": "AOTU026_R"
+  },
+  "520903": {
+   "type": "AOTU002_b",
+   "instance": "AOTU002_b_L"
+  },
+  "14407": {
+   "type": "SIP137m_a",
+   "instance": "SIP137m_a_R"
+  },
+  "532947": {
+   "type": "VES073",
+   "instance": "VES073_R"
+  },
+  "212467981": {
+   "type": "LC10d",
+   "instance": "LC10d_L"
+  },
+  "14533": {
+   "type": "PS002",
+   "instance": "PS002_R"
+  },
+  "516652": {
+   "type": "VES200m",
+   "instance": "VES200m_L"
+  },
+  "517882": {
+   "type": "SIP020_a",
+   "instance": "SIP020_a_L"
+  },
+  "52077": {
+   "type": "CB4103",
+   "instance": "CB4103_R"
+  },
+  "28708": {
+   "type": "LAL021",
+   "instance": "LAL021_R"
+  },
+  "519925": {
+   "type": "LAL040",
+   "instance": "LAL040_L"
+  },
+  "98923": {
+   "type": "AOTU016_b",
+   "instance": "AOTU016_b_L"
+  },
+  "111164": {
+   "type": "LT52",
+   "instance": "LT52_L"
+  },
+  "14040": {
+   "type": "LAL081",
+   "instance": "LAL081_L"
+  },
+  "23576": {
+   "type": "LC14a-1",
+   "instance": "LC14a-1_L"
+  },
+  "10654": {
+   "type": "DNb01",
+   "instance": "DNb01_L"
+  },
+  "521220": {
+   "type": "AOTU053",
+   "instance": "AOTU053_L"
+  },
+  "15614": {
+   "type": "VES073",
+   "instance": "VES073_L"
+  },
+  "12166": {
+   "type": "CB0244",
+   "instance": "CB0244_R"
+  },
+  "34350": {
+   "type": "AOTU002_a",
+   "instance": "AOTU002_a_R"
+  },
+  "21271": {
+   "type": "AOTU016_b",
+   "instance": "AOTU016_b_R"
+  },
+  "513163": {
+   "type": "VES007",
+   "instance": "VES007_R"
+  },
+  "11288": {
+   "type": "MDN",
+   "instance": "MDN_L"
+  },
+  "20808": {
+   "type": "LC4",
+   "instance": "LC4_R"
+  },
+  "22966": {
+   "type": "LC4",
+   "instance": "LC4_R"
+  },
+  "12236": {
+   "type": "LC31b",
+   "instance": "LC31b_R"
+  },
+  "534040": {
+   "type": "PVLP015",
+   "instance": "PVLP015_R"
+  },
+  "520449": {
+   "type": "LC4",
+   "instance": "LC4_L"
+  },
+  "531898": {
+   "type": "DNp04",
+   "instance": "DNp04_L"
+  },
+  "25289": {
+   "type": "VES023",
+   "instance": "VES023_L"
+  },
+  "10147": {
+   "type": "LHAD1g1",
+   "instance": "LHAD1g1_L"
+  },
+  "511914": {
+   "type": "LC4",
+   "instance": "LC4_L"
+  },
+  "10074": {
+   "type": "PVLP010",
+   "instance": "PVLP010_L"
+  },
+  "80886": {
+   "type": "CB0925",
+   "instance": "CB0925_L"
+  },
+  "17556": {
+   "type": null,
+   "instance": null
+  },
+  "17987": {
+   "type": "LC4",
+   "instance": "LC4_R"
+  },
+  "19543": {
+   "type": "LC4",
+   "instance": "LC4_R"
+  },
+  "28945": {
+   "type": "LC4",
+   "instance": "LC4_R"
+  },
+  "12215": {
+   "type": "PVLP122",
+   "instance": "PVLP122_R"
+  },
+  "19634": {
+   "type": "LC4",
+   "instance": "LC4_R"
+  },
+  "17548": {
+   "type": "LC4",
+   "instance": "LC4_R"
+  },
+  "21721": {
+   "type": "LC4",
+   "instance": "LC4_L"
+  },
+  "16904": {
+   "type": "AVLP259",
+   "instance": "AVLP259_L"
+  },
+  "90741": {
+   "type": null,
+   "instance": null
+  },
+  "16917": {
+   "type": "LC4",
+   "instance": "LC4_L"
+  },
+  "23446": {
+   "type": "CB3201",
+   "instance": "CB3201_L"
+  },
+  "83492": {
+   "type": "AVLP177_a",
+   "instance": "AVLP177_a_L"
+  },
+  "532254": {
+   "type": "LC4",
+   "instance": "LC4_L"
+  },
+  "10936": {
+   "type": "LT61b",
+   "instance": "LT61b_L"
+  },
+  "17159": {
+   "type": "AVLP331a",
+   "instance": "AVLP331a_R"
+  },
+  "10220": {
+   "type": "LoVC16",
+   "instance": "LoVC16_L"
+  },
+  "31570": {
+   "type": "LC9",
+   "instance": "LC9_L"
+  },
+  "18432": {
+   "type": "LC4",
+   "instance": "LC4_L"
+  },
+  "10173": {
+   "type": "PVLP151",
+   "instance": "PVLP151_L"
+  },
+  "534052": {
+   "type": "CB4163",
+   "instance": "CB4163_R"
+  },
+  "16809": {
+   "type": "LC4",
+   "instance": "LC4_L"
+  },
+  "16475": {
+   "type": "PVLP024",
+   "instance": "PVLP024_L"
+  },
+  "556303": {
+   "type": "CB1498",
+   "instance": "CB1498_L"
+  },
+  "19954": {
+   "type": "LC4",
+   "instance": "LC4_R"
+  },
+  "17668": {
+   "type": "LC4",
+   "instance": "LC4_R"
+  },
+  "20859": {
+   "type": "LC4",
+   "instance": "LC4_L"
+  },
+  "532839": {
+   "type": "CL140",
+   "instance": "CL140_L"
+  },
+  "55685": {
+   "type": "CL095",
+   "instance": "CL095_L"
+  },
+  "38065": {
+   "type": "LC4",
+   "instance": "LC4_R"
+  },
+  "13122": {
+   "type": "PVLP130",
+   "instance": "PVLP130_R"
+  },
+  "525510": {
+   "type": "PVLP005",
+   "instance": "PVLP005_L"
+  },
+  "27829": {
+   "type": "LC4",
+   "instance": "LC4_L"
+  },
+  "527690": {
+   "type": "PVLP022",
+   "instance": "PVLP022_L"
+  },
+  "531899": {
+   "type": "AVLP452",
+   "instance": "AVLP452_L"
+  },
+  "28160": {
+   "type": "CL001",
+   "instance": "CL001_L"
+  },
+  "17926": {
+   "type": "LC4",
+   "instance": "LC4_R"
+  },
+  "31262": {
+   "type": "LC4",
+   "instance": "LC4_R"
+  },
+  "23226": {
+   "type": "LC4",
+   "instance": "LC4_L"
+  },
+  "10145": {
+   "type": "PVLP130",
+   "instance": "PVLP130_L"
+  },
+  "518983": {
+   "type": "LC4",
+   "instance": "LC4_L"
+  },
+  "523644": {
+   "type": "SAD072",
+   "instance": "SAD072_L"
+  },
+  "12349": {
+   "type": "LC4",
+   "instance": "LC4_L"
+  },
+  "23098": {
+   "type": "LC4",
+   "instance": "LC4_R"
+  },
+  "10297": {
+   "type": "LHAD1g1",
+   "instance": "LHAD1g1_R"
+  },
+  "17478": {
+   "type": "LC4",
+   "instance": "LC4_L"
+  },
+  "11118": {
+   "type": "PVLP137",
+   "instance": "PVLP137_L"
+  },
+  "31759": {
+   "type": "VES023",
+   "instance": "VES023_R"
+  },
+  "34845": {
+   "type": "LC4",
+   "instance": "LC4_L"
+  },
+  "526572": {
+   "type": "CL117",
+   "instance": "CL117_R"
+  },
+  "17653": {
+   "type": "LC4",
+   "instance": "LC4_L"
+  },
+  "20440": {
+   "type": "LC4",
+   "instance": "LC4_L"
+  },
+  "17340": {
+   "type": "LC4",
+   "instance": "LC4_L"
+  },
+  "519389": {
+   "type": "AVLP452",
+   "instance": "AVLP452_L"
+  },
+  "10252": {
+   "type": "CL001",
+   "instance": "CL001_R"
+  },
+  "22975": {
+   "type": "LC4",
+   "instance": "LC4_R"
+  },
+  "11677": {
+   "type": "PVLP151",
+   "instance": "PVLP151_R"
+  },
+  "588414": {
+   "type": "CB4163",
+   "instance": "CB4163_L"
+  },
+  "24523": {
+   "type": "LC4",
+   "instance": "LC4_L"
+  },
+  "20967": {
+   "type": "LC4",
+   "instance": "LC4_L"
+  },
+  "35616": {
+   "type": "LC4",
+   "instance": "LC4_L"
+  },
+  "535341": {
+   "type": "LC4",
+   "instance": "LC4_L"
+  },
+  "512366": {
+   "type": "LC4",
+   "instance": "LC4_L"
+  },
+  "30480": {
+   "type": "LC4",
+   "instance": "LC4_R"
+  },
+  "31301": {
+   "type": "LC4",
+   "instance": "LC4_L"
+  },
+  "10259": {
+   "type": "DNp11",
+   "instance": "DNp11_L"
+  },
+  "36500": {
+   "type": "PS094",
+   "instance": "PS094_R"
+  },
+  "512705": {
+   "type": "LC4",
+   "instance": "LC4_L"
+  },
+  "11599": {
+   "type": "AVLP429",
+   "instance": "AVLP429_L"
+  },
+  "27444": {
+   "type": "AVLP177_a",
+   "instance": "AVLP177_a_R"
+  },
+  "22034": {
+   "type": "LC4",
+   "instance": "LC4_R"
+  },
+  "515476": {
+   "type": "LC4",
+   "instance": "LC4_L"
+  },
+  "47882": {
+   "type": "PVLP005",
+   "instance": "PVLP005_R"
+  },
+  "18907": {
+   "type": "PVLP123",
+   "instance": "PVLP123_L"
+  },
+  "30803": {
+   "type": "LC4",
+   "instance": "LC4_R"
+  },
+  "524899": {
+   "type": "LC4",
+   "instance": "LC4_L"
+  },
+  "514077": {
+   "type": "pC1_11b",
+   "instance": "pC1_11b_L"
+  },
+  "11927": {
+   "type": "PVLP122",
+   "instance": "PVLP122_L"
+  },
+  "32597": {
+   "type": "LC4",
+   "instance": "LC4_L"
+  },
+  "526286": {
+   "type": "LC4",
+   "instance": "LC4_L"
+  },
+  "33137": {
+   "type": "LC4",
+   "instance": "LC4_L"
+  },
+  "27750": {
+   "type": "LC4",
+   "instance": "LC4_L"
+  },
+  "17860": {
+   "type": "LC4",
+   "instance": "LC4_R"
+  },
+  "21287": {
+   "type": "LC4",
+   "instance": "LC4_R"
+  },
+  "575082": {
+   "type": "DNpe021",
+   "instance": "DNpe021_R"
+  },
+  "33612": {
+   "type": "VES023",
+   "instance": "VES023_R"
+  },
+  "18189": {
+   "type": "LC4",
+   "instance": "LC4_R"
+  },
+  "20572": {
+   "type": "LC4",
+   "instance": "LC4_L"
+  },
+  "29469": {
+   "type": "LC4",
+   "instance": "LC4_L"
+  },
+  "36295": {
+   "type": "AVLP462",
+   "instance": "AVLP462_R"
+  },
+  "23929": {
+   "type": "LC4",
+   "instance": "LC4_R"
+  },
+  "20399": {
+   "type": "LC4",
+   "instance": "LC4_R"
+  },
+  "30087": {
+   "type": "LC4",
+   "instance": "LC4_L"
+  },
+  "10184": {
+   "type": "CL366",
+   "instance": "CL366_L"
+  },
+  "518439": {
+   "type": "LC4",
+   "instance": "LC4_L"
+  },
+  "17608": {
+   "type": "LC4",
+   "instance": "LC4_L"
+  },
+  "22847": {
+   "type": "LC4",
+   "instance": "LC4_R"
+  },
+  "20673": {
+   "type": "LC4",
+   "instance": "LC4_R"
+  },
+  "518016": {
+   "type": "LC4",
+   "instance": "LC4_L"
+  },
+  "519705": {
+   "type": "VES104",
+   "instance": "VES104_R"
+  },
+  "20976": {
+   "type": "LC4",
+   "instance": "LC4_L"
+  },
+  "15068": {
+   "type": "PVLP019",
+   "instance": "PVLP019_L"
+  },
+  "25862": {
+   "type": "LC31a",
+   "instance": "LC31a_R"
+  },
+  "31308": {
+   "type": "LC4",
+   "instance": "LC4_L"
+  },
+  "17270": {
+   "type": "LC4",
+   "instance": "LC4_L"
+  },
+  "516909": {
+   "type": "LC4",
+   "instance": "LC4_L"
+  },
+  "521326": {
+   "type": "AVLP259",
+   "instance": "AVLP259_L"
+  },
+  "74486": {
+   "type": "AVLP274_b",
+   "instance": "AVLP274_b_L"
+  },
+  "515900": {
+   "type": "LC4",
+   "instance": "LC4_L"
+  },
+  "12275": {
+   "type": "PVLP151",
+   "instance": "PVLP151_L"
+  },
+  "530850": {
+   "type": "AVLP176_d",
+   "instance": "AVLP176_d_R"
+  },
+  "31429": {
+   "type": "LC4",
+   "instance": "LC4_L"
+  },
+  "19794": {
+   "type": "LC4",
+   "instance": "LC4_R"
+  },
+  "17266": {
+   "type": "LC4",
+   "instance": "LC4_R"
+  },
+  "20588": {
+   "type": "LC4",
+   "instance": "LC4_R"
+  },
+  "22772": {
+   "type": "LC4",
+   "instance": "LC4_L"
+  },
+  "17144": {
+   "type": "CL038",
+   "instance": "CL038_R"
+  },
+  "20917": {
+   "type": "LC4",
+   "instance": "LC4_R"
+  },
+  "77614": {
+   "type": "LC4",
+   "instance": "LC4_L"
+  },
+  "24338": {
+   "type": "LC4",
+   "instance": "LC4_R"
+  },
+  "18396": {
+   "type": "LC4",
+   "instance": "LC4_L"
+  },
+  "27809": {
+   "type": "LC14a-1",
+   "instance": "LC14a-1_L"
+  },
+  "26262": {
+   "type": "LC31b",
+   "instance": "LC31b_R"
+  },
+  "556033": {
+   "type": null,
+   "instance": null
+  },
+  "525844": {
+   "type": "LPLC2",
+   "instance": "LPLC2_L"
+  },
+  "22194": {
+   "type": "LC4",
+   "instance": "LC4_R"
+  },
+  "23392": {
+   "type": "LC4",
+   "instance": "LC4_R"
+  },
+  "21225": {
+   "type": "LC4",
+   "instance": "LC4_R"
+  },
+  "533129": {
+   "type": "LC4",
+   "instance": "LC4_L"
+  },
+  "25584": {
+   "type": "LC4",
+   "instance": "LC4_R"
+  },
+  "28980": {
+   "type": "LC4",
+   "instance": "LC4_L"
+  },
+  "10234": {
+   "type": "DNp35",
+   "instance": "DNp35(PVLP136)_L"
+  },
+  "22328": {
+   "type": "LC4",
+   "instance": "LC4_R"
+  },
+  "514956": {
+   "type": "LC4",
+   "instance": "LC4_L"
+  },
+  "29514": {
+   "type": "LC4",
+   "instance": "LC4_L"
+  },
+  "22922": {
+   "type": "LC4",
+   "instance": "LC4_L"
+  },
+  "15994": {
+   "type": "CB3513",
+   "instance": "CB3513_L"
+  },
+  "520085": {
+   "type": "AVLP274_a",
+   "instance": "AVLP274_a_L"
+  },
+  "517752": {
+   "type": "LC4",
+   "instance": "LC4_L"
+  },
+  "21165": {
+   "type": "LC4",
+   "instance": "LC4_R"
+  },
+  "16628": {
+   "type": "LC4",
+   "instance": "LC4_R"
+  },
+  "519931": {
+   "type": "LC4",
+   "instance": "LC4_L"
+  },
+  "18478": {
+   "type": "LC4",
+   "instance": "LC4_L"
+  },
+  "27624": {
+   "type": "LC4",
+   "instance": "LC4_L"
+  },
+  "20282": {
+   "type": "LC4",
+   "instance": "LC4_R"
+  },
+  "81112": {
+   "type": "LC4",
+   "instance": "LC4_L"
+  },
+  "26112": {
+   "type": "LC4",
+   "instance": "LC4_R"
+  },
+  "21336": {
+   "type": "LC4",
+   "instance": "LC4_R"
+  },
+  "23792": {
+   "type": "LC4",
+   "instance": "LC4_R"
+  },
+  "14888": {
+   "type": "LC4",
+   "instance": "LC4_L"
+  },
+  "519650": {
+   "type": "LC4",
+   "instance": "LC4_L"
+  },
+  "518730": {
+   "type": "LC4",
+   "instance": "LC4_L"
+  },
+  "29417": {
+   "type": "LC4",
+   "instance": "LC4_L"
+  },
+  "12824": {
+   "type": "LC4",
+   "instance": "LC4_L"
+  },
+  "531901": {
+   "type": "AVLP203_c",
+   "instance": "AVLP203_c_L"
+  },
+  "13552": {
+   "type": "AN07B018",
+   "instance": "AN07B018_L"
+  },
+  "527408": {
+   "type": "LC4",
+   "instance": "LC4_R"
+  },
+  "14586": {
+   "type": "LC31b",
+   "instance": "LC31b_R"
+  },
+  "12032": {
+   "type": "LC4",
+   "instance": "LC4_L"
+  },
+  "111787": {
+   "type": "LC4",
+   "instance": "LC4_L"
+  },
+  "35262": {
+   "type": "LC4",
+   "instance": "LC4_L"
+  },
+  "23202": {
+   "type": "LC4",
+   "instance": "LC4_L"
+  },
+  "17054": {
+   "type": "LC4",
+   "instance": "LC4_R"
+  },
+  "16128": {
+   "type": "LC4",
+   "instance": "LC4_R"
+  },
+  "21804": {
+   "type": "LC4",
+   "instance": "LC4_R"
+  },
+  "20016": {
+   "type": "LC4",
+   "instance": "LC4_R"
+  },
+  "15018": {
+   "type": "LC4",
+   "instance": "LC4_L"
+  },
+  "40833": {
+   "type": "LC14a-1",
+   "instance": "LC14a-1_L"
+  },
+  "518732": {
+   "type": "LC31a",
+   "instance": "LC31a_R"
+  },
+  "19260": {
+   "type": "LC4",
+   "instance": "LC4_R"
+  },
+  "514508": {
+   "type": "LC4",
+   "instance": "LC4_L"
+  },
+  "19550": {
+   "type": "LC4",
+   "instance": "LC4_R"
+  },
+  "21151": {
+   "type": "LC4",
+   "instance": "LC4_R"
+  },
+  "518544": {
+   "type": "LC4",
+   "instance": "LC4_L"
+  },
+  "19420": {
+   "type": "LC4",
+   "instance": "LC4_R"
+  },
+  "107513": {
+   "type": "LC4",
+   "instance": "LC4_L"
+  },
+  "20542": {
+   "type": "LC4",
+   "instance": "LC4_R"
+  },
+  "29563": {
+   "type": "LC4",
+   "instance": "LC4_R"
+  },
+  "17364": {
+   "type": "LC4",
+   "instance": "LC4_R"
+  },
+  "37587": {
+   "type": "LC4",
+   "instance": "LC4_L"
+  },
+  "530029": {
+   "type": "LC4",
+   "instance": "LC4_L"
+  },
+  "16138": {
+   "type": "LC4",
+   "instance": "LC4_R"
+  },
+  "18127": {
+   "type": "LC4",
+   "instance": "LC4_R"
+  },
+  "100485": {
+   "type": "LC4",
+   "instance": "LC4_L"
+  },
+  "21313": {
+   "type": "LC4",
+   "instance": "LC4_R"
+  },
+  "519121": {
+   "type": "aSP10A_b",
+   "instance": "aSP10A_b_R"
+  },
+  "63500": {
+   "type": "CB4103",
+   "instance": "CB4103_R"
+  },
+  "10373": {
+   "type": "PVLP141",
+   "instance": "PVLP141_L"
+  },
+  "519413": {
+   "type": "PLP029",
+   "instance": "PLP029_L"
+  },
+  "525454": {
+   "type": "DNg74_b",
+   "instance": "DNg74_b_R"
+  },
+  "10329": {
+   "type": "PVLP137",
+   "instance": "PVLP137_R"
+  },
+  "17001": {
+   "type": "ICL005m",
+   "instance": "ICL005m_R"
+  },
+  "11926": {
+   "type": "LoVP85",
+   "instance": "LoVP85_R"
+  },
+  "803433": {
+   "type": "DNp57",
+   "instance": "DNp57(PS195)_R"
+  },
+  "10752": {
+   "type": "DNp03",
+   "instance": "DNp03_L"
+  },
+  "555428": {
+   "type": "GNG085",
+   "instance": "GNG085_R"
+  },
+  "107194": {
+   "type": "aSP10A_b",
+   "instance": "aSP10A_b_L"
+  },
+  "559780": {
+   "type": "aSP10A_b",
+   "instance": "aSP10A_b_L"
+  },
+  "10203": {
+   "type": "PS100",
+   "instance": "PS100_L"
+  },
+  "44076": {
+   "type": "CB4103",
+   "instance": "CB4103_L"
+  },
+  "531648": {
+   "type": null,
+   "instance": null
+  },
+  "17284": {
+   "type": null,
+   "instance": null
+  },
+  "11043": {
+   "type": "LPT60",
+   "instance": "LPT60_L"
+  },
+  "521059": {
+   "type": "PLP019",
+   "instance": "PLP019_L"
+  },
+  "11472": {
+   "type": "PVLP015",
+   "instance": "PVLP015_L"
+  },
+  "13973": {
+   "type": "PLP300m",
+   "instance": "PLP300m_L"
+  },
+  "11020": {
+   "type": "DNp05",
+   "instance": "DNp05_R"
+  },
+  "11137": {
+   "type": "DNp04",
+   "instance": "DNp04_R"
+  },
+  "42668": {
+   "type": "SAD200m",
+   "instance": "SAD200m_L"
+  },
+  "579933": {
+   "type": "LC23",
+   "instance": "LC23_L"
+  },
+  "10377": {
+   "type": "DNge054",
+   "instance": "DNge054_L"
+  },
+  "578647": {
+   "type": "VES089",
+   "instance": "VES089_L"
+  },
+  "17589": {
+   "type": "AVLP734m",
+   "instance": "AVLP734m_R"
+  }
+ }
+}
