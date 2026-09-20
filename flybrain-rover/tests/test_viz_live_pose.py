@@ -25,12 +25,12 @@ def drive(ad, forward, turn, seconds, t0=0.0, boxes=()):
     """Frames at t0, t0+DT, ... covering `seconds` of motion (the frame at t0 only sets the clock)."""
     st = None
     for i in range(int(round(seconds / DT)) + 1):
-        st = ad.state({"t": t0 + i * DT, "forward": forward, "turn": turn, "boxes": list(boxes)})
+        st = ad.state({"wheels_live": True, "t": t0 + i * DT, "forward": forward, "turn": turn, "boxes": list(boxes)})
     return st
 
 
 def test_starts_at_the_origin_facing_up():
-    st = live_adapter().state({"t": 0.0, "forward": 1.0, "turn": 1.0})
+    st = live_adapter().state({"wheels_live": True, "t": 0.0, "forward": 1.0, "turn": 1.0})
     assert st["fly"][:3] == [0.0, 0.0, 0.0]          # his heading 0 = +z = our +y; first frame integrates nothing
     assert st["pose_estimated"] is True
 
@@ -47,7 +47,7 @@ def test_forward_for_one_second_moves_0_7_m_up():
 
 def test_turn_right_for_one_second_is_minus_half_pi_yaw():
     ad = live_adapter()
-    st0 = ad.state({"t": 0.0, "forward": 0.0, "turn": 0.0})
+    st0 = ad.state({"wheels_live": True, "t": 0.0, "forward": 0.0, "turn": 0.0})
     st = drive(ad, 0.0, 1.0, 1.0)
     assert ad.pose[2] == pytest.approx(0.0, abs=1e-6)                             # pi/2 - pi/2: clockwise
     assert wrap(st["fly"][2] - st0["fly"][2]) == pytest.approx(-math.pi / 2, abs=1e-4)  # his heading = yaw - pi/2: clockwise decreases it
@@ -65,17 +65,17 @@ def test_backwards_clock_resets_the_pose():
     ad = live_adapter()
     drive(ad, 1.0, 0.3, 2.0)
     assert ad.pose[:2] != [0.0, 0.0]
-    st = ad.state({"t": 0.1, "forward": 1.0, "turn": 0.0})     # demo restarted: t went backwards
+    st = ad.state({"wheels_live": True, "t": 0.1, "forward": 1.0, "turn": 0.0})     # demo restarted: t went backwards
     assert st["fly"][:3] == [0.0, 0.0, 0.0]
     assert st["episode"] == 1
-    st = ad.state({"t": 0.12, "forward": 1.0, "turn": 0.0})    # and it walks again from there
+    st = ad.state({"wheels_live": True, "t": 0.12, "forward": 1.0, "turn": 0.0})    # and it walks again from there
     assert st["fly"][1] == pytest.approx(0.014, abs=1e-3)
 
 
 def test_dt_is_clamped_to_100_ms():
     ad = live_adapter()
-    ad.state({"t": 0.0, "forward": 1.0, "turn": 0.0})
-    st = ad.state({"t": 5.0, "forward": 1.0, "turn": 0.0})     # stalled feed: at most 0.1 s of motion
+    ad.state({"wheels_live": True, "t": 0.0, "forward": 1.0, "turn": 0.0})
+    st = ad.state({"wheels_live": True, "t": 5.0, "forward": 1.0, "turn": 0.0})     # stalled feed: at most 0.1 s of motion
     assert st["fly"][1] == pytest.approx(0.07, abs=1e-3)
 
 
@@ -85,7 +85,7 @@ def test_pose_never_leaves_the_arena(forward, turn):
     half = ad.arena_half
     touched = False
     for i in range(int(60.0 / DT)):                            # 42 m of travel on curves wider than the 12 m arena
-        st = ad.state({"t": i * DT, "forward": forward, "turn": turn})
+        st = ad.state({"wheels_live": True, "t": i * DT, "forward": forward, "turn": turn})
         assert abs(st["fly"][0]) <= half + 1e-9 and abs(st["fly"][1]) <= half + 1e-9
         touched |= max(abs(ad.pose[0]), abs(ad.pose[1])) >= half - 1e-9
     assert touched
@@ -97,10 +97,10 @@ def test_people_are_placed_relative_to_the_estimated_pose():
     box = [140.0, 20.0, 180.0, 240.0]                           # centred in the image: bearing 0
     az0, az1 = math.atan((140 - 160) / 138.1), math.atan((180 - 160) / 138.1)
     dist = min(6.0, 0.5 / (az1 - az0))
-    st = ad.state({"t": 1.02, "forward": 0.0, "turn": 0.0, "boxes": [box]})
+    st = ad.state({"wheels_live": True, "t": 1.02, "forward": 0.0, "turn": 0.0, "boxes": [box]})
     assert st["people"][0][:2] == pytest.approx([0.0, 0.7 + dist], abs=2e-3)
     drive(ad, 0.0, 1.0, 1.0, t0=1.02)                           # quarter turn right: same box now lies along our +x
-    st = ad.state({"t": 2.04, "forward": 0.0, "turn": 0.0, "boxes": [box]})
+    st = ad.state({"wheels_live": True, "t": 2.04, "forward": 0.0, "turn": 0.0, "boxes": [box]})
     assert st["people"][0][:2] == pytest.approx([-dist, 0.7], abs=2e-3)   # his x = -our x: the fly's right is his -x
 
 
@@ -125,3 +125,13 @@ def test_replay_mode_keeps_the_true_pose_and_no_estimate_flag(tmp_path):
         assert st["fly"][:3] == [-f["rxy"][0], f["rxy"][1], round(wrap(f["ryaw"] - math.pi / 2), 4)]
         assert st["people"][0][:2] == [-2.0, 2.0]
     assert ad.pose is None
+
+
+def test_dry_run_keeps_the_fly_at_the_origin():
+    """Commands that are not executed must not move the estimate: without wheels_live the fly stays put."""
+    ad = live_adapter()
+    for i in range(100):
+        st = ad.state({"t": i * DT, "forward": 1.0, "turn": 1.0})
+    assert st["fly"][:2] == [0.0, 0.0] or st["fly"][:2] == [-0.0, 0.0]
+    assert abs(st["fly"][2]) < 1e-6                      # facing +z, as before dead reckoning existed
+    assert "heading_deg" in st and "yaw_dps" in st

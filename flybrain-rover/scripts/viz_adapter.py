@@ -114,9 +114,10 @@ class Source:
 class Adapter:
     def __init__(self, src: Source, viz_neurons: list[int], fov_deg: float = 98.43, v_max: float = V_MAX, w_max_deg: float = W_MAX_DEG):
         self.src, self.viz, self.fov = src, viz_neurons, fov_deg
+        self.fov_rad = math.radians(fov_deg)
         self.lock = threading.Condition(); self.version = 0; self.payload = b"{}"
         self.total = 0.0; self.touches = 0; self.locked = False; self.t_first = None; self.track_steps = 0; self.steps_since_lock = 0
-        self.lobotomized = False; self.heat_on = True; self.episode = 0; self.seed = int(src.meta.get("seed", 0)); self.last_t = -1.0
+        self.lobotomized = False; self.silenced = False; self.heat_on = True; self.episode = 0; self.seed = int(src.meta.get("seed", 0)); self.last_t = -1.0
         self.live = not src.replay                                     # live: no world pose in the frames, dead-reckon one
         self.v_max, self.w_max = float(v_max), math.radians(w_max_deg)
         self.arena_half = float(src.meta.get("arena_L", LIVE_ARENA_L)) / 2
@@ -144,8 +145,10 @@ class Adapter:
         if restarted:
             self.episode += 1; self.total = 0.0; self.touches = 0; self.locked = False; self.t_first = None; self.track_steps = 0; self.steps_since_lock = 0
         fwd, turn = float(f.get("forward", 0.0)), float(f.get("turn", 0.0))
-        if self.live:                                                  # no world pose on the robot: estimate it
+        if self.live and f.get("wheels_live", False):                  # no world pose on the robot: estimate it
             rxy, yaw = self.dead_reckon(t, fwd, turn, restarted)
+        elif self.live:                                                # dry run: nothing moves, so draw the fly at the origin
+            self.pose = None; rxy, yaw = (0.0, 0.0), math.pi / 2
         else:
             rxy = f.get("rxy", [0.0, 0.0]); yaw = float(f.get("ryaw", 0.0))
         self.last_t = t
@@ -161,7 +164,10 @@ class Adapter:
                 width = max(az1 - az0, 1e-3); dist = min(6.0, 0.5 / width)      # 0.5 m shoulders
                 bearing = 0.5 * (az0 + az1)                                          # + = right
                 ang = yaw - bearing
-                people.append([round(-(rxy[0] + dist * math.cos(ang)), 3), round(rxy[1] + dist * math.sin(ang), 3), 0.0, 0.0, 1.0, 0, 1, 0])
+                mot = f.get("mot") or []
+                c0, c1 = int(max(0, min(len(mot) - 1, (az0 + self.fov_rad / 2) / self.fov_rad * len(mot)))), int(max(0, min(len(mot) - 1, (az1 + self.fov_rad / 2) / self.fov_rad * len(mot)))) if mot else (0, 0)
+                walk = min(1.7, 6.0 * (sum(abs(m) for m in mot[c0:c1 + 1]) / max(1, c1 - c0 + 1))) if mot else 0.0
+                people.append([round(-(rxy[0] + dist * math.cos(ang)), 3), round(rxy[1] + dist * math.sin(ang), 3), round(walk, 2), 0.0, 1.0, 0, 1, 0])
         reward = float(f.get("reward", 0.0)); self.total += reward
         touching = reward >= 0.5
         if touching:
@@ -189,7 +195,9 @@ class Adapter:
               "lobotomized": bool(f.get("lobotomy", self.lobotomized)), "heat_on": self.heat_on, "see_m": 6.0, "fov_deg": round(self.fov, 1),
               "brain": brain, "stats": {}, "history": []}
         if self.live:
-            st["pose_estimated"] = True                                # dead-reckoned from the motor command, not measured
+            st["heading_deg"] = round(math.degrees(_wrap(yaw - math.pi / 2)), 1)   # HUD: heading 0 = his +z
+            st["yaw_dps"] = round(math.degrees(turn * self.w_max), 1)                # + = clockwise, like his S-Bus driver
+            st["pose_estimated"] = bool(f.get("wheels_live", False))                 # dead-reckoned only when the wheels are live
         return st
 
     def on_frame(self, f: dict):
@@ -250,6 +258,18 @@ def serve(ad: Adapter, brain_json: bytes, ui_dir: Path, asset_dirs: list[Path], 
                         pass
             if "heat" in body:
                 ad.heat_on = bool(body["heat"])
+            if ad.live and ("paused" in body or body.get("next")):
+                # the page's pause silences the brain (hotkey l, a toggle); next episode is a fresh fly: baseline
+                # brain (hotkey 1) and the dead-reckoned pose back at the origin
+                try:
+                    import socket as _s
+                    sk = _s.socket(_s.AF_INET, _s.SOCK_DGRAM)
+                    if "paused" in body and bool(body["paused"]) != ad.silenced:
+                        sk.sendto(b"l", ("127.0.0.1", 9600)); ad.silenced = bool(body["paused"])
+                    if body.get("next"):
+                        sk.sendto(b"1", ("127.0.0.1", 9600)); ad.pose = None; ad.episode += 1; ad.lobotomized = False; ad.silenced = False
+                except OSError:
+                    pass
             self._send(204, "text/plain", b"")
 
     srv = ThreadingHTTPServer(("0.0.0.0", port), H); srv.daemon_threads = True
@@ -296,7 +316,7 @@ def main():
         viz = torch.randperm(N, generator=torch.Generator().manual_seed(0))[:512].tolist()
     brain_json, _ = build_brain_json(a.brain, a.positions, viz)
     ad = Adapter(src, viz, v_max=a.v_max, w_max_deg=a.w_max)
-    who = a.who + (" (pose dead-reckoned from the motor command)" if ad.live and a.who == WHO_DEFAULT else "")
+    who = a.who + (" (live; the fly's pose is dead-reckoned from the motor command when the wheels are live, drawn at the origin in dry run)" if ad.live and a.who == WHO_DEFAULT else "")
     serve(ad, brain_json, Path(a.ui), [Path(a.assets)], a.port, who)
     src.run(ad.on_frame)
 

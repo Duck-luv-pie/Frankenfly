@@ -57,6 +57,7 @@ def _undo_lobotomy(brain):
     if STATE["lobotomy"] is not None:
         plastic_mod.restore(brain.lif, STATE["lobotomy"])
         STATE["lobotomy"] = None
+        brain.learning_wiped = False
 
 
 def k_baseline(brain, rover):
@@ -87,6 +88,7 @@ def k_restore_lesion(brain, rover):
 def k_lobotomize(brain, rover):
     if STATE["lobotomy"] is None:
         STATE["lobotomy"] = plastic_mod.lobotomize(brain.lif)      # plastic synapses -> connectome values
+        brain.learning_wiped = True                                 # what the viewer's HUD shows
         say("lobotomy")
 
 
@@ -132,6 +134,7 @@ HOTKEYS = {
     "5": ("restore learned synapses", k_restore_plasticity),
     "6": ("wiring shuffle on/off", k_shuffle),
     "7": ("remove another quarter of LC10a", k_lesion_quarter),
+    "l": ("silence the brain on/off (the viewer's pause)", lambda brain, rover: setattr(brain, "lobotomy", not brain.lobotomy)),
 }
 
 if __name__ == "__main__":

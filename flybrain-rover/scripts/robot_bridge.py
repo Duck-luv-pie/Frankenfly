@@ -82,6 +82,7 @@ class Brain:
         if shuffle:
             self.build_shuffled()
         self.lobotomy = False
+        self.learning_wiped = False      # set by the demo's hotkey 4/5; reported to the viewer
         self.pending_reward = 0.0
         self.last_t = None
         self.viz, self.last_r, self.last_heat, self.last_exploring = None, None, None, False
@@ -306,7 +307,8 @@ class VizFeed:
                    mot=[round(x, 3) for x in r["mot"][0].tolist()],
                    loom=[round(r["loom_L"][0].item(), 3), round(r["loom_R"][0].item(), 3)],
                    rates={k: round(b.lif.rates(b.groups[k])[0].item(), 1) for k in self.VIZ_KEYS if k in b.groups},
-                   spikes=self.spk_sum.nonzero().flatten().tolist(), exploring=bool(exploring), lobotomy=bool(b.lobotomy))
+                   spikes=self.spk_sum.nonzero().flatten().tolist(), exploring=bool(exploring), lobotomy=bool(getattr(b, "learning_wiped", False)), silenced=bool(b.lobotomy),
+                   wheels_live=bool(getattr(self, "wheels_live", False)))
         self.spk_sum.zero_()
         line = json.dumps(msg)
         self.latest = line
@@ -587,6 +589,8 @@ def main(argv=None, hotkeys=None):
             rover = None
     else:
         rover = Rover(a.conn, a.v_max, a.w_max) if a.robot else (RemoteRover(a.robot_daemon, a.v_max, a.w_max) if a.robot_daemon else None)
+    if getattr(brain, "viz", None) is not None:
+        brain.viz.wheels_live = (rover is not None) and not a.dry_run   # the viewer integrates only commands that are executed
 
     cap = eye = None
     local_eye = (rover is None) or (a.robot_daemon is not None and a.local_eye) or (a.s1_sbus is not None) or (a.s1_udp is not None)

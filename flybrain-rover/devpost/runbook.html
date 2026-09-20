@@ -164,8 +164,10 @@
 
 <span class="c"># 6. Ducks's 3-D viewer with our brain in it -> http://localhost:8601. His files live on his s1-fly-brain</span>
 <span class="c">#    branch, checked out at ~/Downloads/filess/hunting-fly-s1; the copy on main is only the HTML and renders black.</span>
-<span class="c">#    Live, the fly's position is dead-reckoned from the motor command (the robot reports none); the header says so.</span>
-<span class="c">#    The viewer's lobotomize button presses hotkey 4 in the demo; it wipes learning, and the fly keeps tracking.</span>
+<span class="c">#    Live with real wheels, the fly's position is dead-reckoned from the motor command (the robot reports none).</span>
+<span class="c">#    In dry run nothing moves, so the fly is drawn at the origin and the person where the retina puts them.</span>
+<span class="c">#    Viewer buttons reach the brain: lobotomize = hotkey 4 (learning wiped, it keeps tracking), pause = silence,</span>
+<span class="c">#    next episode = baseline brain (hotkey 1) and the fly back at the origin.</span>
 .venv/bin/python scripts/viz_adapter.py --ui ~/Downloads/filess/hunting-fly-s1/brain/companion_brain/ui --live ws://localhost:8765
 open http://localhost:8601</pre>
   </div>
