@@ -1,251 +1,227 @@
-# SWAT, badge game design spec
+# SWATTER, badge game design spec
 
-**One line:** you race a real fruit fly's escape reflex, in milliseconds, and you lose until you start
-removing its neurons.
+**One line:** animals land in front of you, you swat the flies and spare everything else, and the flies are
+hard to hit because a real fly's escape reflex is running on the badge deciding whether it gets away.
 
-Build target: a second badge app (`swat`), alongside the existing `flybadge`. Reuses the connectome and the
-LIF verbatim from `badge/app_template.lua`, so the hard part is already written and tested. Estimated 250 to
-320 lines of new Lua, most of it UI and the state machine.
+This replaces the earlier pure reaction test (`GAME_SPEC_swat_v1.md`). That version raced the fly's reflex,
+which was true but thin. This one adds the thing that makes it a game: **a decision**. You cannot just be
+fast, because being fast at the wrong target costs you.
+
+Build target: one badge app (`swatter`). Reuses the connectome and the fixed-point LIF verbatim from
+`badge/app_template.lua`. Around 350 lines of new Lua, most of it UI and the state machine.
 
 ---
 
-## 1. Why this game and not another game
+## 1. Why this design
 
-A generic badge game is judged against every other badge game. This one cannot be written by anyone else at
-the event, because the opponent is 150 neurons and 900 synapses of a real *Drosophila* connectome running at
-100 Hz on the badge. Every design decision below exists to make that legible in ten seconds without a word
-of explanation.
+Two things are true about a fly, and both are in the game:
 
-The hook a judge will repeat afterwards: **"I lost a reaction test to a fruit fly, and then I lesioned it and
-won."**
+1. **A fly is hard to swat**, because LC4 and LPLC2 detect your hand looming and the giant fibre launches an
+   escape before your hand arrives. That is the circuit we already have running. It is the difficulty.
+2. **You should not swat everything.** The cost of being trigger-happy is what turns a reaction test into a
+   game. So other animals land too, and hitting them costs you a life.
+
+The result is a speed-versus-accuracy squeeze where **the speed limit is an animal's real reflex**. You get
+about 180 ms before you can tell what landed, and the fly escapes at 470 ms from the same instant. That
+290 ms window is exactly where human go/no-go reaction sits. Those numbers are measured off the circuit,
+not tuned until it felt right.
+
+Then the twist no other badge game can do: **press B and you lesion the fly's eye.** Flies stop escaping
+and the game becomes trivial. The difficulty knob is a neuroscience experiment.
 
 ---
 
 ## 2. The core loop
 
 ```
-IDLE ──A──► ARMED ──(random 800-2200 ms)──► LOOMING ──┬── you press A first ──► HIT
-  ▲                                                    │
-  │                                                    └── giant fibre fires first ──► ESCAPED
-  └──────────────── 1400 ms result screen ◄────────────┘
+IDLE ──A──► SPAWN ──(random 400-1200 ms)──► TARGET ──┬── swat, was a fly, GF had not fired ──► HIT       +1
+  ▲                                                   ├── swat, was a fly, GF fired first   ──► ESCAPED   0
+  │                                                   ├── swat, was NOT a fly               ──► FOUL     -1 life
+  │                                                   ├── waited, was NOT a fly             ──► SPARED   +1
+  │                                                   └── waited 2500 ms, was a fly         ──► FLEW OFF  0
+  └───────────────────── 900 ms result card ◄─────────┘
 ```
 
-During **LOOMING**, a dark disc grows from the centre of the screen. Its expansion rate is injected as
-current into LC4 and LPLC2, exactly as `flybadge` injects a swat. The real circuit decides when the giant
-fibre spikes. You press **A** to swat. Whoever is first wins the round.
+A round is one animal. Three lives. The run ends at zero lives; the score is flies swatted.
 
-The round always reports two numbers side by side: **your reaction time** and **the fly's escape latency**,
-both in milliseconds, both measured with `badge.sys.ms()` from the same instant (the moment looming starts).
-
----
-
-## 3. Measured constants (do not guess these, they were measured)
-
-Run `python badge/export_badge_circuit.py` then the sim to reproduce. `RAMP` is added to the injected
-current every 10 ms brain step, capped at 4000.
-
-| Difficulty | `RAMP` | GF fires at | Feels like |
-|---|---|---|---|
-| `SLOW` | 45 | 420 ms | you win most rounds |
-| `NORMAL` | 80 | 250 ms | genuine coin flip |
-| `FAST` | 120 | 170 ms | you lose most rounds |
-| `INSANE` | 200 | 110 ms | you cannot win |
-
-Lesioned (LC4 + LPLC2 outgoing synapses zeroed): the giant fibre **never** fires, even at maximum drive for
-three seconds. Verified: 0 spikes.
-
-Start the game on `NORMAL`. Human visual reaction time is about 250 ms, so `NORMAL` is deliberately the
-knife edge.
+**The looming clock starts the instant the animal becomes visible.** From the fly's point of view something
+is approaching from above (you), so current ramps into LC4 and LPLC2 from that moment. Your reaction time
+is therefore the fly's exposure: the slower you are, the more of your hand it has seen.
 
 ---
 
-## 4. Screen layout, 320 x 240, exact
+## 3. Measured constants, do not invent these
 
-All coordinates are top-left origin, integers, as `badge.ui` requires.
+`RAMP` is added to the injected current each 10 ms brain step, capped at 4000. Reproduce with
+`python badge/export_badge_circuit.py` then `python badge/sim_fixed.py`.
+
+| ramp | giant fibre fires at | use |
+|---|---|---|
+| 60 | 320 ms | `HORNET`, round 15+, effectively unwinnable, which is the joke |
+| 50 | 380 ms | `QUICK` fly, rounds 8 to 14 |
+| **40** | **470 ms** | **the default fly, rounds 4 to 7. Human go/no-go is 350 to 450 ms.** |
+| 32 | 580 ms | `SLOW` fly, rounds 1 to 3, the tutorial |
+| lesioned | never | 0 giant fibre spikes in 3 s at full drive, verified |
+
+Difficulty follows the round number, never a menu. Tell the player only through the animal's name.
+
+---
+
+## 4. The animals
+
+Four types, told apart by **colour first, size second, word third**. The word is a fallback for someone
+watching over a shoulder, not the primary channel.
+
+| animal | swat? | colour | body | word | why it is there |
+|---|---|---|---|---|---|
+| fly | **yes** | `0x2A2A2A` near-black, `0xFF715B` eyes | 44 x 30 | `fly` | the only one with the circuit |
+| bee | no | `0xE8B339` amber | 52 x 34 | `bee` | close enough to a fly to punish mashing |
+| chicken | no | `0xF2E6D8` pale, `0xD94F3A` comb | 96 x 78 | `hen` | unmistakable, a free point if you wait |
+| ladybird | no | `0xD94F3A` red | 40 x 32 | `bug` | fly-sized and tempting |
+
+Spawn weights: fly 55%, bee 20%, ladybird 15%, chicken 10%, with at least one non-fly in every four rounds
+so mashing cannot pay.
+
+**The resolve animation is the discrimination challenge.** For the first **180 ms** every animal is drawn
+as the same dark blob at the same size. Then it snaps to its real colour, size and word. So the earliest
+honest decision point is 180 ms, and the fly escapes at 470 ms from the same instant.
+
+---
+
+## 5. Screen, 320 x 240, exact
 
 ```
 ┌────────────────────────────────────────────────────┐
-│ SWAT                                    07 / 10    │  y=6   title (coral, 20px) | score right (18px)
-│ 150 neurons · NORMAL                               │  y=30  subtitle (dim, 14px)
+│ SWATTER                              12   ***      │  y=6   title left, score and lives right
 │                                                    │
-│                    ████████                        │  the looming disc: a box, centred on (160,118),
-│                  ████████████                      │  grown from 10x10 to 210x210 over the round
-│                  ████ ** ████                      │  the fly sprite sits at (150,110), on top
-│                  ████████████                      │
-│                    ████████                        │
+│                  ▓▓▓▓▓▓▓▓▓▓                        │  the animal, centred on (160,116)
+│                ▓▓▓  o   o  ▓▓▓                     │
+│                  ▓▓▓▓▓▓▓▓▓▓                        │
+│                      fly                           │  y=150, only after 180 ms
 │                                                    │
-│  you 231 ms          fly 250 ms                    │  y=186  both times (20px); winner in coral
-│  A swat   B lesion   UP/DOWN speed   START reset   │  y=216  hint (dim, 14px)
+│  ████████████░░░░░░░░░░░░░░░░░░░░░░░░              │  y=196  the fly's alarm: LC4 + LPLC2 firing
+│  swat it                                           │  y=218  one line, changes per state
 └────────────────────────────────────────────────────┘
 ```
 
-Widget budget: 8 widgets total, far under the 512 cap.
+Eleven widgets, created once in `on_enter` and reused:
 
-| id | factory | position / size | notes |
-|---|---|---|---|
-| `bg` | `box(root,320,240)` | `set_pos(0,0)` | `bg_color 0x000000`, `border_width 0` |
-| `disc` | `box(root,10,10)` | recentred each tick | `bg_color 0x2A0E0A`, `radius 105` makes it a circle |
-| `fly` | `label(root,"**")` | `set_pos(150,110)` | white, 24px, jumps to y=74 on escape |
-| `title` | `label` | `align("top_left",10,6)` | coral `0xFF715B`, 20px |
-| `sub` | `label` | `align("top_left",10,30)` | dim `0x8A8580`, 14px, shows difficulty |
-| `score` | `label` | `align("top_right",-10,6)` | 18px, `07 / 10` |
-| `times` | `label` | `align("top_left",10,186)` | 20px, the two numbers |
-| `hint` | `label` | `align("top_left",10,216)` | dim, 14px, static |
+| id | factory | notes |
+|---|---|---|
+| `bg` | `box(root,320,240)` | `bg_color 0x0A0A0A`, `border_width 0` |
+| `body` | `box(root,44,30)` | the animal; `set_size`, `set_pos`, `style` per round; `radius` half the height |
+| `eyeL`, `eyeR` | `box(root,7,7)` | `radius 4`, hidden for the chicken, repositioned per type |
+| `word` | `label` | centred at `(160,150)`, hidden until 180 ms |
+| `title` | `label` | coral, 18px, `align("top_left",10,6)` |
+| `score` | `label` | 18px, `align("top_right",-58,6)` |
+| `lives` | `label` | `align("top_right",-10,6)`, text `"***"` trimmed to the life count |
+| `alarm` | `bar(root,0,100,0)` | `set_size(300,10)`, `set_pos(10,196)`, coral on `0x221E1B` |
+| `hint` | `label` | dim, 14px, `align("top_left",10,218)` |
+| `flash` | `box(root,320,240)` | result tint, `bg_opa` 0 normally |
 
-**Disc geometry.** Create it once. Each tick during LOOMING:
-```lua
-local d = 10 + math.floor(200 * progress)      -- progress 0..1, see below
-disc:set_size(d, d)
-disc:set_pos(160 - d // 2, 118 - d // 2)       -- keep it centred
-disc:style({ radius = d // 2 })                -- a box with radius = half its size is a circle
-```
-`progress` is **not** wall time: it is `cur / CUR_MAX` where `cur` is the current being injected. That way
-the picture and the neurons are the same signal, which is the whole point. Bring `disc` to front once at
-creation, then `fly:bring_to_front()` so the sprite sits on top.
+Worst-case per tick: the alarm value, the body size and position, two eyes. **At most 6 native UI calls per
+tick.** Colours and words change only on transitions.
+
+**The alarm bar is the fly's own eye**, driven by the live LC4 plus LPLC2 population rate, scaled so it
+fills as the giant fibre nears threshold. It is the tell: nearly full means you are too late. It is also
+what makes the lesion legible, because lesioned the bar still fills and nothing ever happens.
 
 ---
 
-## 5. LEDs, the fly getting nervous
+## 6. LEDs
 
-This is the second thing a judge notices and it costs almost nothing. Map the eye's population firing rate
-to how many of the 6 LEDs are lit, so the badge visibly tenses before it escapes.
+The six LEDs mirror the fly's alarm so someone across the table sees it too. Write only on change, one
+`show()` per tick at most.
 
-- **IDLE / ARMED:** all off.
-- **LOOMING:** `n = math.min(6, math.floor(eye_spikes_this_tick / 3))` LEDs lit in coral `(255,113,91)`,
-  filled clockwise from upper left using the index order `{1,2,3,4,5,6}`. Write only when `n` changes.
-- **ESCAPED:** all six white `(255,255,255)` for 180 ms, then off. The fly sprite jumps to y=74 for 280 ms.
-- **HIT:** all six green `(40,200,90)` for 180 ms.
-- **LESIONED (any state):** LED 1 dim red `(60,0,0)` so the state is visible across a table.
-
-Stage with `set`/`set_all`, then one `show()`. Never call `show()` more than once per tick.
-
----
-
-## 6. State machine, exact
-
-Keep every timestamp from `badge.sys.ms()`. Never count ticks; `on_tick` is nominal 20 ms and not guaranteed.
-
-| state | entered when | what runs each tick | leaves when |
-|---|---|---|---|
-| `IDLE` | boot, or 1400 ms after a result | brain stepped with `cur = 0` | **A** pressed → `ARMED` |
-| `ARMED` | from IDLE | brain stepped with `cur = 0`; disc hidden | `now >= arm_until` → `LOOMING`. **A** pressed → `FALSE_START` |
-| `LOOMING` | from ARMED | `loom = loom + RAMP` per 10 ms step, `cur = min(4000, loom)`; 2 steps per tick; disc grows | GF spikes → `ESCAPED`. **A** pressed → `HIT`. 3000 ms elapsed → `ESCAPED` (safety) |
-| `HIT` | A before GF | brain frozen | 1400 ms → `IDLE` |
-| `ESCAPED` | GF before A | brain frozen | 1400 ms → `IDLE` |
-| `FALSE_START` | A during ARMED | brain frozen | 1400 ms → `IDLE`, round counts as a loss |
-
-`arm_until = now + 800 + badge.sys.random(1400)`.
-
-Timing, precisely:
-- `loom_t0 = badge.sys.ms()` at the instant `LOOMING` is entered.
-- Your reaction: `press_ms = badge.sys.ms() - loom_t0`, captured inside `on_button`, not `on_tick`.
-- The fly's latency: `gf_ms = steps_since_loom * 10`, where `steps_since_loom` counts brain steps, because
-  the brain's clock is exact and the tick clock is not. This is the honest number and it must match the
-  table in section 3.
-
-Round ends on whichever happens first. If both land in the same tick, the brain wins (the fly is faster
-than the button scan); say so on screen as `fly 250 ms · same tick`.
+- **fly on screen:** `n = floor(6 * eye_rate / threshold_rate)` lit in coral, filling clockwise from upper
+  left. They visibly charge as the fly becomes more frightened.
+- **anything else on screen:** LEDs stay dark. Their silence is a fair hint: a bee has no giant fibre here.
+- **ESCAPED:** six white, 200 ms. **HIT:** six green `(40,200,90)`, 200 ms. **FOUL:** six red `(200,30,30)`, 400 ms.
+- **LESIONED:** LED 1 dim red throughout, visible from a distance.
+- **Game over:** one slow clockwise red chase.
 
 ---
 
 ## 7. Controls
 
-| button | IDLE | ARMED | LOOMING | result |
-|---|---|---|---|---|
-| **A** | start the round | false start | swat | ignored |
-| **B** | toggle lesion | toggle lesion | toggle lesion (takes effect immediately) | toggle |
-| **UP / DOWN** | difficulty up / down | same | ignored | same |
-| **START** | reset score to 0/0 | same | ignored | same |
-| **HOME** | exits (default behaviour, do not intercept) | | | |
+| button | IDLE | TARGET | result card |
+|---|---|---|---|
+| **A** | start a run | swat | skip |
+| **physical swat** | start a run | swat, same as A | skip |
+| **B** | toggle lesion | toggle lesion, immediately | toggle |
+| **START** | reset score and lives | abandon the run | reset |
+| **HOME** | exits, default behaviour, do not intercept | | |
 
-Difficulty cycles `SLOW → NORMAL → FAST → INSANE`. Persist both difficulty and lesion state with
-`badge.store.set_int("diff", n)` and read them in `on_enter`; save in `on_exit`.
-
-**The lesion is the teaching moment.** When B is pressed, the subtitle changes to
-`LC4 + LPLC2 CUT · it cannot see you` in red, and the fly never escapes again. When restored, back to
-`150 neurons · NORMAL` in dim. Do not explain it in words anywhere else; the score doing the talking is
-better.
+Both A and a real swat strike, because swatting the badge is the verb the game is named after and the
+accelerometer is already read for the looming input. Debounce a physical strike to one per 400 ms.
 
 ---
 
-## 8. What to copy, verbatim, and what to write
+## 8. Scoring
 
-**Copy unchanged from `badge/app_template.lua`** (these are tested against the Python reference spike for
-spike, do not modify them):
-- the whole injected `--@CIRCUIT@` block,
-- the constants `V_REST, V_TH, SYN_DECAY, GAIN_Q, REFRAC, CUR_MAX`,
-- `reset_brain()`,
-- `step(cur, flirt)`, call it as `step(cur, false)`.
+- **HIT** a fly: `+1`, plus a bonus point for every third in a row without a foul, shown as a combo.
+- **ESCAPED**: 0 and no penalty. Losing to the fly is the normal case, not a punishment.
+- **SPARED** a non-fly: `+1`. Restraint pays the same as speed.
+- **FOUL**: `-1 life`, combo resets.
+- **FLEW OFF**: 0, combo resets.
 
-**Write new:** the state machine, the UI, the LED mapping, scoring, persistence.
-
-**Do not** re-derive the circuit, change the fixed-point constants, or add any rule that makes the fly
-escape. If you find yourself writing `if swat_near then escape()`, stop: the escape must only ever come out
-of `step()` returning a giant-fibre spike. That property is the entire entry.
+Best score in `badge.store.set_int("best", n)`, shown on the idle screen.
 
 ---
 
-## 9. Build and install
+## 9. What is real and what is not
+
+**Real:** 150 neurons and 900 synapses of the male *Drosophila* connectome with their measured counts and
+signs, the fixed-point LIF at 100 Hz, every latency in section 3, and the fact that cutting LC4 and LPLC2
+abolishes escape entirely.
+
+**Not real:** the bee, chicken and ladybird have no circuit, they are cardboard. The looming ramp is a
+number we chose, not a real hand. A real giant fibre escape is far faster than 470 ms; we slowed the
+stimulus so a human can play against it at all.
+
+Say this on the idle screen and in the Devpost. The game is more impressive with the caveat than without,
+because the caveat shows which parts are measurements.
+
+---
+
+## 10. Code reuse, and the one rule
+
+**Copy verbatim from `badge/app_template.lua`:** the injected `--@CIRCUIT@` block, the chunked `b64`
+decoder, the fixed-point constants, `reset_brain()` and `step()`. Do not retune the constants. Do not touch
+`badge/flybadge_circuit.lua`.
+
+**The rule:** nothing may make a fly escape except `step()` returning a giant-fibre spike. If you write
+`if elapsed > 470 then escape()` the entry is dead, because the claim is that a measured circuit decides
+it. A test enforces this.
+
+**Do not enable the radio.** It panics the badge with this circuit loaded; see `badge/SDK_NOTES.md`.
+
+---
+
+## 11. Build and install
 
 ```
 cd ~/Downloads/filess/flybrain-rover
-python badge/export_badge_circuit.py                                   # if the circuit changed
-python badge/build_app.py --template badge/swat_template.lua --out badge/swat_app.lua
-lua badge/test_lua.lua                                                 # sanity: the LIF still matches Python
+python badge/export_badge_circuit.py
+python badge/build_app.py --template badge/swatter_template.lua --out badge/swatter_app.lua
+lua badge/test_swatter.lua
+python -m pytest tests/test_swatter_app.py -q
 ```
-Then paste `badge/swat_app.lua` into `badge.hackthenorth.com/ide` → Import app → Connect → Push.
 
-Manifest header, first lines of `badge/swat_template.lua`:
-```lua
---[==[badge-app
-slug=swat
-name=SWAT
-icon=><
-api=2
-heap_kb=96
-wake_lock=1
-version=1.0
-author=FlyBrain Rover
-]==]
-```
-`slug=swat` must differ from `flybadge` so both apps coexist on the badge. `heap_kb=96` is required: the
-badge compiles `main.lua` in RAM and the circuit is 6.8 KB of source.
+Manifest: `slug=swatter`, `name=Swatter`, `icon=SWT`, `api=2`, `heap_kb=96`, `wake_lock=1`. A different slug
+from `flybadge` so both live on the badge. **Reboot after the first push**, not just `reload`, or `heap_kb`
+is ignored.
 
 ---
 
-## 10. Pass criteria
+## 12. Pass criteria
 
-Ship it when all seven are true:
-
-1. On `NORMAL`, ten rounds against an intact fly give between 2 and 7 hits for an average player. If it is
-   0 or 10, the ramp constant is wrong.
-2. The reported `fly` latency on each difficulty matches section 3 within 20 ms. If it does not, the brain
-   is not being stepped twice per tick or the ramp is being applied per tick instead of per step.
-3. Press **B**: the fly never escapes again, across at least 20 rounds at `INSANE`.
-4. Press **B** again: escape returns at the same latency as before, within 20 ms.
-5. `ms/tick` stays under 10 at all times (add a temporary debug label; the existing app shows how).
-6. The app survives a power cycle with score reset but difficulty and lesion state restored.
-7. No `if` statement anywhere decides whether the fly escapes.
-
----
-
-## 11. Stretch, only if 1 to 7 are done
-
-**Two badges, one fly each, over `badge.radio`.** Only with a much smaller circuit: on hardware,
-enabling BLE with the 150-neuron circuit loaded exhausts the heap and panics the badge (see
-`badge/SDK_NOTES.md`). Use the `--direct-only` export, or skip this. Both badges broadcast `SWAT1:<seed>` and use the same
-`badge.sys.random` seed so the arm delay and ramp are identical. Each human races their own fly; after the
-round, exchange `SWAT1:<press_ms>` and show both on screen: `you 231 · them 198 · fly 250`. Keep payloads
-under 44 bytes, drain at most 4 frames per tick, and fall back silently to single player if
-`badge.radio.enable()` returns false.
-
-**Streak LEDs.** Three hits in a row: a clockwise chase in coral before the next round arms.
-
----
-
-## 12. What this is honestly
-
-The fly's escape latency here is the real circuit's response to a ramp we chose. A real *Drosophila* giant
-fibre escape is faster than any of these numbers, and the looming stimulus is current we inject rather than
-an image on the fly's eye. What is real: the neurons, the synapses, their counts and signs, and the fact
-that removing LC4 and LPLC2 abolishes the escape. Say that if a judge asks, and say it before they ask.
+1. Escape latency per difficulty matches section 3 within 20 ms.
+2. Lesioned: zero escapes across 30 rounds at ramp 60.
+3. Un-lesioning restores the latency within 10 ms.
+4. Worst-case tick under 20 native calls and under 10 ms.
+5. Widgets created exactly once; `show()` at most once per tick.
+6. All four types are pixel-identical for the first 180 ms and differ after, asserted in the harness.
+7. Swatting a non-fly always fouls, whatever the circuit is doing.
+8. No `if` anywhere decides whether a fly escapes.
+9. Survives a power cycle with the best score kept.
