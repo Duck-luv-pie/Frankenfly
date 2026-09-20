@@ -247,6 +247,12 @@ class MultiBody:
     def last_rx(self) -> float:
         return max((float(getattr(b, "last_rx", 0.0)) for b in self.bodies), default=0.0)
 
+    def status(self) -> dict | None:
+        for b in self.bodies:
+            if hasattr(b, "status"):
+                return b.status()
+        return None
+
     def send(self, packet: dict) -> None:
         for b in self.bodies:
             b.send(packet)
