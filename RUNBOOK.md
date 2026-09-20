@@ -98,12 +98,26 @@ behaviour is the wheels not moving.
 
 ## 4. The badge
 
+Two apps, different slugs, both live on the badge at once.
+
 ```bash
 cd flybrain-rover
-.venv/bin/python badge/export_badge_circuit.py
-.venv/bin/python badge/build_app.py
+.venv/bin/python badge/export_badge_circuit.py                                   # connectome -> Lua
+.venv/bin/python badge/build_app.py                                              # FlyBadge, the exhibit
+.venv/bin/python badge/build_app.py --template badge/swatgame_template.lua \
+                                    --out badge/swatgame_app.lua                 # Swat, the game
 ```
-Then paste `badge/flybadge_app.lua` into the badge IDE. Three traps that have each cost real time:
+Paste either built file into the badge IDE.
+
+**Swat**: shake the badge when a mosquito is under the swatter, hold still for the chickens. **B** cuts
+its eye, **RIGHT** stops the robot's wheels. Both of those also drive the rover if a laptop is running:
+
+```bash
+.venv/bin/python scripts/badge_link.py --dry-run     # see the keypresses first
+.venv/bin/python scripts/badge_link.py               # into scripts/demo.py on udp 9600
+```
+Serial, never BLE: `badge.radio.enable()` panics the badge with this circuit loaded. The game plays
+identically with nothing listening. Three traps that have each cost real time:
 
 - battery switch **off** first, and use a **data** cable, not a charge-only one
 - the port is named **USB JTAG/serial debug unit**
@@ -127,7 +141,7 @@ not deployed, and `websockets` is an optional extra (`uv sync --extra relay`) if
 
 ```bash
 # our tests
-cd flybrain-rover && .venv/bin/python -m pytest tests -q          # 219 passed
+cd flybrain-rover && .venv/bin/python -m pytest tests -q          # 246 passed
 
 # Ducks's and Senthil's
 cd brain && uv run pytest -q                                      # 76 passed, 11 skipped
