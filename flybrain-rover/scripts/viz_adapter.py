@@ -111,6 +111,27 @@ class Source:
             asyncio.run(main())
 
 
+
+def brighten(path) -> bytes:
+    """Serve Ducks's viewer with resting neurons visible.
+
+    His brain panel draws a neuron that is not firing at 35% alpha in a 1.5 pixel square, which on a
+    projector or a bright room is invisible: you see the spikes appear out of nothing instead of seeing
+    15,000 neurons with some of them lighting up. This rewrites those two constants as the page is served,
+    so his file on his branch is never touched and a later pull of his work still just works. If he changes
+    that line, the substitution silently does nothing and you get his original.
+    """
+    html = path.read_text()
+    old = "ctx.globalAlpha = .35; ctx.fillRect(px, py, 1.5, 1.5);"
+    new = "ctx.globalAlpha = .62; ctx.fillRect(px, py, 2.4, 2.4);"
+    if old in html:
+        html = html.replace(old, new)
+    old_fb = "CLASS_COLOR[BRAIN.cls[i]] || '#6b7385'"
+    if old_fb in html:
+        html = html.replace(old_fb, "CLASS_COLOR[BRAIN.cls[i]] || '#8f9bb3'")
+    return html.encode()
+
+
 class Adapter:
     def __init__(self, src: Source, viz_neurons: list[int], fov_deg: float = 98.43, v_max: float = V_MAX, w_max_deg: float = W_MAX_DEG):
         self.src, self.viz, self.fov = src, viz_neurons, fov_deg
@@ -145,10 +166,8 @@ class Adapter:
         if restarted:
             self.episode += 1; self.total = 0.0; self.touches = 0; self.locked = False; self.t_first = None; self.track_steps = 0; self.steps_since_lock = 0
         fwd, turn = float(f.get("forward", 0.0)), float(f.get("turn", 0.0))
-        if self.live and f.get("wheels_live", False):                  # no world pose on the robot: estimate it
-            rxy, yaw = self.dead_reckon(t, fwd, turn, restarted)
-        elif self.live:                                                # dry run: nothing moves, so draw the fly at the origin
-            self.pose = None; rxy, yaw = (0.0, 0.0), math.pi / 2
+        if self.live:                                                  # the robot reports no pose, so estimate it
+            rxy, yaw = self.dead_reckon(t, fwd, turn, restarted)        # from the command, wheels live or not
         else:
             rxy = f.get("rxy", [0.0, 0.0]); yaw = float(f.get("ryaw", 0.0))
         self.last_t = t
@@ -197,7 +216,7 @@ class Adapter:
         if self.live:
             st["heading_deg"] = round(math.degrees(_wrap(yaw - math.pi / 2)), 1)   # HUD: heading 0 = his +z
             st["yaw_dps"] = round(math.degrees(turn * self.w_max), 1)                # + = clockwise, like his S-Bus driver
-            st["pose_estimated"] = bool(f.get("wheels_live", False))                 # dead-reckoned only when the wheels are live
+            st["pose_estimated"] = True                                              # dead-reckoned from the command, not measured
         return st
 
     def on_frame(self, f: dict):
@@ -219,7 +238,7 @@ def serve(ad: Adapter, brain_json: bytes, ui_dir: Path, asset_dirs: list[Path], 
         def do_GET(self):
             path = self.path.split("?")[0]
             if path in ("/", "/index.html", "/hunt_gpu.html"):
-                self._send(200, "text/html; charset=utf-8", (ui_dir / "hunt_gpu.html").read_bytes())
+                self._send(200, "text/html; charset=utf-8", brighten(ui_dir / "hunt_gpu.html"))
             elif path == "/events":
                 self.send_response(200); self.send_header("Content-Type", "text/event-stream"); self.send_header("Cache-Control", "no-store"); self.end_headers()
                 seen = -1

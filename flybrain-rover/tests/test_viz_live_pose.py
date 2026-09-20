@@ -127,11 +127,11 @@ def test_replay_mode_keeps_the_true_pose_and_no_estimate_flag(tmp_path):
     assert ad.pose is None
 
 
-def test_dry_run_keeps_the_fly_at_the_origin():
-    """Commands that are not executed must not move the estimate: without wheels_live the fly stays put."""
+def test_live_dead_reckons_whether_or_not_the_wheels_are_live():
+    """The viewer shows what the brain commands. A dry run still moves the fly, because the command is
+    real even when the wheels are not; the state says pose_estimated so nobody mistakes it for odometry."""
     ad = live_adapter()
-    for i in range(100):
-        st = ad.state({"t": i * DT, "forward": 1.0, "turn": 1.0})
-    assert st["fly"][:2] == [0.0, 0.0] or st["fly"][:2] == [-0.0, 0.0]
-    assert abs(st["fly"][2]) < 1e-6                      # facing +z, as before dead reckoning existed
-    assert "heading_deg" in st and "yaw_dps" in st
+    for i in range(60):
+        st = ad.state({"t": i * DT, "forward": 1.0, "turn": 0.0})
+    assert st["fly"][1] > 0.5, "one second of full forward should have moved it"
+    assert st["pose_estimated"] is True
