@@ -11,12 +11,15 @@ class SBusOut {
   void set(const uint16_t *ch, size_t n);   // channels 1..n (n <= 16), the rest stay centred
   void tick();                              // call from loop(); sends a frame when 14 ms have passed
   bool live() const { return lastSet_ && millis() - lastSet_ < SBUS_TIMEOUT_MS; }
+  uint32_t frames() const { return frames_; }
+  bool streaming() const { return haveAny_; }
+  const uint16_t *channels() const { return ch_; }
 
  private:
   static const uint32_t SBUS_TIMEOUT_MS = 500;
   void frame(uint8_t *out, bool lost) const;
   HardwareSerial ser_{1};
   uint16_t ch_[16];
-  uint32_t lastSet_ = 0, lastFrame_ = 0;
+  uint32_t lastSet_ = 0, lastFrame_ = 0, frames_ = 0;
   bool haveAny_ = false;
 };

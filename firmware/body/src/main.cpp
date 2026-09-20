@@ -60,4 +60,15 @@ void loop() {
     lastHeartbeat = now;
     brainLink.send(pir.state(), audio.busy() ? 1 : 0);
   }
+  static uint32_t lastSbusLog = 0;
+  if (now - lastSbusLog > 5000) {                 // the S-Bus side of the wire, in numbers (tools/pi_body_log.sh)
+    lastSbusLog = now;
+    if (sbus.streaming()) {
+      const uint16_t *c = sbus.channels();
+      Serial.printf("[sbus] GPIO %d: %lu frames, brain %s, ch1-7 = %u %u %u %u %u %u %u\n", PIN_SBUS_TX, (unsigned long)sbus.frames(),
+                    sbus.live() ? "live" : "LOST (sticks centred)", c[0], c[1], c[2], c[3], c[4], c[5], c[6]);
+    } else {
+      Serial.printf("[sbus] GPIO %d: idle, no s1 channels received yet (brain %s)\n", PIN_SBUS_TX, brainLink.hostAlive() ? "alive" : "absent");
+    }
+  }
 }

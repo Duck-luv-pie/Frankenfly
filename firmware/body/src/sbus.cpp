@@ -36,4 +36,5 @@ void SBusOut::tick() {
   uint8_t f[25];
   frame(f, !live());
   ser_.write(f, 25);
+  frames_++;
 }
